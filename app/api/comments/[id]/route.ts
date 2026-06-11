@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 function getSupabaseAdmin() {
@@ -8,18 +8,26 @@ function getSupabaseAdmin() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+type DeleteContext = {
+  params: Promise<{ id: string }>;
+};
+
+export async function DELETE(request: NextRequest, context: DeleteContext) {
   try {
+    const { id } = await context.params;
     const body = await request.json().catch(() => ({}));
+
     if (!process.env.ADMIN_DELETE_KEY || body.adminKey !== process.env.ADMIN_DELETE_KEY) {
       return NextResponse.json({ error: '관리자 삭제키가 올바르지 않습니다.' }, { status: 401 });
     }
 
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from('inquiries').delete().eq('id', params.id);
+    const { error } = await supabase.from('inquiries').delete().eq('id', id);
     if (error) throw error;
+
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || '삭제 실패' }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '삭제 실패';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
