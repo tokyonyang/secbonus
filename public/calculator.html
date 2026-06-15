@@ -594,7 +594,7 @@ function App() {
   const [salaryDisplayName, setSalaryDisplayName] = useState("");
   const [salaryAuthMode, setSalaryAuthMode] = useState("login");
   const [salaryRecords, setSalaryRecords] = useState([]);
-  const [salaryRecordYear, setSalaryRecordYear] = useState(2025);
+  const [salaryRecordYear, setSalaryRecordYear] = useState(() => Math.max(2025, simYear - 1));
   const [salaryMemo, setSalaryMemo] = useState("");
   const [salaryMsg, setSalaryMsg] = useState("");
   const [salaryLoading, setSalaryLoading] = useState(false);
@@ -674,6 +674,8 @@ function App() {
 
   const saveSalaryRecord = async () => {
     if (!salaryToken) { setSalaryMsg('로그인 후 저장할 수 있습니다.'); return; }
+    const recordYear = Math.round(Number(salaryRecordYear)) || Math.max(2025, simYear - 1);
+    if (recordYear < 2025) { setSalaryMsg('저장 연도는 2025년부터 가능합니다.'); return; }
     setSalaryLoading(true);
     setSalaryMsg("");
     const contractSalaryMan = agreedSalary > 0 ? agreedSalary : r.bonusSalary;
@@ -681,7 +683,7 @@ function App() {
       const res = await fetch('/api/salary/records', {
         method:'POST', headers: salaryHeaders(),
         body: JSON.stringify({
-          year: salaryRecordYear,
+          year: recordYear,
           cl: myCl,
           division: myDiv,
           contractSalaryMan,
@@ -695,7 +697,8 @@ function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '연봉정보 저장 실패');
-      setSalaryMsg(`${salaryRecordYear}년 연봉정보 저장 완료`);
+      setSalaryRecordYear(recordYear);
+      setSalaryMsg(`${recordYear}년 연봉정보 저장 완료`);
       await loadSalaryRecords();
     } catch(e) {
       setSalaryMsg(e.message || '연봉정보 저장 실패');
@@ -1537,16 +1540,29 @@ function App() {
               </div>
               <button onClick={salaryLogout} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(255,255,255,0.14)", background:"rgba(255,255,255,0.05)", color:"#CBD5E1", cursor:"pointer", fontFamily:"inherit" }}>로그아웃</button>
             </div>
+            <div style={{ fontSize:12, color:"#CBD5E1", lineHeight:1.55, background:"rgba(0,198,255,0.08)", border:"1px solid rgba(0,198,255,0.18)", borderRadius:12, padding:"10px 12px" }}>
+              현재 시뮬레이션 기준연도는 <b>{simYear}년</b>입니다. 연봉 저장은 계산 기준연도와 분리되며, 기본값은 직전 연도인 <b>{Math.max(2025, simYear - 1)}년</b>입니다.
+              2025년 실제 연봉을 저장하려면 아래 저장 연도를 반드시 <b>2025</b>로 두고 저장하세요.
+            </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
               <div style={sBase.inBox}>
-                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>저장 연도</div>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>연봉 귀속연도 / 저장 연도</div>
                 <NumInput value={salaryRecordYear} onChange={setSalaryRecordYear} step={1} min={2025} max={2100}/>
+                <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                  <button type="button" onClick={()=>setSalaryRecordYear(Math.max(2025, simYear - 1))} style={{ flex:1, padding:"7px 6px", borderRadius:8, border:"1px solid rgba(0,198,255,0.30)", background:"rgba(0,198,255,0.09)", color:"#00C6FF", fontSize:11, fontWeight:800, fontFamily:"inherit", cursor:"pointer" }}>직전연도 {Math.max(2025, simYear - 1)}</button>
+                  <button type="button" onClick={()=>setSalaryRecordYear(simYear)} style={{ flex:1, padding:"7px 6px", borderRadius:8, border:"1px solid rgba(255,255,255,0.14)", background:"rgba(255,255,255,0.05)", color:"#CBD5E1", fontSize:11, fontWeight:800, fontFamily:"inherit", cursor:"pointer" }}>기준연도 {simYear}</button>
+                </div>
               </div>
               <div style={sBase.inBox}>
-                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>저장될 체결연봉</div>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>{salaryRecordYear}년에 저장될 체결연봉</div>
                 <div style={{ fontSize:20, fontWeight:900, color:"#00DC82" }}>{comma(agreedSalary > 0 ? agreedSalary : r.bonusSalary)}만원</div>
               </div>
             </div>
+            {Number(salaryRecordYear) === Number(simYear) && (
+              <div style={{ fontSize:11, color:"#FFB400", lineHeight:1.5, padding:"0 2px" }}>
+                저장 연도가 기준연도와 같습니다. 작년 연봉정보를 저장하려는 경우에는 저장 연도를 {Math.max(2025, simYear - 1)}년으로 변경하세요.
+              </div>
+            )}
             <div style={sBase.inBox}>
               <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>메모</div>
               <input value={salaryMemo} onChange={e=>setSalaryMemo(e.target.value)} placeholder="예: 2025 계약연봉, CL 변경 등" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:14, outline:"none" }}/>
