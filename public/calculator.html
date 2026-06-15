@@ -308,12 +308,10 @@ function ResultCard({ icon, title, valueColor, sub, value, accent, children }) {
 }
 
 /* ── 게시판 컴포넌트 ── */
-function CommentBoard() {
+function CommentBoard({ salaryUser, salaryToken, onLoginClick }) {
   const [comments, setComments] = React.useState([]);
-  const [nick, setNick] = React.useState('');
   const [title, setTitle] = React.useState('');
   const [text, setText] = React.useState('');
-  const [contact, setContact] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [errMsg, setErrMsg] = React.useState('');
@@ -338,7 +336,7 @@ function CommentBoard() {
   };
 
   const submitComment = async () => {
-    if (!nick.trim()) { setErrMsg('이름 또는 닉네임을 입력해주세요.'); return; }
+    if (!salaryToken || !salaryUser) { setErrMsg('개인 연봉저장 계정으로 로그인한 뒤 게시글을 작성할 수 있습니다.'); return; }
     if (!title.trim()) { setErrMsg('문의 제목을 입력해주세요.'); return; }
     if (!text.trim()) { setErrMsg('문의 내용을 입력해주세요.'); return; }
     if (text.trim().length < 5) { setErrMsg('내용을 5자 이상 입력해주세요.'); return; }
@@ -347,12 +345,10 @@ function CommentBoard() {
     try {
       const res = await fetch('/api/comments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${salaryToken}` },
         body: JSON.stringify({
-          nick: nick.trim().slice(0, 30),
           title: title.trim().slice(0, 80),
           text: text.trim().slice(0, 1000),
-          contact: contact.trim().slice(0, 120),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -360,7 +356,6 @@ function CommentBoard() {
       setComments([data.comment, ...comments]);
       setTitle('');
       setText('');
-      setContact('');
       setSuccessMsg('문의가 등록되었습니다. 확인 후 반영하겠습니다. ✅');
       setTimeout(() => setSuccessMsg(''), 3500);
     } catch(e) {
@@ -370,13 +365,13 @@ function CommentBoard() {
   };
 
   const handleDelete = async (id) => {
-    const adminKey = window.prompt('관리자 삭제키를 입력하세요.');
-    if (!adminKey) return;
+    if (!salaryToken) { setErrMsg('로그인 후 본인이 작성한 글을 삭제할 수 있습니다.'); return; }
+    if (!window.confirm('게시글을 삭제할까요?')) return;
     try {
       const res = await fetch(`/api/comments/${id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminKey }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${salaryToken}` },
+        body: JSON.stringify({}),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || '삭제에 실패했습니다.');
@@ -398,20 +393,21 @@ function CommentBoard() {
           💬 문의게시판
         </div>
         <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>
-          계산기 오류, 주가정보 반영, 기능 개선 요청을 남겨주세요. 등록된 문의는 Supabase DB에 저장됩니다.
+          개인 연봉저장 계정으로 로그인한 뒤 계산기 오류, 기능 개선 요청을 남겨주세요. 게시판 작성 계정과 연봉저장 계정을 동일하게 사용합니다.
         </div>
       </div>
 
       <div style={{ background:'rgba(15,23,42,0.72)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:18, padding:16, marginBottom:16, boxShadow:'0 16px 36px rgba(0,0,0,0.24)' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
-          <input value={nick} onChange={e=>setNick(e.target.value)} placeholder="이름/닉네임" style={{ background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, outline:'none' }} />
-          <input value={contact} onChange={e=>setContact(e.target.value)} placeholder="연락처/이메일 (선택)" style={{ background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, outline:'none' }} />
-          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="문의 제목" style={{ background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, outline:'none' }} />
-          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="문의 내용을 입력해주세요." rows={5} style={{ resize:'vertical', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, outline:'none', fontFamily:'inherit', lineHeight:1.6 }} />
+          <div style={{ background: salaryUser ? 'rgba(34,197,94,.1)' : 'rgba(251,191,36,.1)', border: salaryUser ? '1px solid rgba(34,197,94,.25)' : '1px solid rgba(251,191,36,.25)', color: salaryUser ? '#86efac' : '#fbbf24', borderRadius:12, padding:'12px 13px', fontSize:13, lineHeight:1.6 }}>
+            {salaryUser ? <>작성 계정: <b>{salaryUser.display_name || salaryUser.login_id}</b> <span style={{ color:'#94a3b8' }}>({salaryUser.login_id})</span></> : <>게시글 작성은 개인 연봉저장 계정 로그인이 필요합니다. <button onClick={onLoginClick} style={{ marginLeft:8, background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)', color:'#fff', borderRadius:8, padding:'5px 8px', fontWeight:800 }}>연봉저장 로그인으로 이동</button></>}
+          </div>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="문의 제목" disabled={!salaryUser} style={{ background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, outline:'none', opacity: salaryUser ? 1 : .55 }} />
+          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="문의 내용을 입력해주세요." rows={5} disabled={!salaryUser} style={{ resize:'vertical', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, outline:'none', fontFamily:'inherit', lineHeight:1.6 }} />
           {errMsg && <div style={{ color:'#ff8f8f', background:'rgba(255,107,107,.1)', border:'1px solid rgba(255,107,107,.25)', borderRadius:10, padding:'9px 11px', fontSize:13 }}>{errMsg}</div>}
           {successMsg && <div style={{ color:'#86efac', background:'rgba(34,197,94,.1)', border:'1px solid rgba(34,197,94,.25)', borderRadius:10, padding:'9px 11px', fontSize:13 }}>{successMsg}</div>}
-          <button disabled={submitting} onClick={submitComment} style={{ border:0, borderRadius:12, padding:'13px 16px', color:'#00111f', background:'linear-gradient(90deg,#00C6FF,#00DC82)', fontWeight:900, fontSize:15, cursor:submitting?'not-allowed':'pointer', opacity:submitting?.7:1 }}>
-            {submitting ? '등록 중...' : '문의 등록하기'}
+          <button disabled={submitting || !salaryUser} onClick={submitComment} style={{ border:0, borderRadius:12, padding:'13px 16px', color:'#00111f', background:'linear-gradient(90deg,#00C6FF,#00DC82)', fontWeight:900, fontSize:15, cursor:(submitting || !salaryUser)?'not-allowed':'pointer', opacity:(submitting || !salaryUser)?.7:1 }}>
+            {submitting ? '등록 중...' : (salaryUser ? '문의 등록하기' : '로그인 후 작성 가능')}
           </button>
         </div>
       </div>
@@ -434,7 +430,7 @@ function CommentBoard() {
                   <div style={{ color:'#fff', fontWeight:900, fontSize:15 }}>{c.title || '문의'}</div>
                   <div style={{ color:getNickColor(c.nick), fontWeight:800, fontSize:12, marginTop:4 }}>{c.nick} · {c.created_at ? new Date(c.created_at).toLocaleString('ko-KR') : ''}</div>
                 </div>
-                <button onClick={()=>handleDelete(c.id)} style={{ background:'transparent', border:0, color:'#64748b', cursor:'pointer', fontSize:12 }}>삭제</button>
+                {salaryUser && c.user_id === salaryUser.id ? <button onClick={()=>handleDelete(c.id)} style={{ background:'transparent', border:0, color:'#ef9a9a', cursor:'pointer', fontSize:12, fontWeight:800 }}>삭제</button> : null}
               </div>
               <div style={{ whiteSpace:'pre-wrap', color:'#dbe4f0', fontSize:14, lineHeight:1.65 }}>{c.text}</div>
               {c.status && <div style={{ marginTop:10, display:'inline-flex', border:'1px solid rgba(0,198,255,.25)', color:'#7dd3fc', background:'rgba(0,198,255,.08)', borderRadius:999, padding:'4px 9px', fontSize:11, fontWeight:800 }}>상태: {c.status}</div>}
@@ -2719,7 +2715,7 @@ function App() {
           </div>
         ) : tab === 6 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent' }}>
-            <CommentBoard />
+            <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => setTab(4)} />
           </div>
         ) : (
           <>
