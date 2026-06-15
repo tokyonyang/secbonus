@@ -14,8 +14,11 @@
     "react-dom": "latest"
   },
   "devDependencies": {
-    "typescript": "latest",
     "@types/node": "latest",
-    "@types/react": "latest"
+    "@types/react": "latest",
+    "typescript": "latest"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
