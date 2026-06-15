@@ -66,22 +66,30 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const auth = verifySalaryToken(request.headers.get('authorization'));
+    const url = new URL(request.url);
     const body = await request.json().catch(() => ({}));
-    const id = clean(body.id, 80);
-    if (!id) {
-      return NextResponse.json({ error: '삭제할 연봉정보 ID가 없습니다.' }, { status: 400 });
+    const id = clean(url.searchParams.get('id') || body.id, 80);
+    const year = Math.round(num(url.searchParams.get('year') || body.year, 0, 2100));
+
+    if (!id && !year) {
+      return NextResponse.json({ error: '삭제할 연봉정보 ID 또는 연도가 없습니다.' }, { status: 400 });
     }
+
     const supabase = getSupabaseAdmin();
-    const { error, count } = await supabase
+    let query = supabase
       .from('salary_records')
       .delete({ count: 'exact' })
-      .eq('id', id)
       .eq('user_id', auth.userId);
+
+    if (id) query = query.eq('id', id);
+    else query = query.eq('year', year);
+
+    const { error, count } = await query;
     if (error) throw error;
     if (!count) {
-      return NextResponse.json({ error: '삭제할 연봉정보를 찾지 못했습니다.' }, { status: 404 });
+      return NextResponse.json({ error: '삭제할 연봉정보를 찾지 못했습니다. 새로고침 후 다시 시도해주세요.' }, { status: 404 });
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, deleted: count });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || '연봉정보 삭제 실패' }, { status: 500 });
   }
