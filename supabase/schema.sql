@@ -39,6 +39,8 @@ create table if not exists public.salary_records (
   cl text not null default 'CL23',
   division text not null default 'memory',
   contract_salary_man numeric not null check (contract_salary_man >= 0),
+  base_up_raise_rate numeric not null default 0,
+  performance_raise_rate numeric not null default 0,
   raise_rate numeric not null default 0,
   business_performance_bonus_man numeric not null default 0,
   withholding_income_man numeric not null default 0,
@@ -54,6 +56,11 @@ alter table public.salary_records enable row level security;
 create index if not exists salary_users_login_id_idx on public.salary_users (login_id);
 create index if not exists salary_records_user_year_idx on public.salary_records (user_id, year desc);
 
+
+
+-- 기존에 salary_records 테이블을 이미 만든 경우, 임금인상률 세부 저장용 컬럼을 추가합니다.
+alter table public.salary_records add column if not exists base_up_raise_rate numeric not null default 0;
+alter table public.salary_records add column if not exists performance_raise_rate numeric not null default 0;
 
 -- 기존에 salary_users 테이블을 이미 만든 경우, 아이디/비밀번호 찾기용 컬럼을 추가합니다.
 alter table public.salary_users add column if not exists recovery_salt text;
