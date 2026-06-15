@@ -697,15 +697,36 @@ function App() {
 
   const salaryHeaders = () => ({ "Content-Type":"application/json", ...(salaryToken ? { Authorization:`Bearer ${salaryToken}` } : {}) });
 
-  const loadSalaryRecords = async (token = salaryToken) => {
+  const getLatestEditedSalaryRecord = (records = []) => {
+    const list = Array.isArray(records) ? records.filter(Boolean) : [];
+    if (!list.length) return null;
+    // 기본값은 마지막 수정일이 아니라 "가장 높은 저장연도" 기준으로 불러온다.
+    // 같은 연도가 중복 저장된 예외 상황에서는 최근 수정 데이터를 우선한다.
+    return [...list].sort((a, b) => {
+      const ay = Number(a.year || 0);
+      const by = Number(b.year || 0);
+      if (by !== ay) return by - ay;
+      const at = new Date(a.updated_at || a.created_at || 0).getTime() || 0;
+      const bt = new Date(b.updated_at || b.created_at || 0).getTime() || 0;
+      return bt - at;
+    })[0];
+  };
+
+  const loadSalaryRecords = async (token = salaryToken, options = {}) => {
     if (!token) return;
+    const shouldApplyLatest = !!options.applyLatest;
     setSalaryLoading(true);
     setSalaryMsg("");
     try {
       const res = await fetch('/api/salary/records', { headers:{ Authorization:`Bearer ${token}` }, cache:'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '연봉정보 조회 실패');
-      setSalaryRecords(data.records || []);
+      const records = data.records || [];
+      setSalaryRecords(records);
+      if (shouldApplyLatest) {
+        const latest = getLatestEditedSalaryRecord(records);
+        if (latest) applySalaryRecord(latest, { silent: true, reason: 'latest' });
+      }
     } catch(e) {
       setSalaryMsg(e.message || '연봉정보 조회 실패');
       if (String(e.message || '').includes('로그인')) salaryLogout();
@@ -753,7 +774,7 @@ function App() {
       setSalaryPassword("");
       setSalaryRecoveryCode("");
       setSalaryMsg(salaryAuthMode === 'register' ? '가입 및 로그인 완료' : '로그인 완료');
-      await loadSalaryRecords(data.token);
+      await loadSalaryRecords(data.token, { applyLatest: true });
     } catch(e) {
       setSalaryMsg(e.message || '처리 실패');
     }
@@ -879,7 +900,8 @@ function App() {
     setSalaryLoading(false);
   };
 
-  const applySalaryRecord = (rec) => {
+  const applySalaryRecord = (rec, options = {}) => {
+    const silent = !!options.silent;
     const contract = Math.round(Number(rec.contract_salary_man) || 0);
     const savedBaseRaw = rec.base_up_raise_rate;
     const savedPerfRaw = rec.performance_raise_rate;
@@ -910,7 +932,8 @@ function App() {
     setSalaryManualWithholdingAuto(false);
     setSalaryManualWithholding(Math.round(Number(rec.withholding_income_man) || 0));
     setSalaryMemo(rec.memo || '');
-    setSalaryMsg(`${rec.year}년 연봉정보를 계산기에 불러왔습니다.`);
+    if (!silent) setSalaryMsg(`${rec.year}년 연봉정보를 계산기에 불러왔습니다.`);
+    else if (options.reason === 'latest') setSalaryMsg(`로그인된 계정의 가장 높은 연도(${rec.year}년) 연봉정보를 기본값으로 불러왔습니다.`);
   };
 
   const deleteSalaryRecord = async (rec) => {
@@ -937,7 +960,7 @@ function App() {
     setSalaryLoading(false);
   };
 
-  useEffect(() => { if (salaryToken) loadSalaryRecords(salaryToken); }, []);
+  useEffect(() => { if (salaryToken) loadSalaryRecords(salaryToken, { applyLatest: true }); }, []);
 
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
