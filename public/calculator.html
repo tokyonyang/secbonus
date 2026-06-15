@@ -562,6 +562,7 @@ function App() {
     return Object.prototype.hasOwnProperty.call(DS_PS_HISTORY, y) ? DS_PS_HISTORY[y] : null;
   };
   const calcPsAmountMan = (salaryMan, psRate) => Math.round((Number(salaryMan) || 0) * (Number(psRate) || 0) / 100);
+  const calcPiAmountMan = (salaryMan, piRate) => Math.round(((Number(salaryMan) || 0) / 24) * ((Number(piRate) || 0) / 100) * 2);
 
   // ── DS 자동환산: totalProfit × dsRatio 변경 시 profit 자동 업데이트 ─────
   React.useEffect(() => {
@@ -607,6 +608,18 @@ function App() {
     const totalRaise = prevRec ? calcTotalRaiseFromSalary(contractSalaryMan, prevRec.contract_salary_man) : null;
     if (totalRaise === null) return null;
     return roundRaise(totalRaise - (Number(baseUpRate) || 0));
+  };
+  const calcDefaultWithholdingFromPrevYear = (year, records = salaryRecords, piRate = 100) => {
+    const prevYear = Number(year) - 1;
+    const prevRec = findRecordByYear(records, prevYear);
+    if (!prevRec) return null;
+    const prevSalary = Math.round(Number(prevRec.contract_salary_man) || 0);
+    const psRate = Number(prevRec.ds_ps_rate ?? getHistoricalDsPs(prevYear) ?? 0);
+    const psMan = calcPsAmountMan(prevSalary, psRate);
+    const piRateNum = Number(piRate) || 0;
+    const piMan = calcPiAmountMan(prevSalary, piRateNum);
+    const total = Math.round(prevSalary + psMan + piMan);
+    return { prevYear, prevSalary, psRate, psMan, piRate: piRateNum, piMan, total };
   };
   const getTotalRaiseForRecord = (rec, records = salaryRecords) => {
     const prevRec = findRecordByYear(records, Number(rec?.year) - 1);
@@ -679,6 +692,8 @@ function App() {
   const [salaryManualPerformance, setSalaryManualPerformance] = useState(0);
   const [salaryManualBizBonus, setSalaryManualBizBonus] = useState(0);
   const [salaryManualDsPsRate, setSalaryManualDsPsRate] = useState(0);
+  const [salaryManualPiRate, setSalaryManualPiRate] = useState(100); // 전년도 PI: 기준급 100% × 2회 기본
+  const [salaryManualWithholdingAuto, setSalaryManualWithholdingAuto] = useState(true);
   const [salaryManualWithholding, setSalaryManualWithholding] = useState(0);
   const [salaryMemo, setSalaryMemo] = useState("");
   const [salaryMsg, setSalaryMsg] = useState("");
@@ -765,13 +780,17 @@ function App() {
     setSalaryManualPerformance(performanceRaise);
     setSalaryManualBizBonus(bizPerfBonus);
     setSalaryManualDsPsRate(getHistoricalDsPs(salaryRecordYear) ?? 0);
-    setSalaryManualWithholding(prevWithholding);
+    setSalaryManualPiRate(100);
+    setSalaryManualWithholdingAuto(true);
+    const defaultWithholding = calcDefaultWithholdingFromPrevYear(salaryRecordYear, salaryRecords, 100);
+    setSalaryManualWithholding(defaultWithholding ? defaultWithholding.total : prevWithholding);
   };
 
 
   const handleSalaryRecordYearChange = (nextYear) => {
     const y = Math.round(Number(nextYear) || 0);
     setSalaryRecordYear(y);
+    if (salarySaveMode === 'manual') setSalaryManualWithholdingAuto(true);
     const historicalBaseUp = getHistoricalBaseUp(y);
     if (salarySaveMode === 'manual' && historicalBaseUp !== null) {
       setSalaryManualBaseUp(historicalBaseUp);
@@ -784,6 +803,7 @@ function App() {
 
   const switchToManualSalaryMode = () => {
     setSalarySaveMode('manual');
+    setSalaryManualWithholdingAuto(true);
     if (!salaryManualContract) fillManualSalaryFromCalculator();
     const historicalBaseUp = getHistoricalBaseUp(salaryRecordYear);
     if (historicalBaseUp !== null) setSalaryManualBaseUp(historicalBaseUp);
@@ -796,6 +816,27 @@ function App() {
     const autoPerf = calcManualPerformanceFromSalary(salaryRecordYear, salaryManualContract, salaryManualBaseUp, salaryRecords);
     if (autoPerf !== null) setSalaryManualPerformance(autoPerf);
   }, [salarySaveMode, salaryRecordYear, salaryManualContract, salaryManualBaseUp, salaryRecords]);
+
+  useEffect(() => {
+    if (salarySaveMode !== 'manual' || !salaryManualWithholdingAuto) return;
+    const defaultWithholding = calcDefaultWithholdingFromPrevYear(salaryRecordYear, salaryRecords, salaryManualPiRate);
+    if (defaultWithholding) setSalaryManualWithholding(defaultWithholding.total);
+  }, [salarySaveMode, salaryRecordYear, salaryRecords, salaryManualPiRate, salaryManualWithholdingAuto]);
+
+  const handleSalaryManualWithholdingChange = (value) => {
+    setSalaryManualWithholdingAuto(false);
+    setSalaryManualWithholding(value);
+  };
+
+  const applyDefaultManualWithholding = () => {
+    const defaultWithholding = calcDefaultWithholdingFromPrevYear(salaryRecordYear, salaryRecords, salaryManualPiRate);
+    if (defaultWithholding) {
+      setSalaryManualWithholding(defaultWithholding.total);
+      setSalaryManualWithholdingAuto(true);
+    } else {
+      setSalaryMsg(`${Number(salaryRecordYear) - 1}년 연봉정보가 없어 자동 계산할 수 없습니다.`);
+    }
+  };
 
   const saveSalaryRecord = async () => {
     if (!salaryToken) { setSalaryMsg('로그인 후 저장할 수 있습니다.'); return; }
@@ -810,6 +851,7 @@ function App() {
     const savePerformance = roundRaise(isManual ? (autoManualPerformance !== null ? autoManualPerformance : salaryManualPerformance) : performanceRaise);
     const saveRaiseRate = roundRaise(saveBaseUp + savePerformance);
     const saveDsPsRate = roundRaise(isManual ? salaryManualDsPsRate : (getHistoricalDsPs(recordYear) ?? 0));
+    const defaultWithholdingForSave = isManual ? calcDefaultWithholdingFromPrevYear(recordYear, salaryRecords, salaryManualPiRate) : null;
     try {
       const res = await fetch('/api/salary/records', {
         method:'POST', headers: salaryHeaders(),
@@ -824,6 +866,9 @@ function App() {
           dsPsRate: saveDsPsRate,
           businessPerformanceBonusMan: Math.round(Number(isManual ? salaryManualBizBonus : bizPerfBonus) || 0),
           withholdingIncomeMan: Math.round(Number(isManual ? salaryManualWithholding : prevWithholding) || 0),
+          withholdingPiRate: isManual ? roundRaise(salaryManualPiRate) : 100,
+          withholdingPsMan: defaultWithholdingForSave ? defaultWithholdingForSave.psMan : 0,
+          withholdingPiMan: defaultWithholdingForSave ? defaultWithholdingForSave.piMan : 0,
           memo: salaryMemo || (isManual ? `${recordYear}년 수기 입력` : ''),
         })
       });
@@ -865,6 +910,8 @@ function App() {
     setSalaryManualPerformance(perf);
     setSalaryManualBizBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
     setSalaryManualDsPsRate(Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0));
+    setSalaryManualPiRate(Number(rec.withholding_pi_rate ?? 100));
+    setSalaryManualWithholdingAuto(false);
     setSalaryManualWithholding(Math.round(Number(rec.withholding_income_man) || 0));
     setSalaryMemo(rec.memo || '');
     setSalaryMsg(`${rec.year}년 연봉정보를 계산기에 불러왔습니다.`);
@@ -1643,6 +1690,8 @@ function App() {
     </div>
   );
 
+  const manualWithholdingEstimate = calcDefaultWithholdingFromPrevYear(salaryRecordYear, salaryRecords, salaryManualPiRate);
+
   const SalaryContent = () => (
     <div className="salary-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
       <FieldBox label="개인 연봉정보 저장" accent="rgba(167,139,250,0.35)">
@@ -1734,7 +1783,7 @@ function App() {
             </div>
             {salarySaveMode === 'manual' && (
               <div style={{ display:"flex", flexDirection:"column", gap:8, background:"rgba(0,220,130,0.06)", border:"1px solid rgba(0,220,130,0.18)", borderRadius:12, padding:10 }}>
-                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 저장연도가 2011~2026년이면 베이스업, 2011~2025년이면 DS PS 참고값이 자동 반영됩니다.</div>
+                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 베이스업과 DS PS 참고값이 자동 반영되며, 전년도 원천징수는 기본적으로 전년도 연봉+PS+PI로 계산됩니다.</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={sBase.inBox}>
                     <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>수기 입력 기준연도</div>
@@ -1799,8 +1848,29 @@ function App() {
                       <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>직전년도 저장 후 자동계산</div>
                     )}
                   </div>
-                  <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>전년도 원천징수(만)</div><NumInput value={salaryManualWithholding} onChange={setSalaryManualWithholding} step={10}/></div>
+                  <div style={sBase.inBox}>
+                    <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>전년도 PI 지급률(%)</div>
+                    <NumInput value={salaryManualPiRate} onChange={(v)=>{ setSalaryManualPiRate(v); setSalaryManualWithholdingAuto(true); }} step={10} min={0} max={100}/>
+                    <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>기본: 기준급 100% × 상·하반기 2회</div>
+                  </div>
+                  <div style={sBase.inBox}>
+                    <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>전년도 원천징수(만)</div>
+                    <NumInput value={salaryManualWithholding} onChange={handleSalaryManualWithholdingChange} step={10}/>
+                    <div style={{ fontSize:10, color: salaryManualWithholdingAuto ? "#7DD3FC" : "#FFB400", marginTop:4 }}>
+                      {salaryManualWithholdingAuto ? "자동계산 적용중" : "수동 수정값 적용중"}
+                    </div>
+                  </div>
                 </div>
+                {manualWithholdingEstimate ? (
+                  <div style={{ fontSize:11, color:"#CBD5E1", lineHeight:1.55, background:"rgba(125,211,252,0.08)", border:"1px solid rgba(125,211,252,0.18)", borderRadius:10, padding:"9px 10px" }}>
+                    <b>{manualWithholdingEstimate.prevYear}년 원천징수 기본값</b> = 전년도 연봉 {comma(manualWithholdingEstimate.prevSalary)}만원 + PS {comma(manualWithholdingEstimate.psMan)}만원({manualWithholdingEstimate.psRate.toFixed(1)}%) + PI {comma(manualWithholdingEstimate.piMan)}만원({Number(salaryManualPiRate||0).toFixed(0)}% × 2회) = <b style={{ color:"#00DC82" }}>{comma(manualWithholdingEstimate.total)}만원</b>
+                    <button type="button" onClick={applyDefaultManualWithholding} style={{ marginTop:7, width:"100%", padding:"7px 8px", borderRadius:8, border:"1px solid rgba(125,211,252,0.35)", background:"rgba(125,211,252,0.10)", color:"#7DD3FC", fontSize:10, fontWeight:800, fontFamily:"inherit", cursor:"pointer" }}>전년도 연봉+PS+PI 기본값 재적용</button>
+                  </div>
+                ) : (
+                  <div style={{ fontSize:11, color:"#94A3B8", lineHeight:1.5, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:10, padding:"9px 10px" }}>
+                    전년도 원천징수 기본값을 계산하려면 {Number(salaryRecordYear) - 1}년 연봉정보를 먼저 저장하세요. 이후 기본값은 전년도 연봉+PS+PI로 자동 계산됩니다.
+                  </div>
+                )}
               </div>
             )}
             <div style={sBase.inBox}>
@@ -1827,7 +1897,7 @@ function App() {
                     <div>
                       <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
                       <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}% · 성과 {getPerformanceRaiseForRecord(rec, salaryRecords).toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
-                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원{rec.withholding_pi_rate !== undefined && rec.withholding_pi_rate !== null ? ` · PI ${Number(rec.withholding_pi_rate).toFixed(0)}%×2회` : ''}</div>
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
                       <button onClick={()=>applySalaryRecord(rec)} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(0,198,255,0.35)", background:"rgba(0,198,255,0.1)", color:"#00C6FF", cursor:"pointer", fontFamily:"inherit", fontWeight:800 }}>불러오기</button>
