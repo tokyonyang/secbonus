@@ -513,9 +513,11 @@ function App() {
     { year:2025, total:43.6, ds:24.9, ratio:57, cycle:"상승(AI 수요)" },
   ];
 
-  // ── 2011~2024년 삼성전자 베이스업 참고값 ───────────────────────────────
+  // ── 2011~2026년 삼성전자 베이스업 참고값 ───────────────────────────────
   // 사용자 첨부 자료 기준. 과거 연봉 수기 입력 시 저장연도에 맞춰 자동 반영합니다.
   const BASE_UP_HISTORY = {
+    2026: 4.1,
+    2025: 3.0,
     2024: 3.0,
     2023: 2.0,
     2022: 5.0,
@@ -1660,7 +1662,7 @@ function App() {
             </div>
             {salarySaveMode === 'manual' && (
               <div style={{ display:"flex", flexDirection:"column", gap:8, background:"rgba(0,220,130,0.06)", border:"1px solid rgba(0,220,130,0.18)", borderRadius:12, padding:10 }}>
-                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 저장연도가 2011~2024년이면 베이스업 참고값이 자동 반영됩니다.</div>
+                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 저장연도가 2011~2026년이면 베이스업 참고값이 자동 반영됩니다.</div>
                 {getHistoricalBaseUp(salaryRecordYear) !== null && (
                   <div style={{ fontSize:11, color:"#7DD3FC", lineHeight:1.5, background:"rgba(0,198,255,0.08)", border:"1px solid rgba(0,198,255,0.18)", borderRadius:10, padding:"8px 10px" }}>
                     {salaryRecordYear}년 베이스업 참고값 <b>{getHistoricalBaseUp(salaryRecordYear).toFixed(1)}%</b>가 적용됩니다.
