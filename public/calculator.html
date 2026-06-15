@@ -500,17 +500,17 @@ function App() {
 
   // ── 역대 실적 참고 데이터 (2015~2025) ────────────────────────────────────
   const HISTORICAL_DS_DATA = [
-    { year:2015, total:26.4, ds:13.3, ratio:50, cycle:"보통" },
-    { year:2016, total:29.2, ds:17.8, ratio:61, cycle:"상승" },
-    { year:2017, total:53.6, ds:35.2, ratio:66, cycle:"호황(슈퍼사이클)" },
-    { year:2018, total:58.9, ds:44.6, ratio:76, cycle:"호황 최고점" },
-    { year:2019, total:27.8, ds:14.9, ratio:54, cycle:"하강" },
-    { year:2020, total:35.9, ds:18.8, ratio:52, cycle:"보통" },
-    { year:2021, total:51.6, ds:29.2, ratio:57, cycle:"상승" },
-    { year:2022, total:43.4, ds:24.0, ratio:55, cycle:"하강" },
-    { year:2023, total:6.6,  ds:-14.9, ratio:null, cycle:"침체(DS 대규모 적자)" },
-    { year:2024, total:32.7, ds:15.1, ratio:46, cycle:"회복" },
-    { year:2025, total:43.6, ds:24.9, ratio:57, cycle:"상승(AI 수요)" },
+    { year:2015, total:26.4, ds:13.3, ratio:50, ps:50.0, cycle:"보통" },
+    { year:2016, total:29.2, ds:17.8, ratio:61, ps:50.0, cycle:"상승" },
+    { year:2017, total:53.6, ds:35.2, ratio:66, ps:50.0, cycle:"호황(슈퍼사이클)" },
+    { year:2018, total:58.9, ds:44.6, ratio:76, ps:50.0, cycle:"호황 최고점" },
+    { year:2019, total:27.8, ds:14.9, ratio:54, ps:29.0, cycle:"하강" },
+    { year:2020, total:35.9, ds:18.8, ratio:52, ps:47.0, cycle:"보통" },
+    { year:2021, total:51.6, ds:29.2, ratio:57, ps:50.0, cycle:"상승" },
+    { year:2022, total:43.4, ds:24.0, ratio:55, ps:50.0, cycle:"하강" },
+    { year:2023, total:6.6,  ds:-14.9, ratio:null, ps:0.0, cycle:"침체(DS 대규모 적자)" },
+    { year:2024, total:32.7, ds:15.1, ratio:46, ps:14.0, cycle:"회복" },
+    { year:2025, total:43.6, ds:24.9, ratio:57, ps:47.0, cycle:"상승(AI 수요)" },
   ];
 
   // ── 2011~2026년 삼성전자 베이스업 참고값 ───────────────────────────────
@@ -2423,7 +2423,7 @@ function App() {
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead>
                   <tr style={{ borderBottom:"1px solid rgba(255,255,255,0.12)" }}>
-                    {["연도","전사(조)","DS(조)","DS비중","반도체 사이클"].map(h => (
+                    {["연도","전사(조)","DS(조)","DS비중","DS PS","반도체 사이클"].map(h => (
                       <th key={h} style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"center", fontSize:11 }}>{h}</th>
                     ))}
                   </tr>
@@ -2444,6 +2444,9 @@ function App() {
                         <td style={{ padding:"7px 6px", textAlign:"center", color:ratioColor, fontWeight:800 }}>
                           {isLoss ? "적자" : `${d.ratio}%`}
                         </td>
+                        <td style={{ padding:"7px 6px", textAlign:"center", color:d.ps >= 45 ? "#00DC82" : d.ps >= 20 ? "#FFB400" : d.ps > 0 ? "#FF9500" : "#FF6B6B", fontWeight:800 }}>
+                          {Number(d.ps).toFixed(d.ps % 1 ? 1 : 0)}%
+                        </td>
                         <td style={{ padding:"7px 6px", textAlign:"center", fontSize:10, color:"#94A3B8" }}>{d.cycle}</td>
                       </tr>
                     );
@@ -2456,6 +2459,7 @@ function App() {
                 { label:"호황기 평균 DS 비중", val:"69%", color:"#00DC82", years:"2017·2018·2026~" },
                 { label:"보통기 평균 DS 비중", val:"55%", color:"#FFB400", years:"2016·2020·2021" },
                 { label:"침체기 평균 DS 비중", val:"50%", color:"#FF9500", years:"2019·2022·2024" },
+                { label:"2015~2025 평균 DS PS", val:`${Math.round(HISTORICAL_DS_DATA.reduce((sum,d)=>sum+(Number(d.ps)||0),0)/HISTORICAL_DS_DATA.length)}%`, color:"#7DD3FC", years:"DS OPI 지급률" },
               ].map(s => (
                 <div key={s.label} style={{ flex:1, minWidth:120, background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 10px", border:`1px solid ${s.color}33` }}>
                   <div style={{ fontSize:10, color:"#94A3B8", marginBottom:3 }}>{s.label}</div>
