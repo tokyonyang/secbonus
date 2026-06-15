@@ -1137,6 +1137,7 @@ function App() {
     { icon:"💰", label:"산출결과" },
     { icon:"📖", label:"로직 설명" },
     { icon:"💾", label:"연봉저장" },
+    { icon:"📈", label:"연봉추이" },
     { icon:"💬", label:"게시판" },
   ];
 
@@ -1713,8 +1714,8 @@ function App() {
               </div>
             )}
             <div style={sBase.inBox}>
-              <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>메모</div>
-              <input value={salaryMemo} onChange={e=>setSalaryMemo(e.target.value)} placeholder="예: 2025 계약연봉, CL 변경 등" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:14, outline:"none" }}/>
+              <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>비고 / 진급여부</div>
+              <input value={salaryMemo} onChange={e=>setSalaryMemo(e.target.value)} placeholder="예: 2025 계약연봉, CL2→CL3 진급, 고과 반영 등" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:14, outline:"none" }}/>
             </div>
             <button onClick={saveSalaryRecord} disabled={salaryLoading} style={{ width:"100%", padding:15, borderRadius:13, background:"linear-gradient(135deg,#00DC82,#059669)", border:"none", color:"#fff", fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}>
               {salaryLoading ? "저장중..." : (salarySaveMode === 'manual' ? "수기 입력값을 연봉정보로 저장" : "현재 계산기 입력값을 연봉정보로 저장")}
@@ -1752,6 +1753,100 @@ function App() {
       )}
     </div>
   );
+
+
+  const SalaryTrendContent = () => {
+    const trendRecords = [...salaryRecords].sort((a,b) => Number(a.year || 0) - Number(b.year || 0));
+    const firstRec = trendRecords[0] || null;
+    const lastRec = trendRecords[trendRecords.length - 1] || null;
+    const salaryGrowth = firstRec && lastRec ? (Number(lastRec.contract_salary_man || 0) - Number(firstRec.contract_salary_man || 0)) : 0;
+    const avgBaseUp = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.base_up_raise_rate || 0), 0) / trendRecords.length : 0;
+    const avgPerformanceRaise = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.performance_raise_rate ?? Math.max(0, (Number(rec.raise_rate)||0) - (Number(rec.base_up_raise_rate)||0))), 0) / trendRecords.length : 0;
+    const maxSalary = Math.max(1, ...trendRecords.map(rec => Number(rec.contract_salary_man || 0)));
+    const maxRaise = Math.max(1, ...trendRecords.map(rec => Math.max(Number(rec.base_up_raise_rate || 0), Number(rec.performance_raise_rate ?? 0))));
+    const getDivisionLabel = (v) => v === 'memory' ? '메모리' : v === 'common' ? '공통' : '르팡';
+    const getAutoNote = (rec, idx) => {
+      const memo = String(rec.memo || '').trim();
+      const prev = trendRecords[idx - 1];
+      const clChange = prev && prev.cl !== rec.cl ? `${prev.cl} → ${rec.cl}` : '';
+      if (memo && clChange) return `${memo} / ${clChange}`;
+      return memo || clChange || '-';
+    };
+
+    return (
+      <div className="salary-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
+        <FieldBox label="개인별 연봉 변동 추이" accent="rgba(0,198,255,0.30)">
+          {!salaryToken ? (
+            <div style={{ fontSize:12, color:"#CBD5E1", lineHeight:1.6 }}>
+              연봉추이는 개인 저장공간에 로그인한 뒤 확인할 수 있습니다. 연봉저장 탭에서 로그인하거나 처음 등록을 먼저 진행하세요.
+            </div>
+          ) : trendRecords.length === 0 ? (
+            <div style={{ fontSize:12, color:"#94A3B8", lineHeight:1.6 }}>
+              아직 저장된 연봉정보가 없습니다. 연봉저장 탭에서 2011년 이후 연봉을 수기 입력하면 이곳에 연도별 추이가 자동으로 정리됩니다.
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ fontSize:12, color:"#CBD5E1", lineHeight:1.6 }}>
+                저장된 연봉정보를 기준으로 <b>연봉, 베이스업, 성과인상률, 비고/진급여부</b>를 연도순으로 정리합니다. 비고는 저장 시 입력한 메모를 우선 표시하고, 직급이 바뀐 경우 자동으로 함께 표시합니다.
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(132px, 1fr))", gap:8 }}>
+                <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>최신 연봉</div><div style={{ fontSize:17, fontWeight:900, color:"#00DC82", marginTop:5 }}>{comma(Number(lastRec?.contract_salary_man)||0)}만원</div></div>
+                <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>누적 상승액</div><div style={{ fontSize:17, fontWeight:900, color: salaryGrowth >= 0 ? "#00DC82" : "#FF6B6B", marginTop:5 }}>{salaryGrowth >= 0 ? '+' : ''}{comma(salaryGrowth)}만원</div></div>
+                <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 베이스업</div><div style={{ fontSize:17, fontWeight:900, color:"#7DD3FC", marginTop:5 }}>{avgBaseUp.toFixed(1)}%</div></div>
+                <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 성과인상</div><div style={{ fontSize:17, fontWeight:900, color:"#A78BFA", marginTop:5 }}>{avgPerformanceRaise.toFixed(1)}%</div></div>
+              </div>
+
+              <div style={{ background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:14, overflowX:"auto", overflowY:"hidden" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 220px", minWidth:650, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
+                  <div>연도</div><div>연봉</div><div>베이스업</div><div>성과인상</div><div>비고</div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column" }}>
+                  {trendRecords.map((rec, idx) => {
+                    const salary = Number(rec.contract_salary_man || 0);
+                    const base = Number(rec.base_up_raise_rate || 0);
+                    const perfRaise = Number(rec.performance_raise_rate ?? Math.max(0, (Number(rec.raise_rate)||0) - base));
+                    const note = getAutoNote(rec, idx);
+                    return (
+                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 220px", minWidth:650, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
+                        <div style={{ color:"#E2E8F0", fontWeight:900 }}>{rec.year}</div>
+                        <div>
+                          <div style={{ color:"#fff", fontWeight:900 }}>{comma(salary)}만원</div>
+                          <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
+                            <div style={{ width:`${Math.max(4, Math.min(100, salary / maxSalary * 100))}%`, height:"100%", background:"linear-gradient(90deg,#00DC82,#7DD3FC)", borderRadius:999 }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color:"#7DD3FC", fontWeight:900 }}>{base.toFixed(1)}%</div>
+                          <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
+                            <div style={{ width:`${Math.max(4, Math.min(100, base / maxRaise * 100))}%`, height:"100%", background:"rgba(125,211,252,0.75)", borderRadius:999 }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color:"#A78BFA", fontWeight:900 }}>{perfRaise.toFixed(1)}%</div>
+                          <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
+                            <div style={{ width:`${Math.max(4, Math.min(100, perfRaise / maxRaise * 100))}%`, height:"100%", background:"rgba(167,139,250,0.75)", borderRadius:999 }} />
+                          </div>
+                        </div>
+                        <div style={{ color: note === '-' ? "#64748B" : "#CBD5E1", lineHeight:1.35 }}>
+                          <div>{note}</div>
+                          <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>{rec.cl} · {getDivisionLabel(rec.division)} · 성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ fontSize:11, color:"#94A3B8", lineHeight:1.5 }}>
+                오기입 데이터는 연봉저장 탭의 연도별 누적 내역에서 삭제 후 다시 입력할 수 있습니다.
+              </div>
+            </div>
+          )}
+        </FieldBox>
+      </div>
+    );
+  };
 
   /* ── 설정 패널 컨텐츠 ── */
   const SettingsContent = () => (
@@ -2443,6 +2538,10 @@ function App() {
             {SalaryContent()}
           </div>
         ) : tab === 5 ? (
+          <div style={{ flex:1, overflowY:'auto', background:'transparent', maxWidth:960, margin:'0 auto', width:'100%' }}>
+            {SalaryTrendContent()}
+          </div>
+        ) : tab === 6 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent' }}>
             <CommentBoard />
           </div>
