@@ -2235,15 +2235,36 @@ function App() {
             {/* DS 직접 입력 모드 */}
             {!dsAutoMode && (
               <>
-                <div style={{ ...sBase.row, marginBottom:12 }}>
-                  <span style={{ fontSize:13, color:"#E2E8F0" }}>DS부문 영업이익 (직접 입력)</span>
-                  <span style={{ fontSize:30, fontWeight:900, color:"#00C6FF" }}>{profit}조</span>
+                <div style={{ ...sBase.row, marginBottom:12, alignItems:"flex-end", gap:10 }}>
+                  <div>
+                    <span style={{ fontSize:13, color:"#E2E8F0" }}>DS부문 영업이익 (직접 입력)</span>
+                    <div style={{ fontSize:11, color:"#94A3B8", marginTop:4 }}>슬라이더 또는 숫자 입력으로 조정</div>
+                  </div>
+                  <div style={{
+                    minWidth:120,
+                    background:"rgba(0,198,255,0.10)",
+                    border:"1.5px solid rgba(0,198,255,0.35)",
+                    borderRadius:13,
+                    padding:"10px 12px",
+                    display:"flex",
+                    alignItems:"baseline",
+                    justifyContent:"flex-end",
+                    gap:4
+                  }}>
+                    <div style={{ width:72, textAlign:"right" }}>
+                      <NumInput value={profit} onChange={setProfit} step={0.1} min={-100} max={900} color="#00C6FF" size={28}/>
+                    </div>
+                    <span style={{ fontSize:18, fontWeight:900, color:"#00C6FF" }}>조</span>
+                  </div>
                 </div>
-                <Slider value={profit} min={10} max={900} step={5} onChange={setProfit} color="#00C6FF"/>
+                <Slider value={profit} min={-100} max={900} step={5} onChange={setProfit} color="#00C6FF"/>
                 <div style={{ ...sBase.row, marginTop:7 }}>
-                  <span style={{ fontSize:11, color:"#94A3B8" }}>10조</span>
+                  <span style={{ fontSize:11, color:"#94A3B8" }}>-100조</span>
                   <span style={{ fontSize:11, color:"#FF6B6B" }}>허들 {r.spThreshold}조</span>
                   <span style={{ fontSize:11, color:"#94A3B8" }}>900조</span>
+                </div>
+                <div style={{ marginTop:8, fontSize:11, color:"#94A3B8", lineHeight:1.5 }}>
+                  적자 연도처럼 DS 영업손실이 있는 경우에는 음수도 입력할 수 있습니다. 예: 2023년 DS -14.9조
                 </div>
               </>
             )}
