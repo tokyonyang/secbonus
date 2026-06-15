@@ -35,7 +35,7 @@ create table if not exists public.salary_users (
 create table if not exists public.salary_records (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.salary_users(id) on delete cascade,
-  year int not null check (year >= 2025),
+  year int not null check (year >= 2011),
   cl text not null default 'CL23',
   division text not null default 'memory',
   contract_salary_man numeric not null check (contract_salary_man >= 0),
@@ -57,6 +57,11 @@ create index if not exists salary_users_login_id_idx on public.salary_users (log
 create index if not exists salary_records_user_year_idx on public.salary_records (user_id, year desc);
 
 
+
+
+-- 기존에 salary_records 테이블을 이미 만든 경우, 2025년 이전 연봉 수기 저장을 위해 연도 제한을 2011년부터 저장 가능하도록 맞춥니다.
+alter table public.salary_records drop constraint if exists salary_records_year_check;
+alter table public.salary_records add constraint salary_records_year_check check (year >= 2011);
 
 -- 기존에 salary_records 테이블을 이미 만든 경우, 임금인상률 세부 저장용 컬럼을 추가합니다.
 alter table public.salary_records add column if not exists base_up_raise_rate numeric not null default 0;
