@@ -21,7 +21,9 @@ export async function GET(request: Request) {
       .eq('user_id', auth.userId)
       .order('year', { ascending: false });
     if (error) throw error;
-    return NextResponse.json({ records: data ?? [] });
+    const records = data ?? [];
+    const latestRecord = records.length ? records[0] : null; // year desc 정렬 기준 가장 높은 연도
+    return NextResponse.json({ records, latestRecord });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || '연봉정보 조회 실패' }, { status: 401 });
   }
