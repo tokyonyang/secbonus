@@ -26,6 +26,8 @@ create table if not exists public.salary_users (
   display_name text not null,
   password_salt text not null,
   password_hash text not null,
+  recovery_salt text,
+  recovery_hash text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -51,3 +53,11 @@ alter table public.salary_records enable row level security;
 
 create index if not exists salary_users_login_id_idx on public.salary_users (login_id);
 create index if not exists salary_records_user_year_idx on public.salary_records (user_id, year desc);
+
+
+-- 기존에 salary_users 테이블을 이미 만든 경우, 아이디/비밀번호 찾기용 컬럼을 추가합니다.
+alter table public.salary_users add column if not exists recovery_salt text;
+alter table public.salary_users add column if not exists recovery_hash text;
+
+-- 사용자 등록리스트 및 개인 연봉정보 전체 초기화가 필요할 때 Supabase SQL Editor에서 아래 한 줄만 실행하세요.
+-- truncate table public.salary_users cascade;
