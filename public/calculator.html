@@ -431,6 +431,7 @@ function App() {
   const [myDiv, setMyDiv] = useState("memory");
   const [myCl, setMyCl] = useState("CL23");
   const [mySalary, setMySalary] = useState(8000);
+  const [agreedSalary, setAgreedSalary] = useState(0); // 올해 체결 연봉(만) — 입력 시 인상률 계산보다 우선 적용
   const [myRaise, setMyRaise] = useState(4.1);
   const [bizPerfBonus, setBizPerfBonus] = useState(0);
   const [prevWithholding, setPrevWithholding] = useState(8000);
@@ -505,10 +506,116 @@ function App() {
 
   const handleClChange = (e) => {
     const newCl = e.target.value;
-    if (newCl === "CL1" && myCl !== "CL1") { setMySalary(300); setPrevWithholding(4000); }
-    else if (newCl !== "CL1" && myCl === "CL1") { setMySalary(8000); setPrevWithholding(8000); }
+    if (newCl === "CL1" && myCl !== "CL1") { setMySalary(300); setAgreedSalary(0); setPrevWithholding(4000); }
+    else if (newCl !== "CL1" && myCl === "CL1") { setMySalary(8000); setAgreedSalary(0); setPrevWithholding(8000); }
     setMyCl(newCl);
   };
+
+  const [salaryToken, setSalaryToken] = useState(() => localStorage.getItem("salaryToken") || "");
+  const [salaryUser, setSalaryUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("salaryUser") || "null"); } catch(e) { return null; }
+  });
+  const [salaryLoginId, setSalaryLoginId] = useState("");
+  const [salaryPassword, setSalaryPassword] = useState("");
+  const [salaryDisplayName, setSalaryDisplayName] = useState("");
+  const [salaryAuthMode, setSalaryAuthMode] = useState("login");
+  const [salaryRecords, setSalaryRecords] = useState([]);
+  const [salaryRecordYear, setSalaryRecordYear] = useState(2025);
+  const [salaryMemo, setSalaryMemo] = useState("");
+  const [salaryMsg, setSalaryMsg] = useState("");
+  const [salaryLoading, setSalaryLoading] = useState(false);
+
+  const salaryHeaders = () => ({ "Content-Type":"application/json", ...(salaryToken ? { Authorization:`Bearer ${salaryToken}` } : {}) });
+
+  const loadSalaryRecords = async (token = salaryToken) => {
+    if (!token) return;
+    setSalaryLoading(true);
+    setSalaryMsg("");
+    try {
+      const res = await fetch('/api/salary/records', { headers:{ Authorization:`Bearer ${token}` }, cache:'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '연봉정보 조회 실패');
+      setSalaryRecords(data.records || []);
+    } catch(e) {
+      setSalaryMsg(e.message || '연봉정보 조회 실패');
+      if (String(e.message || '').includes('로그인')) salaryLogout();
+    }
+    setSalaryLoading(false);
+  };
+
+  const salaryLogin = async () => {
+    setSalaryLoading(true);
+    setSalaryMsg("");
+    try {
+      const res = await fetch('/api/salary/auth', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ mode: salaryAuthMode, loginId: salaryLoginId, password: salaryPassword, displayName: salaryDisplayName })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '로그인 실패');
+      setSalaryToken(data.token);
+      setSalaryUser(data.user);
+      localStorage.setItem('salaryToken', data.token);
+      localStorage.setItem('salaryUser', JSON.stringify(data.user));
+      setSalaryPassword("");
+      setSalaryMsg(salaryAuthMode === 'register' ? '가입 및 로그인 완료' : '로그인 완료');
+      await loadSalaryRecords(data.token);
+    } catch(e) {
+      setSalaryMsg(e.message || '로그인 실패');
+    }
+    setSalaryLoading(false);
+  };
+
+  const salaryLogout = () => {
+    setSalaryToken("");
+    setSalaryUser(null);
+    setSalaryRecords([]);
+    localStorage.removeItem('salaryToken');
+    localStorage.removeItem('salaryUser');
+  };
+
+  const saveSalaryRecord = async () => {
+    if (!salaryToken) { setSalaryMsg('로그인 후 저장할 수 있습니다.'); return; }
+    setSalaryLoading(true);
+    setSalaryMsg("");
+    const contractSalaryMan = agreedSalary > 0 ? agreedSalary : r.bonusSalary;
+    try {
+      const res = await fetch('/api/salary/records', {
+        method:'POST', headers: salaryHeaders(),
+        body: JSON.stringify({
+          year: salaryRecordYear,
+          cl: myCl,
+          division: myDiv,
+          contractSalaryMan,
+          raiseRate: myRaise,
+          businessPerformanceBonusMan: bizPerfBonus,
+          withholdingIncomeMan: prevWithholding,
+          memo: salaryMemo,
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '연봉정보 저장 실패');
+      setSalaryMsg(`${salaryRecordYear}년 연봉정보 저장 완료`);
+      await loadSalaryRecords();
+    } catch(e) {
+      setSalaryMsg(e.message || '연봉정보 저장 실패');
+    }
+    setSalaryLoading(false);
+  };
+
+  const applySalaryRecord = (rec) => {
+    setSalaryRecordYear(rec.year);
+    setMyCl(rec.cl || 'CL23');
+    setMyDiv(rec.division || 'memory');
+    setAgreedSalary(Math.round(Number(rec.contract_salary_man) || 0));
+    setMyRaise(Number(rec.raise_rate) || 0);
+    setBizPerfBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
+    setPrevWithholding(Math.round(Number(rec.withholding_income_man) || 0));
+    setSalaryMemo(rec.memo || '');
+    setSalaryMsg(`${rec.year}년 연봉정보를 계산기에 불러왔습니다.`);
+  };
+
+  useEffect(() => { if (salaryToken) loadSalaryRecords(salaryToken); }, []);
 
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -642,7 +749,8 @@ function App() {
     const myIdx = ids.indexOf(myDiv);
     const isCL1 = myCl === "CL1";
     const isCL4 = myCl === "CL4";
-    const curSalary = Math.round(mySalary * (1 + myRaise / 100));
+    const calculatedSalary = Math.round(mySalary * (1 + myRaise / 100));
+    const curSalary = agreedSalary > 0 ? Math.round(agreedSalary) : calculatedSalary;
     let bonusSalary = curSalary + bizPerfBonus;
     let excessCash = 0;
     if (isCL4 && curSalary > 13000) { bonusSalary = 13000 + bizPerfBonus; excessCash = curSalary - 13000; }
@@ -795,7 +903,7 @@ function App() {
       hynixDcRate, hynixDcAmount, hynixCashAfterDc, hynixDcTaxSaving, hynixDcMarginalRate,
       hynixSame, hynix70, hynixActive,
     };
-  }, [simYear, myDiv, myCl, mySalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice,
+  }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice,
       prevWithholding, profit, rerate, sprate, burate, cntMemory, cntCommon, cntLepan,
       ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRate]);
 
@@ -818,6 +926,7 @@ function App() {
     { icon:"📊", label:"시뮬레이션" },
     { icon:"💰", label:"산출결과" },
     { icon:"📖", label:"로직 설명" },
+    { icon:"💾", label:"연봉저장" },
     { icon:"💬", label:"게시판" },
   ];
 
@@ -1254,6 +1363,92 @@ function App() {
     </div>
   );
 
+  const SalaryContent = () => (
+    <div style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
+      <FieldBox label="개인 연봉정보 저장" accent="rgba(167,139,250,0.35)">
+        <div style={{ fontSize:12, color:"#CBD5E1", lineHeight:1.6, marginBottom:12 }}>
+          연봉정보는 개인 민감정보라서 브라우저 임시저장이 아니라 <b>별도 Supabase 테이블</b>에 로그인 사용자별로 저장합니다. 2025년부터 연도별로 누적할 수 있습니다.
+        </div>
+        {!salaryToken ? (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <ChipGroup value={salaryAuthMode} onChange={setSalaryAuthMode} options={[
+              {value:"login", label:"로그인", color:"#A78BFA"},
+              {value:"register", label:"처음 등록", color:"#00DC82"},
+            ]}/>
+            <div style={sBase.inBox}>
+              <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>아이디</div>
+              <input value={salaryLoginId} onChange={e=>setSalaryLoginId(e.target.value)} placeholder="영문/숫자 3자 이상" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:16, fontWeight:700, outline:"none" }}/>
+            </div>
+            {salaryAuthMode === 'register' && (
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>표시 이름</div>
+                <input value={salaryDisplayName} onChange={e=>setSalaryDisplayName(e.target.value)} placeholder="선택 입력" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:16, fontWeight:700, outline:"none" }}/>
+              </div>
+            )}
+            <div style={sBase.inBox}>
+              <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>비밀번호</div>
+              <input type="password" value={salaryPassword} onChange={e=>setSalaryPassword(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') salaryLogin(); }} placeholder="6자 이상" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:16, fontWeight:700, outline:"none" }}/>
+            </div>
+            <button onClick={salaryLogin} disabled={salaryLoading} style={{ width:"100%", padding:15, borderRadius:13, background:"linear-gradient(135deg,#A78BFA,#7C3AED)", border:"none", color:"#fff", fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}>
+              {salaryLoading ? "처리중..." : (salaryAuthMode === 'register' ? "개인 저장공간 만들기" : "로그인")}
+            </button>
+          </div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(167,139,250,0.12)", border:"1px solid rgba(167,139,250,0.35)", borderRadius:12, padding:"10px 12px" }}>
+              <div>
+                <div style={{ fontSize:12, color:"#A78BFA", fontWeight:800 }}>로그인됨</div>
+                <div style={{ fontSize:11, color:"#CBD5E1" }}>{salaryUser?.display_name || salaryUser?.login_id}</div>
+              </div>
+              <button onClick={salaryLogout} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(255,255,255,0.14)", background:"rgba(255,255,255,0.05)", color:"#CBD5E1", cursor:"pointer", fontFamily:"inherit" }}>로그아웃</button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>저장 연도</div>
+                <NumInput value={salaryRecordYear} onChange={setSalaryRecordYear} step={1} min={2025} max={2100}/>
+              </div>
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>저장될 체결연봉</div>
+                <div style={{ fontSize:20, fontWeight:900, color:"#00DC82" }}>{comma(agreedSalary > 0 ? agreedSalary : r.bonusSalary)}만원</div>
+              </div>
+            </div>
+            <div style={sBase.inBox}>
+              <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>메모</div>
+              <input value={salaryMemo} onChange={e=>setSalaryMemo(e.target.value)} placeholder="예: 2025 계약연봉, CL 변경 등" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:14, outline:"none" }}/>
+            </div>
+            <button onClick={saveSalaryRecord} disabled={salaryLoading} style={{ width:"100%", padding:15, borderRadius:13, background:"linear-gradient(135deg,#00DC82,#059669)", border:"none", color:"#fff", fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}>
+              {salaryLoading ? "저장중..." : "현재 계산기 입력값을 연봉정보로 저장"}
+            </button>
+          </div>
+        )}
+        {salaryMsg && <div style={{ marginTop:10, fontSize:12, color: salaryMsg.includes('완료') || salaryMsg.includes('불러') ? "#00DC82" : "#FFB400", lineHeight:1.5 }}>{salaryMsg}</div>}
+      </FieldBox>
+
+      {salaryToken && (
+        <FieldBox label="연도별 누적 내역" accent="rgba(0,198,255,0.25)">
+          {salaryRecords.length === 0 ? (
+            <div style={{ fontSize:12, color:"#94A3B8", lineHeight:1.6 }}>아직 저장된 연봉정보가 없습니다. 2025년도부터 현재 계산기 입력값을 저장해 누적하세요.</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {salaryRecords.map(rec => (
+                <div key={rec.id} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:12, padding:"11px 12px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                    <div>
+                      <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원</div>
+                    </div>
+                    <button onClick={()=>applySalaryRecord(rec)} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(0,198,255,0.35)", background:"rgba(0,198,255,0.1)", color:"#00C6FF", cursor:"pointer", fontFamily:"inherit", fontWeight:800 }}>불러오기</button>
+                  </div>
+                  {rec.memo && <div style={{ marginTop:7, fontSize:11, color:"#CBD5E1" }}>{rec.memo}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </FieldBox>
+      )}
+    </div>
+  );
+
   /* ── 설정 패널 컨텐츠 ── */
   const SettingsContent = () => (
     <div style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
@@ -1303,9 +1498,14 @@ function App() {
                 <NumInput value={mySalary} onChange={setMySalary} step={100} min={1}/>
               </div>
               <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>{myCl === "CL1" ? "올해 체결 기초액(만)" : "올해 체결연봉(만)"}</div>
+                <NumInput value={agreedSalary} onChange={setAgreedSalary} step={100} min={0}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>0이면 전년도×인상률 자동계산</div>
+              </div>
+              <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>인상률(%)</div>
                 <NumInput value={myRaise} onChange={setMyRaise} step={0.1} min={-100} max={100}/>
-                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>26년 base up</div>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>체결연봉 입력 시 참고값</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>고과 업무성과급(만)</div>
@@ -1916,8 +2116,12 @@ function App() {
 
       {/* ── 반응형 바디 레이아웃 ── */}
       <div className="main-layout">
-        {/* 게시판 탭: 전체 너비로 표시 */}
+        {/* 연봉저장/게시판 탭: 전체 너비로 표시 */}
         {tab === 4 ? (
+          <div style={{ flex:1, overflowY:'auto', background:'transparent', maxWidth:760, margin:'0 auto', width:'100%' }}>
+            <SalaryContent />
+          </div>
+        ) : tab === 5 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent' }}>
             <CommentBoard />
           </div>
