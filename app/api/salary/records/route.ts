@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   try {
     const auth = verifySalaryToken(request.headers.get('authorization'));
     const body = await request.json();
-    const year = Math.round(num(body.year, 2025, 2100));
+    const year = Math.round(num(body.year, 2011, 2100));
     const payload = {
       user_id: auth.userId,
       year,
@@ -59,5 +59,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ record: data });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || '연봉정보 저장 실패' }, { status: 500 });
+  }
+}
+
+
+export async function DELETE(request: Request) {
+  try {
+    const auth = verifySalaryToken(request.headers.get('authorization'));
+    const body = await request.json().catch(() => ({}));
+    const id = clean(body.id, 80);
+    if (!id) {
+      return NextResponse.json({ error: '삭제할 연봉정보 ID가 없습니다.' }, { status: 400 });
+    }
+    const supabase = getSupabaseAdmin();
+    const { error, count } = await supabase
+      .from('salary_records')
+      .delete({ count: 'exact' })
+      .eq('id', id)
+      .eq('user_id', auth.userId);
+    if (error) throw error;
+    if (!count) {
+      return NextResponse.json({ error: '삭제할 연봉정보를 찾지 못했습니다.' }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || '연봉정보 삭제 실패' }, { status: 500 });
   }
 }
