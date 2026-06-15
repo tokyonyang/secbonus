@@ -2119,7 +2119,7 @@ function App() {
         {/* 연봉저장/게시판 탭: 전체 너비로 표시 */}
         {tab === 4 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent', maxWidth:760, margin:'0 auto', width:'100%' }}>
-            <SalaryContent />
+            {SalaryContent()}
           </div>
         ) : tab === 5 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent' }}>
