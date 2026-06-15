@@ -454,7 +454,9 @@ function App() {
   const [myCl, setMyCl] = useState("CL23");
   const [mySalary, setMySalary] = useState(8000);
   const [agreedSalary, setAgreedSalary] = useState(0); // 올해 체결 연봉(만) — 입력 시 인상률 계산보다 우선 적용
-  const [myRaise, setMyRaise] = useState(4.1);
+  const [baseUpRaise, setBaseUpRaise] = useState(4.1); // 베이스업 인상률(%)
+  const [performanceRaise, setPerformanceRaise] = useState(0); // 업무성과 인상률(%)
+  const [myRaise, setMyRaise] = useState(4.1); // 총 임금인상률 = 베이스업 + 업무성과
   const [bizPerfBonus, setBizPerfBonus] = useState(0);
   const [prevWithholding, setPrevWithholding] = useState(8000);
   const [myRating, setMyRating] = useState("MT");
@@ -541,10 +543,33 @@ function App() {
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
   };
 
-  const handleRaiseChange = (nextValue) => {
-    const raise = Number(nextValue) || 0;
-    setMyRaise(raise);
-    const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, raise);
+  const syncRaiseAndReverse = (baseValue, perfValue) => {
+    const base = Number(baseValue) || 0;
+    const perf = Number(perfValue) || 0;
+    const total = Math.round((base + perf) * 10) / 10;
+    setMyRaise(total);
+    const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, total);
+    if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
+  };
+
+  const handleBaseUpRaiseChange = (nextValue) => {
+    const base = Number(nextValue) || 0;
+    setBaseUpRaise(base);
+    syncRaiseAndReverse(base, performanceRaise);
+  };
+
+  const handlePerformanceRaiseChange = (nextValue) => {
+    const perf = Number(nextValue) || 0;
+    setPerformanceRaise(perf);
+    syncRaiseAndReverse(baseUpRaise, perf);
+  };
+
+  const applyTotalRaise = (totalRaise) => {
+    const total = Number(totalRaise) || 0;
+    setBaseUpRaise(total);
+    setPerformanceRaise(0);
+    setMyRaise(total);
+    const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, total);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
   };
 
@@ -648,11 +673,17 @@ function App() {
   };
 
   const applySalaryRecord = (rec) => {
+    const contract = Math.round(Number(rec.contract_salary_man) || 0);
+    const totalRaise = Number(rec.raise_rate) || 0;
     setSalaryRecordYear(rec.year);
     setMyCl(rec.cl || 'CL23');
     setMyDiv(rec.division || 'memory');
-    setAgreedSalary(Math.round(Number(rec.contract_salary_man) || 0));
-    setMyRaise(Number(rec.raise_rate) || 0);
+    setAgreedSalary(contract);
+    setBaseUpRaise(totalRaise);
+    setPerformanceRaise(0);
+    setMyRaise(totalRaise);
+    const reversedPrevSalary = reversePrevSalaryFromContract(contract, totalRaise);
+    if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
     setBizPerfBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
     setPrevWithholding(Math.round(Number(rec.withholding_income_man) || 0));
     setSalaryMemo(rec.memo || '');
@@ -1547,9 +1578,19 @@ function App() {
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>{agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산"}</div>
               </div>
               <div style={sBase.inBox}>
-                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>인상률(%)</div>
-                <NumInput value={myRaise} onChange={handleRaiseChange} step={0.1} min={-99.9} max={100}/>
-                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>{agreedSalary > 0 ? "변경 시 전년도도 재역산" : "체결연봉 입력 시 참고값"}</div>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>베이스업 인상률(%)</div>
+                <NumInput value={baseUpRaise} onChange={handleBaseUpRaiseChange} step={0.1} min={-99.9} max={100}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>기본 임금 인상분</div>
+              </div>
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>업무성과 인상률(%)</div>
+                <NumInput value={performanceRaise} onChange={handlePerformanceRaiseChange} step={0.1} min={-99.9} max={100}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>베이스업과 합산 반영</div>
+              </div>
+              <div style={{ ...sBase.inBox, borderColor:"rgba(0,198,255,0.24)", background:"rgba(0,198,255,0.06)" }}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>총 임금인상률(%)</div>
+                <div style={{ fontSize:20, fontWeight:900, color:"#38BDF8" }}>{myRaise}%</div>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>베이스업 {baseUpRaise}% + 업무성과 {performanceRaise}%</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>고과 업무성과급(만)</div>
@@ -1562,7 +1603,8 @@ function App() {
             </div>
             {agreedSalary > 0 && (
               <div style={{ margin:"-2px 0 10px", padding:"10px 12px", borderRadius:12, background:"rgba(0,198,255,0.08)", border:"1px solid rgba(0,198,255,0.18)", color:"#BAE6FD", fontSize:11, lineHeight:1.5 }}>
-                올해 체결연봉 {comma(agreedSalary)}만원 ÷ (1 + 인상률 {myRaise}%) = 전년도 연봉 {comma(mySalary)}만원으로 자동 역산됩니다.
+                올해 체결연봉 {comma(agreedSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = 전년도 연봉 {comma(mySalary)}만원으로 자동 역산됩니다.<br/>
+                <span style={{ color:"#93C5FD" }}>총 임금인상률 = 베이스업 {baseUpRaise}% + 업무성과 {performanceRaise}%</span>
               </div>
             )}
             <div style={{ background:"rgba(0,220,130,0.08)", border:"1px solid rgba(0,220,130,0.2)", borderRadius:12, padding:"10px 14px", ...sBase.row }}>
