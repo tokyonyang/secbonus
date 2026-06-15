@@ -42,6 +42,7 @@ create table if not exists public.salary_records (
   base_up_raise_rate numeric not null default 0,
   performance_raise_rate numeric not null default 0,
   raise_rate numeric not null default 0,
+  ds_ps_rate numeric not null default 0,
   business_performance_bonus_man numeric not null default 0,
   withholding_income_man numeric not null default 0,
   memo text,
@@ -66,6 +67,7 @@ alter table public.salary_records add constraint salary_records_year_check check
 -- 기존에 salary_records 테이블을 이미 만든 경우, 임금인상률 세부 저장용 컬럼을 추가합니다.
 alter table public.salary_records add column if not exists base_up_raise_rate numeric not null default 0;
 alter table public.salary_records add column if not exists performance_raise_rate numeric not null default 0;
+alter table public.salary_records add column if not exists ds_ps_rate numeric not null default 0;
 
 -- 기존에 salary_users 테이블을 이미 만든 경우, 아이디/비밀번호 찾기용 컬럼을 추가합니다.
 alter table public.salary_users add column if not exists recovery_salt text;
