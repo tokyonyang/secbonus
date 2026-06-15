@@ -543,10 +543,12 @@ function App() {
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
   };
 
+  const roundRaise = (value) => Math.round((Number(value) || 0) * 10) / 10;
+
   const syncRaiseAndReverse = (baseValue, perfValue) => {
     const base = Number(baseValue) || 0;
     const perf = Number(perfValue) || 0;
-    const total = Math.round((base + perf) * 10) / 10;
+    const total = roundRaise(base + perf);
     setMyRaise(total);
     const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, total);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
@@ -564,10 +566,11 @@ function App() {
     syncRaiseAndReverse(baseUpRaise, perf);
   };
 
-  const applyTotalRaise = (totalRaise) => {
-    const total = Number(totalRaise) || 0;
-    setBaseUpRaise(total);
-    setPerformanceRaise(0);
+  const handleTotalRaiseChange = (totalRaise) => {
+    const total = roundRaise(totalRaise);
+    const base = Number(baseUpRaise) || 0;
+    const perf = roundRaise(total - base);
+    setPerformanceRaise(perf);
     setMyRaise(total);
     const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, total);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
@@ -679,8 +682,10 @@ function App() {
     setMyCl(rec.cl || 'CL23');
     setMyDiv(rec.division || 'memory');
     setAgreedSalary(contract);
-    setBaseUpRaise(totalRaise);
-    setPerformanceRaise(0);
+    const base = Number(baseUpRaise) || 0;
+    const perf = roundRaise(totalRaise - base);
+    setBaseUpRaise(base);
+    setPerformanceRaise(perf);
     setMyRaise(totalRaise);
     const reversedPrevSalary = reversePrevSalaryFromContract(contract, totalRaise);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
@@ -1589,8 +1594,9 @@ function App() {
               </div>
               <div style={{ ...sBase.inBox, borderColor:"rgba(0,198,255,0.24)", background:"rgba(0,198,255,0.06)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>총 임금인상률(%)</div>
-                <div style={{ fontSize:20, fontWeight:900, color:"#38BDF8" }}>{myRaise}%</div>
-                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>베이스업 {baseUpRaise}% + 업무성과 {performanceRaise}%</div>
+                <NumInput value={myRaise} onChange={handleTotalRaiseChange} step={0.1} min={-99.9} max={100} color="#38BDF8" size={20}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>입력 시 업무성과 = 총 인상률 - 베이스업</div>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:2 }}>베이스업 {baseUpRaise}% + 업무성과 {performanceRaise}%</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>고과 업무성과급(만)</div>
