@@ -79,5 +79,11 @@ alter table public.salary_records add column if not exists withholding_pi_man nu
 alter table public.salary_users add column if not exists recovery_salt text;
 alter table public.salary_users add column if not exists recovery_hash text;
 
+
+-- 게시판 계정도 개인 연봉저장 계정과 통합합니다.
+-- 기존 문의는 user_id가 없을 수 있고, 신규 문의는 로그인 사용자 id가 저장됩니다.
+alter table public.inquiries add column if not exists user_id uuid references public.salary_users(id) on delete set null;
+create index if not exists inquiries_user_id_idx on public.inquiries (user_id);
+
 -- 사용자 등록리스트 및 개인 연봉정보 전체 초기화가 필요할 때 Supabase SQL Editor에서 아래 한 줄만 실행하세요.
 -- truncate table public.salary_users cascade;
