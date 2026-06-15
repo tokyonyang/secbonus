@@ -538,6 +538,31 @@ function App() {
     return Object.prototype.hasOwnProperty.call(BASE_UP_HISTORY, y) ? BASE_UP_HISTORY[y] : null;
   };
 
+  // ── DS부문 PS/OPI 지급률 이력 참고값 ───────────────────────────────
+  // 사용자 첨부 자료의 DS 컬럼 기준. 과거 연봉 수기 입력 및 연봉추이 참고값으로 사용합니다.
+  const DS_PS_HISTORY = {
+    2025: 47.0,
+    2024: 14.0,
+    2023: 0.0,
+    2022: 50.0,
+    2021: 50.0,
+    2020: 47.0,
+    2019: 29.0,
+    2018: 50.0,
+    2017: 50.0,
+    2016: 50.0,
+    2015: 50.0,
+    2014: 50.0,
+    2013: 43.3,
+    2012: 18.2,
+    2011: 42.5,
+  };
+  const getHistoricalDsPs = (year) => {
+    const y = Math.round(Number(year) || 0);
+    return Object.prototype.hasOwnProperty.call(DS_PS_HISTORY, y) ? DS_PS_HISTORY[y] : null;
+  };
+  const calcPsAmountMan = (salaryMan, psRate) => Math.round((Number(salaryMan) || 0) * (Number(psRate) || 0) / 100);
+
   // ── DS 자동환산: totalProfit × dsRatio 변경 시 profit 자동 업데이트 ─────
   React.useEffect(() => {
     if (dsAutoMode) {
@@ -627,6 +652,7 @@ function App() {
   const [salaryManualBaseUp, setSalaryManualBaseUp] = useState(0);
   const [salaryManualPerformance, setSalaryManualPerformance] = useState(0);
   const [salaryManualBizBonus, setSalaryManualBizBonus] = useState(0);
+  const [salaryManualDsPsRate, setSalaryManualDsPsRate] = useState(0);
   const [salaryManualWithholding, setSalaryManualWithholding] = useState(0);
   const [salaryMemo, setSalaryMemo] = useState("");
   const [salaryMsg, setSalaryMsg] = useState("");
@@ -712,6 +738,7 @@ function App() {
     setSalaryManualBaseUp(baseUpRaise);
     setSalaryManualPerformance(performanceRaise);
     setSalaryManualBizBonus(bizPerfBonus);
+    setSalaryManualDsPsRate(getHistoricalDsPs(salaryRecordYear) ?? 0);
     setSalaryManualWithholding(prevWithholding);
   };
 
@@ -723,6 +750,10 @@ function App() {
     if (salarySaveMode === 'manual' && historicalBaseUp !== null) {
       setSalaryManualBaseUp(historicalBaseUp);
     }
+    const historicalDsPs = getHistoricalDsPs(y);
+    if (salarySaveMode === 'manual' && historicalDsPs !== null) {
+      setSalaryManualDsPsRate(historicalDsPs);
+    }
   };
 
   const switchToManualSalaryMode = () => {
@@ -730,6 +761,8 @@ function App() {
     if (!salaryManualContract) fillManualSalaryFromCalculator();
     const historicalBaseUp = getHistoricalBaseUp(salaryRecordYear);
     if (historicalBaseUp !== null) setSalaryManualBaseUp(historicalBaseUp);
+    const historicalDsPs = getHistoricalDsPs(salaryRecordYear);
+    if (historicalDsPs !== null) setSalaryManualDsPsRate(historicalDsPs);
   };
 
   const saveSalaryRecord = async () => {
@@ -743,6 +776,7 @@ function App() {
     const saveBaseUp = roundRaise(isManual ? salaryManualBaseUp : baseUpRaise);
     const savePerformance = roundRaise(isManual ? salaryManualPerformance : performanceRaise);
     const saveRaiseRate = roundRaise(saveBaseUp + savePerformance);
+    const saveDsPsRate = roundRaise(isManual ? salaryManualDsPsRate : (getHistoricalDsPs(recordYear) ?? 0));
     try {
       const res = await fetch('/api/salary/records', {
         method:'POST', headers: salaryHeaders(),
@@ -754,6 +788,7 @@ function App() {
           baseUpRaiseRate: saveBaseUp,
           performanceRaiseRate: savePerformance,
           raiseRate: saveRaiseRate,
+          dsPsRate: saveDsPsRate,
           businessPerformanceBonusMan: Math.round(Number(isManual ? salaryManualBizBonus : bizPerfBonus) || 0),
           withholdingIncomeMan: Math.round(Number(isManual ? salaryManualWithholding : prevWithholding) || 0),
           memo: salaryMemo || (isManual ? `${recordYear}년 수기 입력` : ''),
@@ -796,6 +831,7 @@ function App() {
     setSalaryManualBaseUp(base);
     setSalaryManualPerformance(perf);
     setSalaryManualBizBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
+    setSalaryManualDsPsRate(Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0));
     setSalaryManualWithholding(Math.round(Number(rec.withholding_income_man) || 0));
     setSalaryMemo(rec.memo || '');
     setSalaryMsg(`${rec.year}년 연봉정보를 계산기에 불러왔습니다.`);
@@ -1665,16 +1701,17 @@ function App() {
             </div>
             {salarySaveMode === 'manual' && (
               <div style={{ display:"flex", flexDirection:"column", gap:8, background:"rgba(0,220,130,0.06)", border:"1px solid rgba(0,220,130,0.18)", borderRadius:12, padding:10 }}>
-                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 저장연도가 2011~2026년이면 베이스업 참고값이 자동 반영됩니다.</div>
+                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 저장연도가 2011~2026년이면 베이스업, 2011~2025년이면 DS PS 참고값이 자동 반영됩니다.</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={sBase.inBox}>
                     <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>수기 입력 기준연도</div>
                     <NumInput value={salaryRecordYear} onChange={handleSalaryRecordYearChange} step={1} min={2011} max={2100}/>
                   </div>
                   <div style={sBase.inBox}>
-                    <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>해당 연도 베이스업</div>
+                    <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>해당 연도 베이스업 / DS PS</div>
                     <div style={{ color:"#00DC82", fontSize:16, fontWeight:900 }}>
                       {getHistoricalBaseUp(salaryRecordYear) !== null ? `${getHistoricalBaseUp(salaryRecordYear).toFixed(1)}%` : '직접 입력'}
+                      <span style={{ color:"#7DD3FC", marginLeft:8 }}>{getHistoricalDsPs(salaryRecordYear) !== null ? `PS ${getHistoricalDsPs(salaryRecordYear).toFixed(1)}%` : ''}</span>
                     </div>
                   </div>
                 </div>
@@ -1685,7 +1722,7 @@ function App() {
                 </div>
                 {getHistoricalBaseUp(salaryRecordYear) !== null && (
                   <div style={{ fontSize:11, color:"#7DD3FC", lineHeight:1.5, background:"rgba(0,198,255,0.08)", border:"1px solid rgba(0,198,255,0.18)", borderRadius:10, padding:"8px 10px" }}>
-                    {salaryRecordYear}년 베이스업 참고값 <b>{getHistoricalBaseUp(salaryRecordYear).toFixed(1)}%</b>가 적용됩니다.
+                    {salaryRecordYear}년 베이스업 참고값 <b>{getHistoricalBaseUp(salaryRecordYear).toFixed(1)}%</b>{getHistoricalDsPs(salaryRecordYear) !== null ? <> · DS PS 이력 <b>{getHistoricalDsPs(salaryRecordYear).toFixed(1)}%</b></> : null}가 적용됩니다.
                   </div>
                 )}
 
@@ -1706,6 +1743,12 @@ function App() {
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>체결연봉(만)</div><NumInput value={salaryManualContract} onChange={setSalaryManualContract} step={10}/></div>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>업무성과급(만)</div><NumInput value={salaryManualBizBonus} onChange={setSalaryManualBizBonus} step={10}/></div>
+                  <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>DS PS/OPI 이력(%)</div><NumInput value={salaryManualDsPsRate} onChange={setSalaryManualDsPsRate} step={0.1}/></div>
+                  <div style={sBase.inBox}>
+                    <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>PS 환산액(만)</div>
+                    <div style={{ color:"#7DD3FC", fontSize:16, fontWeight:900 }}>{comma(calcPsAmountMan(salaryManualContract, salaryManualDsPsRate))}만원</div>
+                    <button type="button" onClick={()=>setSalaryManualBizBonus(calcPsAmountMan(salaryManualContract, salaryManualDsPsRate))} style={{ marginTop:7, padding:"6px 8px", borderRadius:8, border:"1px solid rgba(125,211,252,0.35)", background:"rgba(125,211,252,0.10)", color:"#7DD3FC", fontSize:10, fontWeight:800, fontFamily:"inherit", cursor:"pointer" }}>업무성과급에 반영</button>
+                  </div>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>베이스업(%)</div><NumInput value={salaryManualBaseUp} onChange={setSalaryManualBaseUp} step={0.1}/></div>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>성과인상률(%)</div><NumInput value={salaryManualPerformance} onChange={setSalaryManualPerformance} step={0.1}/></div>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>총 인상률</div><div style={{ color:"#00DC82", fontSize:16, fontWeight:900 }}>{roundRaise(Number(salaryManualBaseUp || 0) + Number(salaryManualPerformance || 0)).toFixed(1)}%</div></div>
@@ -1737,7 +1780,7 @@ function App() {
                     <div>
                       <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
                       <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}% · 성과 {Number(rec.performance_raise_rate ?? Math.max(0, (Number(rec.raise_rate)||0) - (Number(rec.base_up_raise_rate)||0))).toFixed(1)}% · 총 {Number(rec.raise_rate||0).toFixed(1)}%</div>
-                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원</div>
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
                       <button onClick={()=>applySalaryRecord(rec)} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(0,198,255,0.35)", background:"rgba(0,198,255,0.1)", color:"#00C6FF", cursor:"pointer", fontFamily:"inherit", fontWeight:800 }}>불러오기</button>
@@ -1762,8 +1805,10 @@ function App() {
     const salaryGrowth = firstRec && lastRec ? (Number(lastRec.contract_salary_man || 0) - Number(firstRec.contract_salary_man || 0)) : 0;
     const avgBaseUp = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.base_up_raise_rate || 0), 0) / trendRecords.length : 0;
     const avgPerformanceRaise = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.performance_raise_rate ?? Math.max(0, (Number(rec.raise_rate)||0) - (Number(rec.base_up_raise_rate)||0))), 0) / trendRecords.length : 0;
+    const avgDsPs = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0), 0) / trendRecords.length : 0;
     const maxSalary = Math.max(1, ...trendRecords.map(rec => Number(rec.contract_salary_man || 0)));
     const maxRaise = Math.max(1, ...trendRecords.map(rec => Math.max(Number(rec.base_up_raise_rate || 0), Number(rec.performance_raise_rate ?? 0))));
+    const maxPs = Math.max(1, ...trendRecords.map(rec => Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0)));
     const getDivisionLabel = (v) => v === 'memory' ? '메모리' : v === 'common' ? '공통' : '르팡';
     const getAutoNote = (rec, idx) => {
       const memo = String(rec.memo || '').trim();
@@ -1787,7 +1832,7 @@ function App() {
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <div style={{ fontSize:12, color:"#CBD5E1", lineHeight:1.6 }}>
-                저장된 연봉정보를 기준으로 <b>연봉, 베이스업, 성과인상률, 비고/진급여부</b>를 연도순으로 정리합니다. 비고는 저장 시 입력한 메모를 우선 표시하고, 직급이 바뀐 경우 자동으로 함께 표시합니다.
+                저장된 연봉정보를 기준으로 <b>연봉, 베이스업, 성과인상률, DS PS 이력, 비고/진급여부</b>를 연도순으로 정리합니다. 비고는 저장 시 입력한 메모를 우선 표시하고, 직급이 바뀐 경우 자동으로 함께 표시합니다.
               </div>
 
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(132px, 1fr))", gap:8 }}>
@@ -1795,20 +1840,23 @@ function App() {
                 <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>누적 상승액</div><div style={{ fontSize:17, fontWeight:900, color: salaryGrowth >= 0 ? "#00DC82" : "#FF6B6B", marginTop:5 }}>{salaryGrowth >= 0 ? '+' : ''}{comma(salaryGrowth)}만원</div></div>
                 <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 베이스업</div><div style={{ fontSize:17, fontWeight:900, color:"#7DD3FC", marginTop:5 }}>{avgBaseUp.toFixed(1)}%</div></div>
                 <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 성과인상</div><div style={{ fontSize:17, fontWeight:900, color:"#A78BFA", marginTop:5 }}>{avgPerformanceRaise.toFixed(1)}%</div></div>
+                <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 DS PS</div><div style={{ fontSize:17, fontWeight:900, color:"#FBBF24", marginTop:5 }}>{avgDsPs.toFixed(1)}%</div></div>
               </div>
 
               <div style={{ background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:14, overflowX:"auto", overflowY:"hidden" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 220px", minWidth:650, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
-                  <div>연도</div><div>연봉</div><div>베이스업</div><div>성과인상</div><div>비고</div>
+                <div style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 110px 240px", minWidth:780, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
+                  <div>연도</div><div>연봉</div><div>베이스업</div><div>성과인상</div><div>DS PS</div><div>비고</div>
                 </div>
                 <div style={{ display:"flex", flexDirection:"column" }}>
                   {trendRecords.map((rec, idx) => {
                     const salary = Number(rec.contract_salary_man || 0);
                     const base = Number(rec.base_up_raise_rate || 0);
                     const perfRaise = Number(rec.performance_raise_rate ?? Math.max(0, (Number(rec.raise_rate)||0) - base));
+                    const dsPs = Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0);
+                    const psAmount = calcPsAmountMan(salary, dsPs);
                     const note = getAutoNote(rec, idx);
                     return (
-                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 220px", minWidth:650, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
+                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 110px 240px", minWidth:780, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
                         <div style={{ color:"#E2E8F0", fontWeight:900 }}>{rec.year}</div>
                         <div>
                           <div style={{ color:"#fff", fontWeight:900 }}>{comma(salary)}만원</div>
@@ -1827,6 +1875,13 @@ function App() {
                           <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
                             <div style={{ width:`${Math.max(4, Math.min(100, perfRaise / maxRaise * 100))}%`, height:"100%", background:"rgba(167,139,250,0.75)", borderRadius:999 }} />
                           </div>
+                        </div>
+                        <div>
+                          <div style={{ color:"#FBBF24", fontWeight:900 }}>{dsPs.toFixed(1)}%</div>
+                          <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
+                            <div style={{ width:`${Math.max(4, Math.min(100, dsPs / maxPs * 100))}%`, height:"100%", background:"rgba(251,191,36,0.75)", borderRadius:999 }} />
+                          </div>
+                          <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>{comma(psAmount)}만원</div>
                         </div>
                         <div style={{ color: note === '-' ? "#64748B" : "#CBD5E1", lineHeight:1.35 }}>
                           <div>{note}</div>
