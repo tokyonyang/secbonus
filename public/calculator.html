@@ -526,6 +526,28 @@ function App() {
     }
   }, [simYear]);
 
+  const reversePrevSalaryFromContract = (contractSalary, raiseRate) => {
+    const contract = Number(contractSalary) || 0;
+    const raise = Number(raiseRate) || 0;
+    const denominator = 1 + raise / 100;
+    if (contract <= 0 || denominator <= 0) return null;
+    return Math.round(contract / denominator);
+  };
+
+  const handleAgreedSalaryChange = (nextValue) => {
+    const contract = Number(nextValue) || 0;
+    setAgreedSalary(contract);
+    const reversedPrevSalary = reversePrevSalaryFromContract(contract, myRaise);
+    if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
+  };
+
+  const handleRaiseChange = (nextValue) => {
+    const raise = Number(nextValue) || 0;
+    setMyRaise(raise);
+    const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, raise);
+    if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
+  };
+
   const handleClChange = (e) => {
     const newCl = e.target.value;
     if (newCl === "CL1" && myCl !== "CL1") { setMySalary(300); setAgreedSalary(0); setPrevWithholding(4000); }
@@ -1521,13 +1543,13 @@ function App() {
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>{myCl === "CL1" ? "올해 체결 기초액(만)" : "올해 체결연봉(만)"}</div>
-                <NumInput value={agreedSalary} onChange={setAgreedSalary} step={100} min={0}/>
-                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>0이면 전년도×인상률 자동계산</div>
+                <NumInput value={agreedSalary} onChange={handleAgreedSalaryChange} step={100} min={0}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>{agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산"}</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>인상률(%)</div>
-                <NumInput value={myRaise} onChange={setMyRaise} step={0.1} min={-100} max={100}/>
-                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>체결연봉 입력 시 참고값</div>
+                <NumInput value={myRaise} onChange={handleRaiseChange} step={0.1} min={-99.9} max={100}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>{agreedSalary > 0 ? "변경 시 전년도도 재역산" : "체결연봉 입력 시 참고값"}</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>고과 업무성과급(만)</div>
@@ -1538,6 +1560,11 @@ function App() {
                 <NumInput value={prevWithholding} onChange={setPrevWithholding} step={100} color="#00DC82" min={0}/>
               </div>
             </div>
+            {agreedSalary > 0 && (
+              <div style={{ margin:"-2px 0 10px", padding:"10px 12px", borderRadius:12, background:"rgba(0,198,255,0.08)", border:"1px solid rgba(0,198,255,0.18)", color:"#BAE6FD", fontSize:11, lineHeight:1.5 }}>
+                올해 체결연봉 {comma(agreedSalary)}만원 ÷ (1 + 인상률 {myRaise}%) = 전년도 연봉 {comma(mySalary)}만원으로 자동 역산됩니다.
+              </div>
+            )}
             <div style={{ background:"rgba(0,220,130,0.08)", border:"1px solid rgba(0,220,130,0.2)", borderRadius:12, padding:"10px 14px", ...sBase.row }}>
               <span style={{ fontSize:12, color:"#CBD5E1" }}>{myCl === "CL1" ? "올해 기초액" : "올해 기준연봉"}</span>
               <span style={{ fontSize:18, fontWeight:900, color:"#00DC82" }}>
