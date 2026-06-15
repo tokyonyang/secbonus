@@ -1947,9 +1947,22 @@ function App() {
     const avgBaseUp = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.base_up_raise_rate || 0), 0) / trendRecords.length : 0;
     const avgPerformanceRaise = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + getPerformanceRaiseForRecord(rec, trendRecords), 0) / trendRecords.length : 0;
     const avgDsPs = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0), 0) / trendRecords.length : 0;
+    const latestWithholding = Number(lastRec?.withholding_income_man || 0);
+    const withholdingGrowth = firstRec && lastRec ? (Number(lastRec.withholding_income_man || 0) - Number(firstRec.withholding_income_man || 0)) : 0;
+    const avgWithholding = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.withholding_income_man || 0), 0) / trendRecords.length : 0;
     const maxSalary = Math.max(1, ...trendRecords.map(rec => Number(rec.contract_salary_man || 0)));
+    const maxWithholding = Math.max(1, ...trendRecords.map(rec => Number(rec.withholding_income_man || 0)));
+    const maxMoneyTrend = Math.max(maxSalary, maxWithholding, 1);
     const maxRaise = Math.max(1, ...trendRecords.map(rec => Math.max(Number(rec.base_up_raise_rate || 0), getPerformanceRaiseForRecord(rec, trendRecords))));
     const maxPs = Math.max(1, ...trendRecords.map(rec => Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0)));
+    const chartW = 720;
+    const chartH = 220;
+    const chartPad = 30;
+    const chartSpanX = chartW - chartPad * 2;
+    const chartSpanY = chartH - chartPad * 2;
+    const pointX = (idx) => trendRecords.length <= 1 ? chartW / 2 : chartPad + (idx / (trendRecords.length - 1)) * chartSpanX;
+    const pointY = (val) => chartH - chartPad - (Number(val || 0) / maxMoneyTrend) * chartSpanY;
+    const buildLinePoints = (key) => trendRecords.map((rec, idx) => `${pointX(idx).toFixed(1)},${pointY(rec[key]).toFixed(1)}`).join(' ');
     const getDivisionLabel = (v) => v === 'memory' ? '메모리' : v === 'common' ? '공통' : '르팡';
     const getAutoNote = (rec, idx) => {
       const memo = String(rec.memo || '').trim();
@@ -1982,27 +1995,68 @@ function App() {
                 <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 베이스업</div><div style={{ fontSize:17, fontWeight:900, color:"#7DD3FC", marginTop:5 }}>{avgBaseUp.toFixed(1)}%</div></div>
                 <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 성과인상</div><div style={{ fontSize:17, fontWeight:900, color:"#A78BFA", marginTop:5 }}>{avgPerformanceRaise.toFixed(1)}%</div></div>
                 <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 DS PS</div><div style={{ fontSize:17, fontWeight:900, color:"#FBBF24", marginTop:5 }}>{avgDsPs.toFixed(1)}%</div></div>
+                <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>최신 원천징수</div><div style={{ fontSize:17, fontWeight:900, color:"#F97316", marginTop:5 }}>{comma(latestWithholding)}만원</div></div>
+                <div style={sBase.inBox}><div style={{ fontSize:11, color:"#94A3B8" }}>평균 원천징수</div><div style={{ fontSize:17, fontWeight:900, color:"#FDBA74", marginTop:5 }}>{comma(Math.round(avgWithholding))}만원</div></div>
+              </div>
+
+              <div style={{ background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:14, padding:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:900, color:"#E2E8F0" }}>연봉 · 원천징수 추이 그래프</div>
+                    <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>개인 저장공간의 연도별 체결연봉과 전년도 원천징수 금액을 같은 축에서 비교합니다.</div>
+                  </div>
+                  <div style={{ fontSize:11, color: withholdingGrowth >= 0 ? "#00DC82" : "#FF6B6B", fontWeight:900, whiteSpace:"nowrap" }}>원천징수 누적 {withholdingGrowth >= 0 ? '+' : ''}{comma(withholdingGrowth)}만원</div>
+                </div>
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:8, fontSize:11 }}>
+                  <span style={{ color:"#00DC82", fontWeight:900 }}>● 연봉</span>
+                  <span style={{ color:"#F97316", fontWeight:900 }}>● 원천징수</span>
+                  <span style={{ color:"#64748B" }}>단위: 만원</span>
+                </div>
+                <div style={{ overflowX:"auto", overflowY:"hidden" }}>
+                  <svg viewBox={`0 0 ${chartW} ${chartH}`} style={{ minWidth:680, width:"100%", height:240, display:"block" }}>
+                    {[0, 0.25, 0.5, 0.75, 1].map((tick, i) => {
+                      const y = chartH - chartPad - tick * chartSpanY;
+                      return <g key={i}><line x1={chartPad} y1={y} x2={chartW-chartPad} y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="1"/><text x={chartPad-6} y={y+4} textAnchor="end" fontSize="10" fill="#64748B">{comma(Math.round(maxMoneyTrend * tick))}</text></g>;
+                    })}
+                    <polyline points={buildLinePoints('contract_salary_man')} fill="none" stroke="#00DC82" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    <polyline points={buildLinePoints('withholding_income_man')} fill="none" stroke="#F97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 5" />
+                    {trendRecords.map((rec, idx) => (
+                      <g key={`pt-${rec.id || rec.year}`}>
+                        <circle cx={pointX(idx)} cy={pointY(rec.contract_salary_man)} r="4" fill="#00DC82" />
+                        <circle cx={pointX(idx)} cy={pointY(rec.withholding_income_man)} r="4" fill="#F97316" />
+                        <text x={pointX(idx)} y={chartH-8} textAnchor="middle" fontSize="10" fill="#94A3B8">{rec.year}</text>
+                      </g>
+                    ))}
+                  </svg>
+                </div>
               </div>
 
               <div style={{ background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:14, overflowX:"auto", overflowY:"hidden" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 110px 240px", minWidth:780, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
-                  <div>연도</div><div>연봉</div><div>베이스업</div><div>성과인상</div><div>DS PS</div><div>비고</div>
+                <div style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 230px", minWidth:885, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
+                  <div>연도</div><div>연봉</div><div>원천징수</div><div>베이스업</div><div>성과인상</div><div>DS PS</div><div>비고</div>
                 </div>
                 <div style={{ display:"flex", flexDirection:"column" }}>
                   {trendRecords.map((rec, idx) => {
                     const salary = Number(rec.contract_salary_man || 0);
                     const base = Number(rec.base_up_raise_rate || 0);
+                    const withholding = Number(rec.withholding_income_man || 0);
                     const perfRaise = getPerformanceRaiseForRecord(rec, trendRecords);
                     const dsPs = Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0);
                     const psAmount = calcPsAmountMan(salary, dsPs);
                     const note = getAutoNote(rec, idx);
                     return (
-                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 130px 110px 110px 110px 240px", minWidth:780, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
+                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 230px", minWidth:885, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
                         <div style={{ color:"#E2E8F0", fontWeight:900 }}>{rec.year}</div>
                         <div>
                           <div style={{ color:"#fff", fontWeight:900 }}>{comma(salary)}만원</div>
                           <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
                             <div style={{ width:`${Math.max(4, Math.min(100, salary / maxSalary * 100))}%`, height:"100%", background:"linear-gradient(90deg,#00DC82,#7DD3FC)", borderRadius:999 }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ color:"#FDBA74", fontWeight:900 }}>{comma(withholding)}만원</div>
+                          <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
+                            <div style={{ width:`${Math.max(4, Math.min(100, withholding / maxWithholding * 100))}%`, height:"100%", background:"rgba(249,115,22,0.78)", borderRadius:999 }} />
                           </div>
                         </div>
                         <div>
