@@ -685,6 +685,8 @@ function App() {
           cl: myCl,
           division: myDiv,
           contractSalaryMan,
+          baseUpRaiseRate: baseUpRaise,
+          performanceRaiseRate: performanceRaise,
           raiseRate: myRaise,
           businessPerformanceBonusMan: bizPerfBonus,
           withholdingIncomeMan: prevWithholding,
@@ -703,13 +705,17 @@ function App() {
 
   const applySalaryRecord = (rec) => {
     const contract = Math.round(Number(rec.contract_salary_man) || 0);
-    const totalRaise = Number(rec.raise_rate) || 0;
+    const savedBaseRaw = rec.base_up_raise_rate;
+    const savedPerfRaw = rec.performance_raise_rate;
+    const savedTotalRaw = rec.raise_rate;
+    const hasSavedSplit = savedBaseRaw !== undefined && savedBaseRaw !== null && savedPerfRaw !== undefined && savedPerfRaw !== null;
+    const base = hasSavedSplit ? Number(savedBaseRaw) || 0 : Number(baseUpRaise) || 0;
+    const perf = hasSavedSplit ? Number(savedPerfRaw) || 0 : roundRaise((Number(savedTotalRaw) || 0) - base);
+    const totalRaise = roundRaise((Number(savedTotalRaw) || 0) || (base + perf));
     setSalaryRecordYear(rec.year);
     setMyCl(rec.cl || 'CL23');
     setMyDiv(rec.division || 'memory');
     setAgreedSalary(contract);
-    const base = Number(baseUpRaise) || 0;
-    const perf = roundRaise(totalRaise - base);
     setBaseUpRaise(base);
     setPerformanceRaise(perf);
     setMyRaise(totalRaise);
@@ -1564,7 +1570,8 @@ function App() {
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                     <div>
                       <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
-                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}% · 성과 {Number(rec.performance_raise_rate ?? Math.max(0, (Number(rec.raise_rate)||0) - (Number(rec.base_up_raise_rate)||0))).toFixed(1)}% · 총 {Number(rec.raise_rate||0).toFixed(1)}%</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원</div>
                     </div>
                     <button onClick={()=>applySalaryRecord(rec)} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(0,198,255,0.35)", background:"rgba(0,198,255,0.1)", color:"#00C6FF", cursor:"pointer", fontFamily:"inherit", fontWeight:800 }}>불러오기</button>
                   </div>
