@@ -565,10 +565,12 @@ function App() {
     return null;
   };
   const PERFORMANCE_GRADE_LABELS = { MT:'다(MT)', ES:'나(ES)', EM:'가(EM)' };
-  const getEstimatedPerformanceGrade = (year, cl='CL3', actualPerformanceRaise=0, payzone=2) => {
-    const y = Math.round(Number(year) || 0);
+  const getEstimatedPerformanceGrade = (salaryYear, cl='CL3', actualPerformanceRaise=0, payzone=2) => {
+    const y = Math.round(Number(salaryYear) || 0);
+    const gradeYear = y > 2011 ? y - 1 : y; // 임금인상에 반영된 고과는 전년도 평가 기준으로 표시
     const c = cl === 'CL23' ? 'CL3' : cl;
     const z = Math.min(3, Math.max(1, Math.round(Number(payzone) || 2)));
+    // 참고표의 행은 해당 연도 임금인상표 기준이므로 비교값은 salaryYear를 사용하고, 표시 고과연도만 전년도 기준으로 표기합니다.
     const mt = getPerformanceRaiseReference(y, c, 'MT', z);
     const es = getPerformanceRaiseReference(y, c, 'ES', z);
     const em = getPerformanceRaiseReference(y, c, 'EM', z);
@@ -592,8 +594,9 @@ function App() {
       closestLabel: PERFORMANCE_GRADE_LABELS[closest.code],
       closestRef: Number(closest.value),
       mt:Number(mt), es:Number(es), em:Number(em),
-      payzone: z, cl: c, year: y,
-      basis: y >= 2022 ? `${y}년 ${c} 평균표 기준` : `${y}년 ${c} Payzone ${z} 평균표 기준`
+      payzone: z, cl: c, year: y, gradeYear,
+      basis: y >= 2022 ? `${y}년 임금인상표·${c} 기준` : `${y}년 임금인상표·${c} Payzone ${z} 기준`,
+      gradeBasis: `${gradeYear}년 고과 추정`
     };
   };
 
@@ -662,11 +665,16 @@ function App() {
     if (current <= 0 || prev <= 0) return null;
     return roundRaise(((current / prev) - 1) * 100);
   };
-  const calcManualPerformanceFromSalary = (year, contractSalaryMan, baseUpRate, records = salaryRecords) => {
+  const getPromotionRaiseForRecord = (rec) => {
+    if (!rec) return 0;
+    const promoted = rec.promotion_yn === true || rec.promotion_yn === 'true';
+    return promoted ? roundRaise(Number(rec.promotion_raise_rate) || 0) : 0;
+  };
+  const calcManualPerformanceFromSalary = (year, contractSalaryMan, baseUpRate, records = salaryRecords, promotionRate = 0) => {
     const prevRec = findRecordByYear(records, Number(year) - 1);
     const totalRaise = prevRec ? calcTotalRaiseFromSalary(contractSalaryMan, prevRec.contract_salary_man) : null;
     if (totalRaise === null) return null;
-    return roundRaise(totalRaise - (Number(baseUpRate) || 0));
+    return roundRaise(totalRaise - (Number(baseUpRate) || 0) - (Number(promotionRate) || 0));
   };
   const calcDefaultWithholdingFromPrevYear = (year, records = salaryRecords, piRate = 100) => {
     const prevYear = Number(year) - 1;
@@ -687,10 +695,11 @@ function App() {
   };
   const getPerformanceRaiseForRecord = (rec, records = salaryRecords) => {
     const totalRaise = getTotalRaiseForRecord(rec, records);
+    const promotionRate = getPromotionRaiseForRecord(rec);
     if (totalRaise !== null && findRecordByYear(records, Number(rec?.year) - 1)) {
-      return roundRaise(totalRaise - (Number(rec?.base_up_raise_rate) || 0));
+      return roundRaise(totalRaise - (Number(rec?.base_up_raise_rate) || 0) - promotionRate);
     }
-    return roundRaise(Number(rec?.performance_raise_rate ?? Math.max(0, (Number(rec?.raise_rate)||0) - (Number(rec?.base_up_raise_rate)||0))) || 0);
+    return roundRaise(Number(rec?.performance_raise_rate ?? Math.max(0, (Number(rec?.raise_rate)||0) - (Number(rec?.base_up_raise_rate)||0) - promotionRate)) || 0);
   };
 
   const syncRaiseAndReverse = (baseValue, perfValue) => {
@@ -752,6 +761,10 @@ function App() {
   const [salaryManualPerfRefCl, setSalaryManualPerfRefCl] = useState("CL3");
   const [salaryManualPerfRating, setSalaryManualPerfRating] = useState("ES");
   const [salaryManualPayzone, setSalaryManualPayzone] = useState(2);
+  const [salaryManualPromoted, setSalaryManualPromoted] = useState(false);
+  const [salaryManualPromotionFrom, setSalaryManualPromotionFrom] = useState("CL2");
+  const [salaryManualPromotionTo, setSalaryManualPromotionTo] = useState("CL3");
+  const [salaryManualPromotionRate, setSalaryManualPromotionRate] = useState(5);
   const [salaryManualBizBonus, setSalaryManualBizBonus] = useState(0);
   const [salaryManualDsPsRate, setSalaryManualDsPsRate] = useState(0);
   const [salaryManualPiRate, setSalaryManualPiRate] = useState(100); // 전년도 PI: 기준급 100% × 2회 기본
@@ -862,6 +875,10 @@ function App() {
     setSalaryManualContract(agreedSalary > 0 ? agreedSalary : r.bonusSalary);
     setSalaryManualBaseUp(baseUpRaise);
     setSalaryManualPerformance(performanceRaise);
+    setSalaryManualPromoted(false);
+    setSalaryManualPromotionFrom('CL2');
+    setSalaryManualPromotionTo('CL3');
+    setSalaryManualPromotionRate(5);
     setSalaryManualBizBonus(bizPerfBonus);
     setSalaryManualDsPsRate(getHistoricalDsPs(salaryRecordYear) ?? 0);
     setSalaryManualPiRate(100);
@@ -897,9 +914,10 @@ function App() {
 
   useEffect(() => {
     if (salarySaveMode !== 'manual') return;
-    const autoPerf = calcManualPerformanceFromSalary(salaryRecordYear, salaryManualContract, salaryManualBaseUp, salaryRecords);
+    const promoRate = salaryManualPromoted ? salaryManualPromotionRate : 0;
+    const autoPerf = calcManualPerformanceFromSalary(salaryRecordYear, salaryManualContract, salaryManualBaseUp, salaryRecords, promoRate);
     if (autoPerf !== null) setSalaryManualPerformance(autoPerf);
-  }, [salarySaveMode, salaryRecordYear, salaryManualContract, salaryManualBaseUp, salaryRecords]);
+  }, [salarySaveMode, salaryRecordYear, salaryManualContract, salaryManualBaseUp, salaryRecords, salaryManualPromoted, salaryManualPromotionRate]);
 
   useEffect(() => {
     if (salarySaveMode !== 'manual' || !salaryManualWithholdingAuto) return;
@@ -931,9 +949,10 @@ function App() {
     const isManual = salarySaveMode === 'manual';
     const contractSalaryMan = Math.round(Number(isManual ? salaryManualContract : (agreedSalary > 0 ? agreedSalary : r.bonusSalary)) || 0);
     const saveBaseUp = roundRaise(isManual ? salaryManualBaseUp : baseUpRaise);
-    const autoManualPerformance = isManual ? calcManualPerformanceFromSalary(recordYear, contractSalaryMan, saveBaseUp, salaryRecords) : null;
+    const savePromotionRate = roundRaise(isManual && salaryManualPromoted ? salaryManualPromotionRate : 0);
+    const autoManualPerformance = isManual ? calcManualPerformanceFromSalary(recordYear, contractSalaryMan, saveBaseUp, salaryRecords, savePromotionRate) : null;
     const savePerformance = roundRaise(isManual ? (autoManualPerformance !== null ? autoManualPerformance : salaryManualPerformance) : performanceRaise);
-    const saveRaiseRate = roundRaise(saveBaseUp + savePerformance);
+    const saveRaiseRate = roundRaise(saveBaseUp + savePromotionRate + savePerformance);
     const saveDsPsRate = roundRaise(isManual ? salaryManualDsPsRate : (getHistoricalDsPs(recordYear) ?? 0));
     const defaultWithholdingForSave = isManual ? calcDefaultWithholdingFromPrevYear(recordYear, salaryRecords, salaryManualPiRate) : null;
     try {
@@ -947,6 +966,10 @@ function App() {
           baseUpRaiseRate: saveBaseUp,
           performanceRaiseRate: savePerformance,
           raiseRate: saveRaiseRate,
+          promotionYn: isManual ? !!salaryManualPromoted : false,
+          promotionFromCl: isManual && salaryManualPromoted ? salaryManualPromotionFrom : '',
+          promotionToCl: isManual && salaryManualPromoted ? salaryManualPromotionTo : '',
+          promotionRaiseRate: savePromotionRate,
           dsPsRate: saveDsPsRate,
           businessPerformanceBonusMan: Math.round(Number(isManual ? salaryManualBizBonus : bizPerfBonus) || 0),
           withholdingIncomeMan: Math.round(Number(isManual ? salaryManualWithholding : prevWithholding) || 0),
@@ -993,6 +1016,10 @@ function App() {
     setSalaryManualContract(contract);
     setSalaryManualBaseUp(base);
     setSalaryManualPerformance(perf);
+    setSalaryManualPromoted(rec.promotion_yn === true || rec.promotion_yn === 'true');
+    setSalaryManualPromotionFrom(rec.promotion_from_cl || 'CL2');
+    setSalaryManualPromotionTo(rec.promotion_to_cl || 'CL3');
+    setSalaryManualPromotionRate(Number(rec.promotion_raise_rate ?? 5));
     setSalaryManualBizBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
     setSalaryManualDsPsRate(Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0));
     setSalaryManualPiRate(Number(rec.withholding_pi_rate ?? 100));
@@ -2050,16 +2077,44 @@ function App() {
                     {manualEstimatedGrade ? (
                       <>
                         <div style={{ fontSize:16, fontWeight:900, color:"#7DD3FC" }}>
-                          {manualEstimatedGrade.label} <span style={{ fontSize:11, color:"#CBD5E1", fontWeight:700 }}>추정</span>
+                          {manualEstimatedGrade.gradeYear}년 고과 {manualEstimatedGrade.label} <span style={{ fontSize:11, color:"#CBD5E1", fontWeight:700 }}>추정</span>
                         </div>
                         <div style={{ fontSize:10, color:"#94A3B8", marginTop:3, lineHeight:1.45 }}>
-                          성과인상률 {manualEstimatedGrade.actual.toFixed(1)}%를 {manualEstimatedGrade.basis}의 MT {manualEstimatedGrade.mt.toFixed(1)}% · ES {manualEstimatedGrade.es.toFixed(1)}% · EM {manualEstimatedGrade.em.toFixed(1)}%와 비교했습니다.
+                          {salaryRecordYear}년 연봉상승에 반영된 성과인상률 {manualEstimatedGrade.actual.toFixed(1)}%를 {manualEstimatedGrade.basis}의 MT {manualEstimatedGrade.mt.toFixed(1)}% · ES {manualEstimatedGrade.es.toFixed(1)}% · EM {manualEstimatedGrade.em.toFixed(1)}%와 비교했습니다.
                         </div>
                       </>
                     ) : (
                       <div style={{ fontSize:11, color:"#64748B" }}>연도·직급·Payzone 참고값이 있으면 자동 추정됩니다.</div>
                     )}
                   </div>
+                </div>
+
+                <div style={{ background:"rgba(251,191,36,0.08)", border:"1px solid rgba(251,191,36,0.22)", borderRadius:12, padding:10 }}>
+                  <label style={{ display:"flex", alignItems:"center", gap:8, color:"#FDE68A", fontSize:12, fontWeight:900, cursor:"pointer" }}>
+                    <input type="checkbox" checked={salaryManualPromoted} onChange={e=>setSalaryManualPromoted(e.target.checked)} />
+                    진급인상률 별도 반영
+                  </label>
+                  <div style={{ fontSize:10, color:"#94A3B8", lineHeight:1.45, marginTop:5 }}>CL2에서 CL3로 진급한 경우 기본 진급인상률 <b style={{ color:"#FBBF24" }}>5.0%</b>를 총 상승률에서 먼저 제외하고, 남은 값을 성과인상률로 역산합니다.</div>
+                  {salaryManualPromoted && (
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:9 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>진급 전</div>
+                        <select value={salaryManualPromotionFrom} onChange={e=>setSalaryManualPromotionFrom(e.target.value)} style={sBase.select}>
+                          <option value="CL1">CL1</option><option value="CL2">CL2</option><option value="CL3">CL3</option><option value="CL4">CL4</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>진급 후</div>
+                        <select value={salaryManualPromotionTo} onChange={e=>setSalaryManualPromotionTo(e.target.value)} style={sBase.select}>
+                          <option value="CL2">CL2</option><option value="CL3">CL3</option><option value="CL4">CL4</option>
+                        </select>
+                      </div>
+                      <div style={sBase.inBox}>
+                        <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>진급인상률(%)</div>
+                        <NumInput value={salaryManualPromotionRate} onChange={setSalaryManualPromotionRate} step={0.1} min={0} max={30}/>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -2093,10 +2148,10 @@ function App() {
                   </div>
                   <div style={sBase.inBox}>
                     <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>총 인상률</div>
-                    <div style={{ color:"#00DC82", fontSize:16, fontWeight:900 }}>{roundRaise(Number(salaryManualBaseUp || 0) + Number(salaryManualPerformance || 0)).toFixed(1)}%</div>
+                    <div style={{ color:"#00DC82", fontSize:16, fontWeight:900 }}>{roundRaise(Number(salaryManualBaseUp || 0) + Number(salaryManualPerformance || 0) + (salaryManualPromoted ? Number(salaryManualPromotionRate || 0) : 0)).toFixed(1)}%</div>
                     {findRecordByYear(salaryRecords, Number(salaryRecordYear) - 1) ? (
                       <div style={{ fontSize:10, color:"#7DD3FC", marginTop:4, lineHeight:1.4 }}>
-                        전년대비 {calcTotalRaiseFromSalary(salaryManualContract, findRecordByYear(salaryRecords, Number(salaryRecordYear) - 1)?.contract_salary_man)?.toFixed(1)}% - 베업 {Number(salaryManualBaseUp || 0).toFixed(1)}%
+                        전년대비 {calcTotalRaiseFromSalary(salaryManualContract, findRecordByYear(salaryRecords, Number(salaryRecordYear) - 1)?.contract_salary_man)?.toFixed(1)}% - 베업 {Number(salaryManualBaseUp || 0).toFixed(1)}%{salaryManualPromoted ? ` - 진급 ${Number(salaryManualPromotionRate || 0).toFixed(1)}%` : ''}
                       </div>
                     ) : (
                       <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>직전년도 저장 후 자동계산</div>
@@ -2153,9 +2208,9 @@ function App() {
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                     <div>
                       <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
-                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}% · 성과 {recPerf.toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}%{getPromotionRaiseForRecord(rec) ? ` · 진급 ${getPromotionRaiseForRecord(rec).toFixed(1)}%` : ''} · 성과 {recPerf.toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
                       <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원{rec.withholding_pi_rate !== undefined && rec.withholding_pi_rate !== null ? ` · PI ${Number(rec.withholding_pi_rate).toFixed(0)}%×2회` : ''}</div>
-                      {recEstimatedGrade && <div style={{ fontSize:11, color:"#7DD3FC", marginTop:3, fontWeight:800 }}>예상 고과 {recEstimatedGrade.label} · {recEstimatedGrade.basis}</div>}
+                      {recEstimatedGrade && <div style={{ fontSize:11, color:"#7DD3FC", marginTop:3, fontWeight:800 }}>{recEstimatedGrade.gradeYear}년 예상 고과 {recEstimatedGrade.label} · {recEstimatedGrade.basis}</div>}
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
                       <button onClick={()=>applySalaryRecord(rec)} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(0,198,255,0.35)", background:"rgba(0,198,255,0.1)", color:"#00C6FF", cursor:"pointer", fontFamily:"inherit", fontWeight:800 }}>불러오기</button>
@@ -2188,7 +2243,7 @@ function App() {
     const maxSalary = Math.max(1, ...trendRecords.map(rec => Number(rec.contract_salary_man || 0)));
     const maxWithholding = Math.max(1, ...trendRecords.map(rec => Number(rec.withholding_income_man || 0)));
     const maxMoneyTrend = Math.max(maxSalary, maxWithholding, 1);
-    const maxRaise = Math.max(1, ...trendRecords.map(rec => Math.max(Number(rec.base_up_raise_rate || 0), getPerformanceRaiseForRecord(rec, trendRecords))));
+    const maxRaise = Math.max(1, ...trendRecords.map(rec => Math.max(Number(rec.base_up_raise_rate || 0), getPromotionRaiseForRecord(rec), getPerformanceRaiseForRecord(rec, trendRecords))));
     const maxPs = Math.max(1, ...trendRecords.map(rec => Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0)));
     const chartW = 720;
     const chartH = 220;
@@ -2221,7 +2276,7 @@ function App() {
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <div style={{ fontSize:12, color:"#CBD5E1", lineHeight:1.6 }}>
-                저장된 연봉정보를 기준으로 <b>연봉, 베이스업, 성과인상률, DS PS 이력, 비고/진급여부</b>를 연도순으로 정리합니다. 비고는 저장 시 입력한 메모를 우선 표시하고, 직급이 바뀐 경우 자동으로 함께 표시합니다.
+                저장된 연봉정보를 기준으로 <b>연봉, 베이스업, 진급인상률, 성과인상률, DS PS 이력, 전년도 고과, 비고</b>를 연도순으로 정리합니다. 비고는 저장 시 입력한 메모를 우선 표시하고, 직급이 바뀐 경우 자동으로 함께 표시합니다.
               </div>
 
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(132px, 1fr))", gap:8 }}>
@@ -2267,8 +2322,8 @@ function App() {
               </div>
 
               <div style={{ background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:14, overflowX:"auto", overflowY:"hidden" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 110px 230px", minWidth:1005, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
-                  <div>연도</div><div>연봉</div><div>원천징수</div><div>베이스업</div><div>성과인상</div><div>DS PS</div><div>예상고과</div><div>비고</div>
+                <div style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 95px 95px 95px 95px 125px 250px", minWidth:1160, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
+                  <div>연도</div><div>연봉</div><div>원천징수</div><div>베이스업</div><div>진급</div><div>성과인상</div><div>DS PS</div><div>전년도 고과</div><div>비고</div>
                 </div>
                 <div style={{ display:"flex", flexDirection:"column" }}>
                   {trendRecords.map((rec, idx) => {
@@ -2276,12 +2331,13 @@ function App() {
                     const base = Number(rec.base_up_raise_rate || 0);
                     const withholding = Number(rec.withholding_income_man || 0);
                     const perfRaise = getPerformanceRaiseForRecord(rec, trendRecords);
+                    const promotionRate = getPromotionRaiseForRecord(rec);
                     const dsPs = Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0);
                     const psAmount = calcPsAmountMan(salary, dsPs);
                     const estimatedGrade = getEstimatedPerformanceGrade(rec.year, rec.cl, perfRaise, 2);
                     const note = getAutoNote(rec, idx);
                     return (
-                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 110px 230px", minWidth:1005, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
+                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 95px 95px 95px 95px 125px 250px", minWidth:1160, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
                         <div style={{ color:"#E2E8F0", fontWeight:900 }}>{rec.year}</div>
                         <div>
                           <div style={{ color:"#fff", fontWeight:900 }}>{comma(salary)}만원</div>
@@ -2302,6 +2358,10 @@ function App() {
                           </div>
                         </div>
                         <div>
+                          <div style={{ color: promotionRate ? "#FBBF24" : "#64748B", fontWeight:900 }}>{promotionRate ? `${promotionRate.toFixed(1)}%` : '-'}</div>
+                          <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>{promotionRate ? `${rec.promotion_from_cl || 'CL2'}→${rec.promotion_to_cl || 'CL3'}` : ''}</div>
+                        </div>
+                        <div>
                           <div style={{ color:"#A78BFA", fontWeight:900 }}>{perfRaise.toFixed(1)}%</div>
                           <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
                             <div style={{ width:`${Math.max(4, Math.min(100, perfRaise / maxRaise * 100))}%`, height:"100%", background:"rgba(167,139,250,0.75)", borderRadius:999 }} />
@@ -2317,7 +2377,7 @@ function App() {
                         <div>
                           {estimatedGrade ? (
                             <>
-                              <div style={{ color:"#7DD3FC", fontWeight:900 }}>{estimatedGrade.label}</div>
+                              <div style={{ color:"#7DD3FC", fontWeight:900 }}>{estimatedGrade.gradeYear}년 {estimatedGrade.label}</div>
                               <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>기준 {estimatedGrade.ref.toFixed(1)}%</div>
                             </>
                           ) : (
