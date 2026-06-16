@@ -659,6 +659,28 @@ function App() {
   };
 
   const roundRaise = (value) => Math.round((Number(value) || 0) * 10) / 10;
+  const SALARY_CAP_BY_CL = { CL3: 11000, CL4: 13000 };
+  const formatSalaryCap = (capMan) => capMan >= 10000 ? `${(capMan / 10000).toFixed(1)}억` : `${comma(capMan)}만원`;
+  const getSalaryCapByCl = (cl) => SALARY_CAP_BY_CL[normalizeCl(cl)] || null;
+  const splitSalaryByCap = (cl, salaryMan) => {
+    const salary = Math.round(Number(salaryMan) || 0);
+    const cap = getSalaryCapByCl(cl);
+    if (!cap) return { cap: null, baseSalary: salary, excessCash: 0, isCapped: false };
+    const excessCash = Math.max(0, salary - cap);
+    return {
+      cap,
+      baseSalary: excessCash > 0 ? cap : salary,
+      excessCash,
+      isCapped: excessCash > 0,
+    };
+  };
+  const getDefaultPromotionRaiseRate = (fromCl, toCl) => {
+    const from = normalizeCl(fromCl);
+    const to = normalizeCl(toCl);
+    if (from === 'CL2' && to === 'CL3') return 5;
+    if (from === 'CL3' && to === 'CL4') return 1;
+    return 0;
+  };
 
   const findRecordByYear = (records, year) => (records || []).find(rec => Number(rec.year) === Number(year));
   const calcTotalRaiseFromSalary = (currentSalaryMan, prevSalaryMan) => {
@@ -1311,9 +1333,12 @@ function App() {
     const isCL4 = myCl === "CL4";
     const calculatedSalary = Math.round(mySalary * (1 + myRaise / 100));
     const curSalary = agreedSalary > 0 ? Math.round(agreedSalary) : calculatedSalary;
-    let bonusSalary = curSalary + bizPerfBonus;
-    let excessCash = 0;
-    if (isCL4 && curSalary > 13000) { bonusSalary = 13000 + bizPerfBonus; excessCash = curSalary - 13000; }
+    const salaryCapInfo = splitSalaryByCap(myCl, curSalary);
+    const cappedBaseSalary = salaryCapInfo.baseSalary;
+    const salaryCap = salaryCapInfo.cap;
+    const excessCash = salaryCapInfo.excessCash;
+    // 연봉상한 초과분은 기준연봉에 넣지 않고, 1회성 현금 성과급으로 분리한다.
+    let bonusSalary = cappedBaseSalary + bizPerfBonus;
     let perf = 1.0;
     if (isCL4) { if (myRating === "EM") perf = 1.4; else if (myRating === "ES") perf = 1.2; }
     
@@ -1443,7 +1468,7 @@ function App() {
     const hynixDcTaxSaving = hynixActive.dcTaxSaving;
     const hynixDcMarginalRate = hynixActive.dcMarginalRate;
     return {
-      bizPerfBonus, curSalary, bonusSalary, excessCash, perf, usePrice, isCL1, isCL4,
+      bizPerfBonus, curSalary, bonusSalary, cappedBaseSalary, salaryCap, excessCash, perf, usePrice, isCL1, isCL4,
       opi, opiCap, opiPct, opiTax, opiNet, sp, isSpFixed24, tax, spNet, taxRate,
       totalIncW, prevWithholding, taxBaseMan, healthAdd, ltcAdd, healthTotal, healthMonthly, isHealthCapped,
       third, sharesEach, totalBonus: opi + sp + excessCash + bizPerfBonus + samsungTaiAnnual,
@@ -1521,7 +1546,7 @@ function App() {
           {label:"특별성과(세후)", val:fmtM(r.spNet), color:"#FFB400"},
           ...(r.samsungTaiAnnual>0?[{label:"TAI/PI(세후)",val:fmtM(r.taiNet),color:"#A78BFA"}]:[]),
           ...(r.bizPerfBonus>0?[{label:"업무성과",val:fmtM(r.bizPerfBonus),color:"#34D399"}]:[]),
-          ...(r.excessCash>0?[{label:"연봉초과",val:fmtM(r.excessCash),color:"#FF6B6B"}]:[]),
+          ...(r.excessCash>0?[{label:"상한초과 1회성",val:fmtM(r.excessCash),color:"#FF6B6B"}]:[]),
           {label:"총 영끌(세전)", val:fmtM(r.totalBonus), color:"#fff"},
         ].map(item=>(
           <div key={item.label} style={{ background:"#0e1828", borderRadius:12, padding:"12px 8px", textAlign:"center", border:"1px solid rgba(255,255,255,0.1)" }}>
@@ -2093,21 +2118,33 @@ function App() {
 
                 <div style={{ background:"rgba(251,191,36,0.08)", border:"1px solid rgba(251,191,36,0.22)", borderRadius:12, padding:10 }}>
                   <label style={{ display:"flex", alignItems:"center", gap:8, color:"#FDE68A", fontSize:12, fontWeight:900, cursor:"pointer" }}>
-                    <input type="checkbox" checked={salaryManualPromoted} onChange={e=>setSalaryManualPromoted(e.target.checked)} />
+                    <input type="checkbox" checked={salaryManualPromoted} onChange={e=>{
+                      const checked = e.target.checked;
+                      setSalaryManualPromoted(checked);
+                      if (checked) setSalaryManualPromotionRate(getDefaultPromotionRaiseRate(salaryManualPromotionFrom, salaryManualPromotionTo));
+                    }} />
                     진급인상률 별도 반영
                   </label>
-                  <div style={{ fontSize:10, color:"#94A3B8", lineHeight:1.45, marginTop:5 }}>CL2에서 CL3로 진급한 경우 기본 진급인상률 <b style={{ color:"#FBBF24" }}>5.0%</b>를 총 상승률에서 먼저 제외하고, 남은 값을 성과인상률로 역산합니다.</div>
+                  <div style={{ fontSize:10, color:"#94A3B8", lineHeight:1.45, marginTop:5 }}>진급 경로별 기본값을 적용합니다. <b style={{ color:"#FBBF24" }}>CL2→CL3 5.0%</b>, <b style={{ color:"#FBBF24" }}>CL3→CL4 1.0%</b>를 총 상승률에서 먼저 제외하고, 남은 값을 성과인상률로 역산합니다.</div>
                   {salaryManualPromoted && (
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:9 }}>
                       <div>
                         <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>진급 전</div>
-                        <select value={salaryManualPromotionFrom} onChange={e=>setSalaryManualPromotionFrom(e.target.value)} style={sBase.select}>
+                        <select value={salaryManualPromotionFrom} onChange={e=>{
+                          const next = e.target.value;
+                          setSalaryManualPromotionFrom(next);
+                          setSalaryManualPromotionRate(getDefaultPromotionRaiseRate(next, salaryManualPromotionTo));
+                        }} style={sBase.select}>
                           <option value="CL1">CL1</option><option value="CL2">CL2</option><option value="CL3">CL3</option><option value="CL4">CL4</option>
                         </select>
                       </div>
                       <div>
                         <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>진급 후</div>
-                        <select value={salaryManualPromotionTo} onChange={e=>setSalaryManualPromotionTo(e.target.value)} style={sBase.select}>
+                        <select value={salaryManualPromotionTo} onChange={e=>{
+                          const next = e.target.value;
+                          setSalaryManualPromotionTo(next);
+                          setSalaryManualPromotionRate(getDefaultPromotionRaiseRate(salaryManualPromotionFrom, next));
+                        }} style={sBase.select}>
                           <option value="CL2">CL2</option><option value="CL3">CL3</option><option value="CL4">CL4</option>
                         </select>
                       </div>
@@ -2133,6 +2170,12 @@ function App() {
                     </select>
                   </div>
                 </div>
+                {getSalaryCapByCl(salaryManualCl) && (
+                  <div style={{ fontSize:11, color: Number(salaryManualContract || 0) > getSalaryCapByCl(salaryManualCl) ? "#FCA5A5" : "#94A3B8", lineHeight:1.45, background: Number(salaryManualContract || 0) > getSalaryCapByCl(salaryManualCl) ? "rgba(239,68,68,0.10)" : "rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:10, padding:"8px 10px" }}>
+                    {salaryManualCl} 연봉상한 참고값: <b style={{ color:"#FBBF24" }}>{formatSalaryCap(getSalaryCapByCl(salaryManualCl))}</b>
+                    {Number(salaryManualContract || 0) > getSalaryCapByCl(salaryManualCl) ? ` · 상한 초과 ${comma(Math.round(Number(salaryManualContract || 0) - getSalaryCapByCl(salaryManualCl)))}만원은 연봉 기준액에 포함하지 않고 1회성 성과급으로 분리 지급됩니다.` : ''}
+                  </div>
+                )}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>체결연봉(만)</div><NumInput value={salaryManualContract} onChange={setSalaryManualContract} step={10}/></div>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>업무성과급(만)</div><NumInput value={salaryManualBizBonus} onChange={setSalaryManualBizBonus} step={10}/></div>
@@ -2186,7 +2229,7 @@ function App() {
             )}
             <div style={sBase.inBox}>
               <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>비고 / 진급여부</div>
-              <input value={salaryMemo} onChange={e=>setSalaryMemo(e.target.value)} placeholder="예: 2025 계약연봉, CL2→CL3 진급, 고과 반영 등" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:14, outline:"none" }}/>
+              <input value={salaryMemo} onChange={e=>setSalaryMemo(e.target.value)} placeholder="예: 2025 계약연봉, CL2→CL3 진급, CL3→CL4 진급, 고과 반영 등" style={{ width:"100%", background:"transparent", border:"none", color:"#fff", fontSize:14, outline:"none" }}/>
             </div>
             <button onClick={saveSalaryRecord} disabled={salaryLoading} style={{ width:"100%", padding:15, borderRadius:13, background:"linear-gradient(135deg,#00DC82,#059669)", border:"none", color:"#fff", fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"inherit" }}>
               {salaryLoading ? "저장중..." : (salarySaveMode === 'manual' ? "수기 입력값을 연봉정보로 저장" : "현재 계산기 입력값을 연봉정보로 저장")}
@@ -2495,7 +2538,7 @@ function App() {
               <span style={{ fontSize:12, color:"#CBD5E1" }}>{myCl === "CL1" ? "올해 기초액" : "올해 기준연봉"}</span>
               <span style={{ fontSize:18, fontWeight:900, color:"#00DC82" }}>
                 {comma(r.bonusSalary)}만원
-                {r.excessCash > 0 && <span style={{ fontSize:11, color:"#FF6B6B", marginLeft:8 }}>상한 1.3억 적용</span>}
+                {r.excessCash > 0 && <span style={{ fontSize:11, color:"#FF6B6B", marginLeft:8 }}>{formatSalaryCap(r.salaryCap)} 상한 적용 · 초과 {comma(r.excessCash)}만원은 1회성 성과급</span>}
               </span>
             </div>
           </FieldBox>
@@ -3034,6 +3077,7 @@ function App() {
               <div>지급액(세전) = <b>사업부별 1인당 × 개인 고과 배수</b></div>
               <ul className="logic-ul">
                 <li>CL4 ES: 1.2배 / EM: 1.4배 · CL1~3: 1.0배</li>
+                <li>연봉상한 참고: CL3 1.1억, CL4 1.3억. 상한 초과분은 기준연봉에 반영하지 않고 연봉상한 초과금으로 분리하여 1회성 현금 성과급으로 계산합니다. 진급인상률 기본값은 CL2→CL3 5.0%, CL3→CL4 1.0%로 적용합니다.</li>
                 <li>자사주 3등분 지급: 즉시 1/3 + 1년 후 1/3 + 2년 후 1/3 (중도 퇴사 시 미수령분 몰수)</li>
               </ul>
             </div>
