@@ -36,7 +36,7 @@ create table if not exists public.salary_records (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.salary_users(id) on delete cascade,
   year int not null check (year >= 2011),
-  cl text not null default 'CL23',
+  cl text not null default 'CL3',
   division text not null default 'memory',
   contract_salary_man numeric not null check (contract_salary_man >= 0),
   base_up_raise_rate numeric not null default 0,
