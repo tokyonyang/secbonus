@@ -83,11 +83,11 @@
       align-items: stretch; position: sticky; top: 0; overflow: hidden;
     }
     .header-left { flex-direction: column; align-items: stretch; gap: 10px; width: 100%; }
-    .header-left > div:first-child { padding-right: 118px; min-height: 34px; }
+    .header-left > div:first-child { padding-right: 0; min-height: 34px; }
     .header-right {
-      position: absolute; right: 14px; top: 16px; text-align: right !important;
+      width: 100% !important; max-width: none !important; text-align: left !important;
       border-top: none !important; padding-top: 0 !important; line-height: 1.35 !important;
-      max-width: 112px; font-size: 9px !important;
+      font-size: 9px !important; margin-top: 0;
     }
     .nav-tabs {
       margin-left: 0; width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -973,6 +973,11 @@ function App() {
   const [vwapPrice, setVwapPrice] = useState(null);
   const [vwapLoading, setVwapLoading] = useState(false);
   const [vwapSource, setVwapSource] = useState(null); // "naver" | "yahoo"
+  const [marketInfo, setMarketInfo] = useState(null);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [stockSearchText, setStockSearchText] = useState("");
+  const [marketMsg, setMarketMsg] = useState("");
+  const [hasPreferredStock, setHasPreferredStock] = useState(false);
 
   // ── 다중 CORS 프록시 설정 ──────────────────────────────────────────────
   // 각 프록시는 { build(url)→proxyUrl, extract(res)→text } 형식
@@ -1045,7 +1050,111 @@ function App() {
     }
     setVwapLoading(false);
   };
+
+  // ── 헤더 시장정보 조회: KOSPI 또는 로그인 계정별 선호 종목 ─────────────
+  const setMarketFromPayload = (data, fallbackType = 'stock') => {
+    setMarketInfo({
+      type: data.type || fallbackType,
+      symbol: data.symbol || '',
+      name: data.name || (data.type === 'index' ? 'KOSPI' : data.symbol || ''),
+      market: data.market || '',
+      price: Number(data.price),
+      change: Number(data.change || 0),
+      changeRate: Number(data.changeRate || 0),
+      source: data.source || 'api',
+      updatedAt: data.updatedAt || null,
+    });
+  };
+
+  const fetchKospiIndex = async () => {
+    setMarketLoading(true);
+    setMarketMsg('');
+    try {
+      const res = await fetch('/api/market/kospi', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data.price) throw new Error(data.error || 'KOSPI 조회 실패');
+      setMarketFromPayload({ ...data, type:'index', name:'KOSPI', symbol:'KOSPI' }, 'index');
+      setHasPreferredStock(false);
+    } catch(e) {
+      console.warn('KOSPI 조회 실패', e);
+      setMarketInfo(null);
+      setMarketMsg(e.message || 'KOSPI 조회 실패');
+    }
+    setMarketLoading(false);
+  };
+
+  const fetchStockQuote = async (query, options = {}) => {
+    const q = String(query || '').trim();
+    if (!q) { setMarketMsg('종목명 또는 6자리 종목코드를 입력해주세요.'); return; }
+    setMarketLoading(true);
+    setMarketMsg('');
+    try {
+      const res = await fetch(`/api/market/quote?query=${encodeURIComponent(q)}`, { cache:'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data.price) throw new Error(data.error || '종목 조회 실패');
+      setMarketFromPayload(data, 'stock');
+      setStockSearchText(data.name || data.symbol || q);
+      if (options.save && salaryToken) {
+        const saveRes = await fetch('/api/market/preference', {
+          method:'POST',
+          headers: salaryHeaders(),
+          body: JSON.stringify({ symbol:data.symbol, name:data.name, market:data.market || '' }),
+        });
+        const saveData = await saveRes.json().catch(() => ({}));
+        if (!saveRes.ok) throw new Error(saveData.error || '선호 종목 저장 실패');
+        setHasPreferredStock(true);
+        setMarketMsg(`${data.name || data.symbol} 종목을 로그인 계정 기본값으로 저장했습니다.`);
+      } else if (options.fromPreference) {
+        setHasPreferredStock(true);
+        setMarketMsg(`${data.name || data.symbol} 종목을 로그인 계정 기본값으로 불러왔습니다.`);
+      } else {
+        setHasPreferredStock(false);
+      }
+    } catch(e) {
+      console.warn('종목 조회 실패', e);
+      setMarketMsg(e.message || '종목 조회 실패');
+      if (options.fromPreference) fetchKospiIndex();
+    }
+    setMarketLoading(false);
+  };
+
+  const loadPreferredStock = async () => {
+    if (!salaryToken) { fetchKospiIndex(); return; }
+    setMarketLoading(true);
+    try {
+      const res = await fetch('/api/market/preference', { headers: salaryHeaders(), cache:'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.preference?.symbol) {
+        await fetchStockQuote(data.preference.symbol, { fromPreference:true });
+      } else {
+        await fetchKospiIndex();
+      }
+    } catch(e) {
+      await fetchKospiIndex();
+    }
+    setMarketLoading(false);
+  };
+
+  const resetPreferredStock = async () => {
+    setMarketMsg('');
+    if (salaryToken) {
+      try {
+        await fetch('/api/market/preference', { method:'DELETE', headers: salaryHeaders() });
+      } catch(e) {}
+    }
+    setStockSearchText('');
+    setHasPreferredStock(false);
+    await fetchKospiIndex();
+    setMarketMsg('종목 기본값을 초기화하고 KOSPI로 돌아왔습니다.');
+  };
+
+  const handleStockSearchSubmit = async (e) => {
+    e?.preventDefault?.();
+    await fetchStockQuote(stockSearchText, { save: !!salaryToken });
+  };
+
   useEffect(() => { fetchCurrentPrice(); fetchVwapPrice(); }, []);
+  useEffect(() => { loadPreferredStock(); }, [salaryToken]);
 
   const calc = useCallback(() => {
     const buPct = burate * 10, saPct = 100 - buPct;
@@ -2800,8 +2909,46 @@ function App() {
             ))}
           </div>
         </div>
-        <div className="header-right" style={{ fontSize:10, color:"#94A3B8", textAlign:"right", lineHeight:1.5 }}>
-          made by<br/><span style={{ color:"#E2E8F0", fontWeight:700 }}>초기업_눙물이또르륵</span>
+        <div
+          className="header-right"
+          style={{
+            display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end",
+            fontSize:10, color:"#94A3B8", lineHeight:1.35, minWidth:340
+          }}
+        >
+          <button
+            onClick={marketInfo?.type === 'stock' ? () => fetchStockQuote(marketInfo.symbol, { save:false }) : fetchKospiIndex}
+            title="시장정보 새로고침"
+            style={{
+              fontSize:10, color:"#94A3B8", textAlign:"right", lineHeight:1.35,
+              background:"rgba(255,255,255,0.045)", border:"1px solid rgba(255,255,255,0.09)",
+              borderRadius:12, padding:"7px 10px", cursor:"pointer", minWidth:126
+            }}
+          >
+            <div style={{ letterSpacing:"0.08em", fontWeight:800, color: marketInfo?.type === 'stock' ? "#A7F3D0" : "#7DD3FC" }}>
+              {marketInfo?.type === 'stock' ? (marketInfo.name || marketInfo.symbol) : "오늘의 KOSPI"}
+            </div>
+            <div style={{ color:"#E2E8F0", fontWeight:900, fontSize:15, marginTop:1 }}>
+              {marketLoading ? "조회중" : marketInfo?.price ? marketInfo.price.toLocaleString("ko-KR", { minimumFractionDigits: marketInfo.type === 'index' ? 2 : 0, maximumFractionDigits: marketInfo.type === 'index' ? 2 : 0 }) : "-"}
+            </div>
+            <div style={{ color: marketInfo?.change > 0 ? "#F87171" : marketInfo?.change < 0 ? "#60A5FA" : "#94A3B8", fontSize:10, fontWeight:800 }}>
+              {marketInfo?.price ? `${marketInfo.change > 0 ? "+" : ""}${marketInfo.change.toLocaleString("ko-KR", { maximumFractionDigits:2 })} (${marketInfo.changeRate > 0 ? "+" : ""}${marketInfo.changeRate.toFixed(2)}%)` : "클릭 새로고침"}
+            </div>
+          </button>
+          <form onSubmit={handleStockSearchSubmit} style={{ display:"flex", alignItems:"center", gap:5 }}>
+            <input
+              value={stockSearchText}
+              onChange={e=>setStockSearchText(e.target.value)}
+              placeholder="종목명/코드"
+              title={salaryToken ? "검색한 종목은 로그인 계정 기본값으로 저장됩니다." : "로그인하면 마지막 검색 종목이 계정에 저장됩니다."}
+              style={{
+                width:92, background:"#0b1220", color:"#E2E8F0", border:"1px solid rgba(255,255,255,.13)",
+                borderRadius:10, padding:"8px 9px", fontSize:11, fontWeight:800
+              }}
+            />
+            <button type="submit" disabled={marketLoading} style={{ border:0, borderRadius:10, padding:"8px 9px", background:"rgba(0,220,130,.18)", color:"#A7F3D0", fontWeight:900, fontSize:11, cursor:marketLoading?'wait':'pointer' }}>검색</button>
+            {(marketInfo?.type === 'stock' || hasPreferredStock) && <button type="button" onClick={resetPreferredStock} style={{ border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"8px 8px", background:"rgba(255,255,255,.04)", color:"#CBD5E1", fontWeight:900, fontSize:11, cursor:'pointer' }}>리셋</button>}
+          </form>
         </div>
       </div>
 
