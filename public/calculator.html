@@ -654,7 +654,8 @@ function App() {
   const handleAgreedSalaryChange = (nextValue) => {
     const contract = Number(nextValue) || 0;
     setAgreedSalary(contract);
-    const reversedPrevSalary = reversePrevSalaryFromContract(contract, myRaise);
+    const reverseBaseSalary = splitSalaryByCap(myCl, contract).baseSalary;
+    const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, myRaise);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
   };
 
@@ -674,6 +675,9 @@ function App() {
       isCapped: excessCash > 0,
     };
   };
+  const getSalaryBaseForRaise = (cl, salaryMan) => splitSalaryByCap(cl, salaryMan).baseSalary;
+  const getRecordSalaryBaseForRaise = (rec) => getSalaryBaseForRaise(rec?.cl || 'CL3', rec?.contract_salary_man || 0);
+
   const getDefaultPromotionRaiseRate = (fromCl, toCl) => {
     const from = normalizeCl(fromCl);
     const to = normalizeCl(toCl);
@@ -694,9 +698,11 @@ function App() {
     const promoted = rec.promotion_yn === true || rec.promotion_yn === 'true';
     return promoted ? roundRaise(Number(rec.promotion_raise_rate) || 0) : 0;
   };
-  const calcManualPerformanceFromSalary = (year, contractSalaryMan, baseUpRate, records = salaryRecords, promotionRate = 0) => {
+  const calcManualPerformanceFromSalary = (year, contractSalaryMan, baseUpRate, records = salaryRecords, promotionRate = 0, currentCl = salaryManualCl) => {
     const prevRec = findRecordByYear(records, Number(year) - 1);
-    const totalRaise = prevRec ? calcTotalRaiseFromSalary(contractSalaryMan, prevRec.contract_salary_man) : null;
+    const currentBaseForRaise = getSalaryBaseForRaise(currentCl, contractSalaryMan);
+    const prevBaseForRaise = prevRec ? getRecordSalaryBaseForRaise(prevRec) : 0;
+    const totalRaise = prevRec ? calcTotalRaiseFromSalary(currentBaseForRaise, prevBaseForRaise) : null;
     if (totalRaise === null) return null;
     return roundRaise(totalRaise - (Number(baseUpRate) || 0) - (Number(promotionRate) || 0));
   };
@@ -714,7 +720,9 @@ function App() {
   };
   const getTotalRaiseForRecord = (rec, records = salaryRecords) => {
     const prevRec = findRecordByYear(records, Number(rec?.year) - 1);
-    const bySalary = prevRec ? calcTotalRaiseFromSalary(rec?.contract_salary_man, prevRec.contract_salary_man) : null;
+    const currentBaseForRaise = getRecordSalaryBaseForRaise(rec);
+    const prevBaseForRaise = prevRec ? getRecordSalaryBaseForRaise(prevRec) : 0;
+    const bySalary = prevRec ? calcTotalRaiseFromSalary(currentBaseForRaise, prevBaseForRaise) : null;
     return bySalary !== null ? bySalary : roundRaise(Number(rec?.raise_rate) || 0);
   };
   const getPerformanceRaiseForRecord = (rec, records = salaryRecords) => {
@@ -731,7 +739,8 @@ function App() {
     const perf = Number(perfValue) || 0;
     const total = roundRaise(base + perf);
     setMyRaise(total);
-    const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, total);
+    const reverseBaseSalary = splitSalaryByCap(myCl, agreedSalary).baseSalary;
+    const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, total);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
   };
 
@@ -753,7 +762,8 @@ function App() {
     const perf = roundRaise(total - base);
     setPerformanceRaise(perf);
     setMyRaise(total);
-    const reversedPrevSalary = reversePrevSalaryFromContract(agreedSalary, total);
+    const reverseBaseSalary = splitSalaryByCap(myCl, agreedSalary).baseSalary;
+    const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, total);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
   };
 
@@ -762,6 +772,11 @@ function App() {
     if (newCl === "CL1" && myCl !== "CL1") { setMySalary(300); setAgreedSalary(0); setPrevWithholding(4000); }
     else if (newCl !== "CL1" && myCl === "CL1") { setMySalary(8000); setAgreedSalary(0); setPrevWithholding(8000); }
     setMyCl(newCl);
+    if (agreedSalary > 0) {
+      const reverseBaseSalary = splitSalaryByCap(newCl, agreedSalary).baseSalary;
+      const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, myRaise);
+      if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
+    }
   };
 
   const [salaryToken, setSalaryToken] = useState(() => localStorage.getItem("salaryToken") || "");
@@ -974,7 +989,7 @@ function App() {
     const contractSalaryMan = Math.round(Number(isManual ? salaryManualContract : (agreedSalary > 0 ? agreedSalary : r.bonusSalary)) || 0);
     const saveBaseUp = roundRaise(isManual ? salaryManualBaseUp : baseUpRaise);
     const savePromotionRate = roundRaise(isManual && salaryManualPromoted ? salaryManualPromotionRate : 0);
-    const autoManualPerformance = isManual ? calcManualPerformanceFromSalary(recordYear, contractSalaryMan, saveBaseUp, salaryRecords, savePromotionRate) : null;
+    const autoManualPerformance = isManual ? calcManualPerformanceFromSalary(recordYear, contractSalaryMan, saveBaseUp, salaryRecords, savePromotionRate, salaryManualCl) : null;
     const savePerformance = roundRaise(isManual ? (autoManualPerformance !== null ? autoManualPerformance : salaryManualPerformance) : performanceRaise);
     const saveRaiseRate = roundRaise(saveBaseUp + savePromotionRate + savePerformance);
     const saveDsPsRate = roundRaise(isManual ? salaryManualDsPsRate : (getHistoricalDsPs(recordYear) ?? 0));
@@ -1031,7 +1046,8 @@ function App() {
     setBaseUpRaise(base);
     setPerformanceRaise(perf);
     setMyRaise(totalRaise);
-    const reversedPrevSalary = reversePrevSalaryFromContract(contract, totalRaise);
+    const reverseBaseSalary = splitSalaryByCap(normalizeCl(rec.cl || 'CL3'), contract).baseSalary;
+    const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, totalRaise);
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
     setBizPerfBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
     setPrevWithholding(Math.round(Number(rec.withholding_income_man) || 0));
@@ -1361,7 +1377,7 @@ function App() {
     const lostTotal = lostOpi + lostSp;
     // ── 과세표준: 연봉 + 업무성과급 + OPI + 특별성과급 + TAI 모두 포함 ──
     // bizPerfBonus는 annualGrossForTax에 이미 포함되어 있으므로 curW에 반영됨
-    const annualGrossForTax = (isCL1 ? curSalary * 14 : curSalary) + bizPerfBonus;
+    const annualGrossForTax = (isCL1 ? curSalary * 14 : cappedBaseSalary) + excessCash + bizPerfBonus;
     const curW = annualGrossForTax * MAN;
     const opiW = opi * MAN;
     const spW = sp * MAN;
@@ -2196,7 +2212,7 @@ function App() {
                     <div style={{ color:"#00DC82", fontSize:16, fontWeight:900 }}>{roundRaise(Number(salaryManualBaseUp || 0) + Number(salaryManualPerformance || 0) + (salaryManualPromoted ? Number(salaryManualPromotionRate || 0) : 0)).toFixed(1)}%</div>
                     {findRecordByYear(salaryRecords, Number(salaryRecordYear) - 1) ? (
                       <div style={{ fontSize:10, color:"#7DD3FC", marginTop:4, lineHeight:1.4 }}>
-                        전년대비 {calcTotalRaiseFromSalary(salaryManualContract, findRecordByYear(salaryRecords, Number(salaryRecordYear) - 1)?.contract_salary_man)?.toFixed(1)}% - 베업 {Number(salaryManualBaseUp || 0).toFixed(1)}%{salaryManualPromoted ? ` - 진급 ${Number(salaryManualPromotionRate || 0).toFixed(1)}%` : ''}
+                        전년대비 {calcTotalRaiseFromSalary(getSalaryBaseForRaise(salaryManualCl, salaryManualContract), getRecordSalaryBaseForRaise(findRecordByYear(salaryRecords, Number(salaryRecordYear) - 1)))?.toFixed(1)}% - 베업 {Number(salaryManualBaseUp || 0).toFixed(1)}%{salaryManualPromoted ? ` - 진급 ${Number(salaryManualPromotionRate || 0).toFixed(1)}%` : ''}
                       </div>
                     ) : (
                       <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>직전년도 저장 후 자동계산</div>
@@ -2501,7 +2517,7 @@ function App() {
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>{myCl === "CL1" ? "올해 체결 기초액(만)" : "올해 체결연봉(만)"}</div>
                 <NumInput value={agreedSalary} onChange={handleAgreedSalaryChange} step={100} min={0}/>
-                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>{agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산"}</div>
+                <div style={{ fontSize:10, color: agreedSalary >= 100000 ? "#FCA5A5" : "#94A3B8", marginTop:4 }}>{agreedSalary >= 100000 ? `단위 확인: ${comma(agreedSalary)}만원 = 약 ${(agreedSalary/10000).toFixed(1)}억원` : (agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산")}</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>베이스업 인상률(%)</div>
@@ -2530,7 +2546,12 @@ function App() {
             </div>
             {agreedSalary > 0 && (
               <div style={{ margin:"-2px 0 10px", padding:"10px 12px", borderRadius:12, background:"rgba(0,198,255,0.08)", border:"1px solid rgba(0,198,255,0.18)", color:"#BAE6FD", fontSize:11, lineHeight:1.5 }}>
-                올해 체결연봉 {comma(agreedSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = 전년도 연봉 {comma(mySalary)}만원으로 자동 역산됩니다.<br/>
+                {r.salaryCap && r.excessCash > 0 ? (
+                  <>올해 체결연봉 {comma(agreedSalary)}만원 중 기준연봉은 상한 {comma(r.salaryCap)}만원으로 적용됩니다. 상한 초과 {comma(r.excessCash)}만원은 1회성 현금 성과급으로 분리하고, 전년도 연봉은 기준연봉 {comma(r.cappedBaseSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = {comma(mySalary)}만원으로 역산됩니다.</>
+                ) : (
+                  <>올해 체결연봉 {comma(agreedSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = 전년도 연봉 {comma(mySalary)}만원으로 자동 역산됩니다.</>
+                )}<br/>
+                {agreedSalary >= 100000 && <span style={{ color:"#FCA5A5", display:"block", marginTop:4 }}>단위 확인: 현재 입력값은 {comma(agreedSalary)}만원, 즉 약 {(agreedSalary/10000).toFixed(1)}억원입니다. 1.3억원은 13,000으로 입력하세요.</span>}
                 <span style={{ color:"#93C5FD" }}>총 임금인상률 = 베이스업 {baseUpRaise}% + 업무성과 {performanceRaise}%</span>
               </div>
             )}
