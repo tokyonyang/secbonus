@@ -447,7 +447,7 @@ function App() {
   const [tab, setTab] = useState(0); // 0: 정보, 1: 시뮬레이션, 2: 산출결과, 3: 로직
   const [simYear, setSimYear] = useState(2026);
   const [myDiv, setMyDiv] = useState("memory");
-  const [myCl, setMyCl] = useState("CL23");
+  const [myCl, setMyCl] = useState("CL3");
   const [mySalary, setMySalary] = useState(8000);
   const [agreedSalary, setAgreedSalary] = useState(0); // 올해 체결 연봉(만) — 입력 시 인상률 계산보다 우선 적용
   const [baseUpRaise, setBaseUpRaise] = useState(4.1); // 베이스업 인상률(%)
@@ -554,9 +554,11 @@ function App() {
     CL4:{1:{MT:0.5, ES:2.0, EM:4.0}, 2:{MT:0.5, ES:1.5, EM:3.0}, 3:{MT:0.5, ES:1.0, EM:2.0}}
   };
   const PERFORMANCE_CPI_HISTORY = { 2026:2.1, 2025:2.3, 2024:3.6, 2023:5.1, 2022:2.5, 2021:0.5, 2020:0.4, 2019:1.5, 2018:1.9, 2017:1.0, 2016:0.7, 2015:1.3, 2014:1.3, 2013:2.2, 2012:4.0, 2011:2.9 };
+  const normalizeCl = (cl) => cl === 'CL23' ? 'CL3' : (cl || 'CL3');
+  const formatCl = (cl) => cl === 'CL23' ? 'CL3(구 CL2~CL3)' : (cl || 'CL3');
   const getPerformanceRaiseReference = (year, cl='CL3', rating='ES', payzone=2) => {
     const y = Math.round(Number(year) || 0);
-    const c = cl === 'CL23' ? 'CL3' : cl;
+    const c = normalizeCl(cl);
     const r = ['MT','ES','EM'].includes(rating) ? rating : 'ES';
     const z = Math.min(3, Math.max(1, Math.round(Number(payzone) || 2)));
     if (y >= 2022 && y <= 2026) return PERFORMANCE_RAISE_HISTORY[y]?.[c]?.[r] ?? null;
@@ -568,7 +570,7 @@ function App() {
   const getEstimatedPerformanceGrade = (salaryYear, cl='CL3', actualPerformanceRaise=0, payzone=2) => {
     const y = Math.round(Number(salaryYear) || 0);
     const gradeYear = y > 2011 ? y - 1 : y; // 임금인상에 반영된 고과는 전년도 평가 기준으로 표시
-    const c = cl === 'CL23' ? 'CL3' : cl;
+    const c = normalizeCl(cl);
     const z = Math.min(3, Math.max(1, Math.round(Number(payzone) || 2)));
     // 참고표의 행은 해당 연도 임금인상표 기준이므로 비교값은 salaryYear를 사용하고, 표시 고과연도만 전년도 기준으로 표기합니다.
     const mt = getPerformanceRaiseReference(y, c, 'MT', z);
@@ -753,7 +755,7 @@ function App() {
   const [salaryRecords, setSalaryRecords] = useState([]);
   const [salaryRecordYear, setSalaryRecordYear] = useState(() => Math.max(2011, simYear - 1));
   const [salarySaveMode, setSalarySaveMode] = useState("calculator"); // calculator | manual
-  const [salaryManualCl, setSalaryManualCl] = useState("CL23");
+  const [salaryManualCl, setSalaryManualCl] = useState("CL3");
   const [salaryManualDiv, setSalaryManualDiv] = useState("memory");
   const [salaryManualContract, setSalaryManualContract] = useState(0);
   const [salaryManualBaseUp, setSalaryManualBaseUp] = useState(0);
@@ -1001,7 +1003,7 @@ function App() {
     const perf = hasSavedSplit ? Number(savedPerfRaw) || 0 : roundRaise((Number(savedTotalRaw) || 0) - base);
     const totalRaise = roundRaise((Number(savedTotalRaw) || 0) || (base + perf));
     setSalaryRecordYear(rec.year);
-    setMyCl(rec.cl || 'CL23');
+    setMyCl(normalizeCl(rec.cl || 'CL3'));
     setMyDiv(rec.division || 'memory');
     setAgreedSalary(contract);
     setBaseUpRaise(base);
@@ -1011,7 +1013,7 @@ function App() {
     if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
     setBizPerfBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
     setPrevWithholding(Math.round(Number(rec.withholding_income_man) || 0));
-    setSalaryManualCl(rec.cl || 'CL23');
+    setSalaryManualCl(normalizeCl(rec.cl || 'CL3'));
     setSalaryManualDiv(rec.division || 'memory');
     setSalaryManualContract(contract);
     setSalaryManualBaseUp(base);
@@ -2121,7 +2123,7 @@ function App() {
                   <div>
                     <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>직급</div>
                     <select value={salaryManualCl} onChange={e=>setSalaryManualCl(e.target.value)} style={sBase.select}>
-                      <option value="CL1">CL1</option><option value="CL23">CL2 ~ CL3</option><option value="CL4">CL4 이상</option>
+                      <option value="CL1">CL1</option><option value="CL2">CL2</option><option value="CL3">CL3</option><option value="CL4">CL4 이상</option>
                     </select>
                   </div>
                   <div>
@@ -2208,7 +2210,7 @@ function App() {
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                     <div>
                       <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
-                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}%{getPromotionRaiseForRecord(rec) ? ` · 진급 ${getPromotionRaiseForRecord(rec).toFixed(1)}%` : ''} · 성과 {recPerf.toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{formatCl(rec.cl)} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}%{getPromotionRaiseForRecord(rec) ? ` · 진급 ${getPromotionRaiseForRecord(rec).toFixed(1)}%` : ''} · 성과 {recPerf.toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
                       <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원{rec.withholding_pi_rate !== undefined && rec.withholding_pi_rate !== null ? ` · PI ${Number(rec.withholding_pi_rate).toFixed(0)}%×2회` : ''}</div>
                       {recEstimatedGrade && <div style={{ fontSize:11, color:"#7DD3FC", marginTop:3, fontWeight:800 }}>{recEstimatedGrade.gradeYear}년 예상 고과 {recEstimatedGrade.label} · {recEstimatedGrade.basis}</div>}
                     </div>
@@ -2421,7 +2423,8 @@ function App() {
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:6 }}>직급</div>
                 <select value={myCl} onChange={handleClChange} style={sBase.select}>
                   <option value="CL1">CL1 (비연봉제)</option>
-                  <option value="CL23">CL2 ~ CL3</option>
+                  <option value="CL2">CL2</option>
+                  <option value="CL3">CL3</option>
                   <option value="CL4">CL4 이상</option>
                 </select>
               </div>
@@ -2918,7 +2921,7 @@ function App() {
               </table>
             </div>
             <div style={{ marginTop:9, fontSize:10, color:"#64748B", lineHeight:1.5 }}>
-              * 2023년부터는 그룹장/팀장이 CL2~4 가/나 각 6개 그룹 내에서 성과인상률을 조정하는 구조로 해석했습니다. 실제 개인값은 회사/조직/평가에 따라 달라질 수 있어 참고값으로만 사용하세요.
+              * 2023년부터는 그룹장/팀장이 CL2/CL3/CL4 가/나 각 6개 그룹 내에서 성과인상률을 조정하는 구조로 해석했습니다. 실제 개인값은 회사/조직/평가에 따라 달라질 수 있어 참고값으로만 사용하세요.
             </div>
           </FieldBox>
 
