@@ -534,6 +534,69 @@ function App() {
     return Object.prototype.hasOwnProperty.call(BASE_UP_HISTORY, y) ? BASE_UP_HISTORY[y] : null;
   };
 
+  // ── 평균 성과인상률 참고표 ─────────────────────────────────────
+  // 사용자 첨부 자료 기준. 과거 연봉 수기 입력 시 성과인상률 참고/적용값으로 사용합니다.
+  const PERFORMANCE_RAISE_HISTORY = {
+    2026: { CL2:{MT:1.5, ES:4.5, EM:7.5}, CL3:{MT:1.0, ES:3.3, EM:6.2}, CL4:{MT:0.0, ES:2.2, EM:4.5} },
+    2025: { CL2:{MT:1.5, ES:4.6, EM:7.5}, CL3:{MT:1.0, ES:3.3, EM:6.0}, CL4:{MT:0.0, ES:2.2, EM:5.0} },
+    2024: { CL2:{MT:1.5, ES:4.9, EM:7.2}, CL3:{MT:1.0, ES:3.6, EM:6.0}, CL4:{MT:0.0, ES:2.1, EM:4.7} },
+    2023: { CL2:{MT:1.5, ES:3.3, EM:6.5}, CL3:{MT:0.5, ES:2.6, EM:5.5}, CL4:{MT:0.0, ES:0.8, EM:3.0} },
+    2022: { CL2:{MT:5.8, ES:9.5, EM:11.5}, CL3:{MT:3.8, ES:7.5, EM:9.5}, CL4:{MT:1.0, ES:3.0, EM:5.0} },
+    2021: {
+      CL2:{1:{MT:5.5, ES:9.0, EM:11.0}, 2:{MT:5.0, ES:8.5, EM:10.5}, 3:{MT:4.5, ES:8.0, EM:10.0}},
+      CL3:{1:{MT:2.0, ES:5.5, EM:7.5}, 2:{MT:2.0, ES:3.5, EM:5.5}, 3:{MT:1.5, ES:1.5, EM:3.0}},
+      CL4:{1:{MT:0.5, ES:2.0, EM:4.0}, 2:{MT:0.5, ES:1.5, EM:3.0}, 3:{MT:0.5, ES:1.0, EM:2.0}}
+    }
+  };
+  const PERFORMANCE_RAISE_2011_2020 = {
+    CL2:{1:{MT:1.5, ES:5.0, EM:7.0}, 2:{MT:1.5, ES:5.0, EM:7.0}, 3:{MT:1.5, ES:5.0, EM:7.0}},
+    CL3:{1:{MT:1.5, ES:5.0, EM:7.0}, 2:{MT:1.0, ES:3.0, EM:5.0}, 3:{MT:0.5, ES:1.5, EM:3.0}},
+    CL4:{1:{MT:0.5, ES:2.0, EM:4.0}, 2:{MT:0.5, ES:1.5, EM:3.0}, 3:{MT:0.5, ES:1.0, EM:2.0}}
+  };
+  const PERFORMANCE_CPI_HISTORY = { 2026:2.1, 2025:2.3, 2024:3.6, 2023:5.1, 2022:2.5, 2021:0.5, 2020:0.4, 2019:1.5, 2018:1.9, 2017:1.0, 2016:0.7, 2015:1.3, 2014:1.3, 2013:2.2, 2012:4.0, 2011:2.9 };
+  const getPerformanceRaiseReference = (year, cl='CL3', rating='ES', payzone=2) => {
+    const y = Math.round(Number(year) || 0);
+    const c = cl === 'CL23' ? 'CL3' : cl;
+    const r = ['MT','ES','EM'].includes(rating) ? rating : 'ES';
+    const z = Math.min(3, Math.max(1, Math.round(Number(payzone) || 2)));
+    if (y >= 2022 && y <= 2026) return PERFORMANCE_RAISE_HISTORY[y]?.[c]?.[r] ?? null;
+    if (y === 2021) return PERFORMANCE_RAISE_HISTORY[2021]?.[c]?.[z]?.[r] ?? null;
+    if (y >= 2011 && y <= 2020) return PERFORMANCE_RAISE_2011_2020?.[c]?.[z]?.[r] ?? null;
+    return null;
+  };
+  const PERFORMANCE_GRADE_LABELS = { MT:'다(MT)', ES:'나(ES)', EM:'가(EM)' };
+  const getEstimatedPerformanceGrade = (year, cl='CL3', actualPerformanceRaise=0, payzone=2) => {
+    const y = Math.round(Number(year) || 0);
+    const c = cl === 'CL23' ? 'CL3' : cl;
+    const z = Math.min(3, Math.max(1, Math.round(Number(payzone) || 2)));
+    const mt = getPerformanceRaiseReference(y, c, 'MT', z);
+    const es = getPerformanceRaiseReference(y, c, 'ES', z);
+    const em = getPerformanceRaiseReference(y, c, 'EM', z);
+    if ([mt, es, em].some(v => v === null || v === undefined)) return null;
+    const actual = roundRaise(actualPerformanceRaise);
+    const mtEsMid = (Number(mt) + Number(es)) / 2;
+    const esEmMid = (Number(es) + Number(em)) / 2;
+    let rating = 'MT';
+    if (actual >= esEmMid) rating = 'EM';
+    else if (actual >= mtEsMid) rating = 'ES';
+    const ref = { MT:mt, ES:es, EM:em }[rating];
+    const closest = ['MT','ES','EM'].map(code => ({ code, value:{MT:mt, ES:es, EM:em}[code], gap:Math.abs(actual - {MT:mt, ES:es, EM:em}[code]) }))
+      .sort((a,b)=>a.gap-b.gap)[0];
+    return {
+      rating,
+      label: PERFORMANCE_GRADE_LABELS[rating],
+      ref: Number(ref),
+      actual,
+      gap: roundRaise(actual - Number(ref)),
+      closestRating: closest.code,
+      closestLabel: PERFORMANCE_GRADE_LABELS[closest.code],
+      closestRef: Number(closest.value),
+      mt:Number(mt), es:Number(es), em:Number(em),
+      payzone: z, cl: c, year: y,
+      basis: y >= 2022 ? `${y}년 ${c} 평균표 기준` : `${y}년 ${c} Payzone ${z} 평균표 기준`
+    };
+  };
+
   // ── DS부문 PS/OPI 지급률 이력 참고값 ───────────────────────────────
   // 사용자 첨부 자료의 DS 컬럼 기준. 과거 연봉 수기 입력 및 연봉추이 참고값으로 사용합니다.
   const DS_PS_HISTORY = {
@@ -686,6 +749,9 @@ function App() {
   const [salaryManualContract, setSalaryManualContract] = useState(0);
   const [salaryManualBaseUp, setSalaryManualBaseUp] = useState(0);
   const [salaryManualPerformance, setSalaryManualPerformance] = useState(0);
+  const [salaryManualPerfRefCl, setSalaryManualPerfRefCl] = useState("CL3");
+  const [salaryManualPerfRating, setSalaryManualPerfRating] = useState("ES");
+  const [salaryManualPayzone, setSalaryManualPayzone] = useState(2);
   const [salaryManualBizBonus, setSalaryManualBizBonus] = useState(0);
   const [salaryManualDsPsRate, setSalaryManualDsPsRate] = useState(0);
   const [salaryManualPiRate, setSalaryManualPiRate] = useState(100); // 전년도 PI: 기준급 100% × 2회 기본
@@ -1830,6 +1896,8 @@ function App() {
   );
 
   const manualWithholdingEstimate = calcDefaultWithholdingFromPrevYear(salaryRecordYear, salaryRecords, salaryManualPiRate);
+  const manualPerformanceReference = getPerformanceRaiseReference(salaryRecordYear, salaryManualPerfRefCl, salaryManualPerfRating, salaryManualPayzone);
+  const manualEstimatedGrade = getEstimatedPerformanceGrade(salaryRecordYear, salaryManualPerfRefCl, salaryManualPerformance, salaryManualPayzone);
 
   const SalaryContent = () => (
     <div className="salary-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
@@ -1922,7 +1990,7 @@ function App() {
             </div>
             {salarySaveMode === 'manual' && (
               <div style={{ display:"flex", flexDirection:"column", gap:8, background:"rgba(0,220,130,0.06)", border:"1px solid rgba(0,220,130,0.18)", borderRadius:12, padding:10 }}>
-                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 베이스업과 DS PS 참고값이 자동 반영되며, 전년도 원천징수는 기본적으로 전년도 연봉+PS+PI로 계산됩니다.</div>
+                <div style={{ fontSize:11, color:"#A7F3D0", lineHeight:1.5 }}>2011년부터 과거 연봉까지 계산기 화면을 바꾸지 않고 직접 입력해 저장할 수 있습니다. 베이스업, DS PS, 평균 성과인상률 참고값을 함께 확인할 수 있으며, 전년도 원천징수는 기본적으로 전년도 연봉+PS+PI로 계산됩니다.</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={sBase.inBox}>
                     <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>수기 입력 기준연도</div>
@@ -1946,6 +2014,53 @@ function App() {
                     {salaryRecordYear}년 베이스업 참고값 <b>{getHistoricalBaseUp(salaryRecordYear).toFixed(1)}%</b>{getHistoricalDsPs(salaryRecordYear) !== null ? <> · DS PS 이력 <b>{getHistoricalDsPs(salaryRecordYear).toFixed(1)}%</b></> : null}가 적용됩니다.
                   </div>
                 )}
+
+                <div style={{ background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.22)", borderRadius:12, padding:10 }}>
+                  <div style={{ fontSize:11, color:"#DDD6FE", fontWeight:800, marginBottom:7 }}>평균 성과인상률 참고</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                    <div>
+                      <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>기준 직급</div>
+                      <select value={salaryManualPerfRefCl} onChange={e=>setSalaryManualPerfRefCl(e.target.value)} style={sBase.select}>
+                        <option value="CL2">CL2</option><option value="CL3">CL3</option><option value="CL4">CL4</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>성과등급</div>
+                      <select value={salaryManualPerfRating} onChange={e=>setSalaryManualPerfRating(e.target.value)} style={sBase.select}>
+                        <option value="MT">다(MT)</option><option value="ES">나(ES)</option><option value="EM">가(EM)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5 }}>Payzone</div>
+                      <select value={salaryManualPayzone} onChange={e=>setSalaryManualPayzone(Number(e.target.value))} style={sBase.select}>
+                        <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginTop:8, display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:10, padding:"8px 10px" }}>
+                    <div>
+                      <div style={{ fontSize:10, color:"#94A3B8" }}>참고 성과인상률</div>
+                      <div style={{ fontSize:17, fontWeight:900, color:"#A78BFA" }}>{manualPerformanceReference !== null ? `${manualPerformanceReference.toFixed(1)}%` : '자료 없음'}</div>
+                      <div style={{ fontSize:10, color:"#64748B", marginTop:2 }}>{salaryRecordYear >= 2022 ? '2022년 이후는 Payzone 구분 없이 직급 기준' : '2021년 이전은 Payzone 기준 참고'}</div>
+                    </div>
+                    <button type="button" disabled={manualPerformanceReference === null} onClick={()=>setSalaryManualPerformance(manualPerformanceReference ?? 0)} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(167,139,250,0.38)", background: manualPerformanceReference === null ? "rgba(255,255,255,0.03)" : "rgba(167,139,250,0.13)", color: manualPerformanceReference === null ? "#64748B" : "#DDD6FE", fontSize:10, fontWeight:900, fontFamily:"inherit", cursor: manualPerformanceReference === null ? "not-allowed" : "pointer" }}>성과인상률에 적용</button>
+                  </div>
+                  <div style={{ marginTop:8, background:"rgba(0,198,255,0.07)", border:"1px solid rgba(0,198,255,0.20)", borderRadius:10, padding:"8px 10px" }}>
+                    <div style={{ fontSize:10, color:"#94A3B8", marginBottom:3 }}>연봉 상승률 기반 예상 고과등급</div>
+                    {manualEstimatedGrade ? (
+                      <>
+                        <div style={{ fontSize:16, fontWeight:900, color:"#7DD3FC" }}>
+                          {manualEstimatedGrade.label} <span style={{ fontSize:11, color:"#CBD5E1", fontWeight:700 }}>추정</span>
+                        </div>
+                        <div style={{ fontSize:10, color:"#94A3B8", marginTop:3, lineHeight:1.45 }}>
+                          성과인상률 {manualEstimatedGrade.actual.toFixed(1)}%를 {manualEstimatedGrade.basis}의 MT {manualEstimatedGrade.mt.toFixed(1)}% · ES {manualEstimatedGrade.es.toFixed(1)}% · EM {manualEstimatedGrade.em.toFixed(1)}%와 비교했습니다.
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize:11, color:"#64748B" }}>연도·직급·Payzone 참고값이 있으면 자동 추정됩니다.</div>
+                    )}
+                  </div>
+                </div>
 
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div>
@@ -2030,13 +2145,17 @@ function App() {
             <div style={{ fontSize:12, color:"#94A3B8", lineHeight:1.6 }}>아직 저장된 연봉정보가 없습니다. 2011년도부터 수기 입력하거나 현재 계산기 입력값을 저장해 누적하세요.</div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {salaryRecords.map(rec => (
+              {salaryRecords.map(rec => {
+                const recPerf = getPerformanceRaiseForRecord(rec, salaryRecords);
+                const recEstimatedGrade = getEstimatedPerformanceGrade(rec.year, rec.cl, recPerf, 2);
+                return (
                 <div key={rec.id} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:12, padding:"11px 12px" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                     <div>
                       <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
-                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}% · 성과 {getPerformanceRaiseForRecord(rec, salaryRecords).toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{rec.cl} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}% · 성과 {recPerf.toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
                       <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원{rec.withholding_pi_rate !== undefined && rec.withholding_pi_rate !== null ? ` · PI ${Number(rec.withholding_pi_rate).toFixed(0)}%×2회` : ''}</div>
+                      {recEstimatedGrade && <div style={{ fontSize:11, color:"#7DD3FC", marginTop:3, fontWeight:800 }}>예상 고과 {recEstimatedGrade.label} · {recEstimatedGrade.basis}</div>}
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
                       <button onClick={()=>applySalaryRecord(rec)} style={{ padding:"8px 10px", borderRadius:9, border:"1px solid rgba(0,198,255,0.35)", background:"rgba(0,198,255,0.1)", color:"#00C6FF", cursor:"pointer", fontFamily:"inherit", fontWeight:800 }}>불러오기</button>
@@ -2045,7 +2164,8 @@ function App() {
                   </div>
                   {rec.memo && <div style={{ marginTop:7, fontSize:11, color:"#CBD5E1" }}>{rec.memo}</div>}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </FieldBox>
@@ -2147,8 +2267,8 @@ function App() {
               </div>
 
               <div style={{ background:"rgba(255,255,255,0.035)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:14, overflowX:"auto", overflowY:"hidden" }}>
-                <div style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 230px", minWidth:885, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
-                  <div>연도</div><div>연봉</div><div>원천징수</div><div>베이스업</div><div>성과인상</div><div>DS PS</div><div>비고</div>
+                <div style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 110px 230px", minWidth:1005, gap:8, padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,0.08)", color:"#94A3B8", fontSize:11, fontWeight:900 }}>
+                  <div>연도</div><div>연봉</div><div>원천징수</div><div>베이스업</div><div>성과인상</div><div>DS PS</div><div>예상고과</div><div>비고</div>
                 </div>
                 <div style={{ display:"flex", flexDirection:"column" }}>
                   {trendRecords.map((rec, idx) => {
@@ -2158,9 +2278,10 @@ function App() {
                     const perfRaise = getPerformanceRaiseForRecord(rec, trendRecords);
                     const dsPs = Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0);
                     const psAmount = calcPsAmountMan(salary, dsPs);
+                    const estimatedGrade = getEstimatedPerformanceGrade(rec.year, rec.cl, perfRaise, 2);
                     const note = getAutoNote(rec, idx);
                     return (
-                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 230px", minWidth:885, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
+                      <div key={rec.id || rec.year} style={{ display:"grid", gridTemplateColumns:"70px 125px 130px 100px 100px 100px 110px 230px", minWidth:1005, gap:8, alignItems:"center", padding:"10px 12px", borderBottom: idx === trendRecords.length - 1 ? "none" : "1px solid rgba(255,255,255,0.06)", fontSize:12 }}>
                         <div style={{ color:"#E2E8F0", fontWeight:900 }}>{rec.year}</div>
                         <div>
                           <div style={{ color:"#fff", fontWeight:900 }}>{comma(salary)}만원</div>
@@ -2192,6 +2313,16 @@ function App() {
                             <div style={{ width:`${Math.max(4, Math.min(100, dsPs / maxPs * 100))}%`, height:"100%", background:"rgba(251,191,36,0.75)", borderRadius:999 }} />
                           </div>
                           <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>{comma(psAmount)}만원</div>
+                        </div>
+                        <div>
+                          {estimatedGrade ? (
+                            <>
+                              <div style={{ color:"#7DD3FC", fontWeight:900 }}>{estimatedGrade.label}</div>
+                              <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>기준 {estimatedGrade.ref.toFixed(1)}%</div>
+                            </>
+                          ) : (
+                            <div style={{ color:"#64748B", fontSize:11 }}>-</div>
+                          )}
                         </div>
                         <div style={{ color: note === '-' ? "#64748B" : "#CBD5E1", lineHeight:1.35 }}>
                           <div>{note}</div>
@@ -2681,6 +2812,53 @@ function App() {
                   <div style={{ fontSize:10, color:"#64748B", marginTop:2 }}>{s.years}</div>
                 </div>
               ))}
+            </div>
+          </FieldBox>
+
+          <FieldBox label="평균 성과인상률 참고표" accent="rgba(167,139,250,0.28)">
+            <div style={{ fontSize:11, color:"#CBD5E1", lineHeight:1.6, marginBottom:10 }}>
+              첨부한 평균 성과인상률표를 기준으로 반영했습니다. 수기 연봉 입력 시 <b>연도 · 직급 · 성과등급 · Payzone</b>을 선택하면 참고 성과인상률을 확인하고 바로 적용할 수 있습니다.
+            </div>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, minWidth:620 }}>
+                <thead>
+                  <tr style={{ borderBottom:"1px solid rgba(255,255,255,0.12)" }}>
+                    {["연도","Base-Up","직급/Payzone","다(MT)","나(ES)","가(EM)","물가"].map(h => (
+                      <th key={h} style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"center", fontSize:11 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[2026,2025,2024,2023,2022].flatMap(y => ['CL2','CL3','CL4'].map((cl, idx) => ({ y, cl, idx, vals:PERFORMANCE_RAISE_HISTORY[y][cl] }))).map((row, i) => (
+                    <tr key={`${row.y}-${row.cl}`} style={{ background:i%2===0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                      <td style={{ padding:"7px 6px", textAlign:"center", color:"#E2E8F0", fontWeight:800 }}>{row.idx===0 ? row.y : ''}</td>
+                      <td style={{ padding:"7px 6px", textAlign:"center", color:"#00DC82", fontWeight:800 }}>{row.idx===0 ? `${getHistoricalBaseUp(row.y).toFixed(1)}%` : ''}</td>
+                      <td style={{ padding:"7px 6px", textAlign:"center", color:"#CBD5E1", fontWeight:700 }}>{row.cl}</td>
+                      <td style={{ padding:"7px 6px", textAlign:"center", color:"#CBD5E1" }}>{row.vals.MT.toFixed(1)}%</td>
+                      <td style={{ padding:"7px 6px", textAlign:"center", color:"#DDD6FE", fontWeight:800 }}>{row.vals.ES.toFixed(1)}%</td>
+                      <td style={{ padding:"7px 6px", textAlign:"center", color:"#FDE68A", fontWeight:800 }}>{row.vals.EM.toFixed(1)}%</td>
+                      <td style={{ padding:"7px 6px", textAlign:"center", color:"#94A3B8" }}>{row.idx===0 ? `${PERFORMANCE_CPI_HISTORY[row.y].toFixed(1)}%` : ''}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background:"rgba(167,139,250,0.06)", borderTop:"1px solid rgba(167,139,250,0.22)" }}>
+                    <td style={{ padding:"8px 6px", textAlign:"center", color:"#E2E8F0", fontWeight:800 }}>2021</td>
+                    <td style={{ padding:"8px 6px", textAlign:"center", color:"#00DC82", fontWeight:800 }}>4.5%</td>
+                    <td colSpan="5" style={{ padding:"8px 6px", color:"#CBD5E1", fontSize:11, lineHeight:1.6 }}>
+                      2021년은 CL2/CL3/CL4별 Payzone 1~3 구분값을 수기 입력 화면에서 선택해 참고합니다. 물가상승률 0.5%.
+                    </td>
+                  </tr>
+                  <tr style={{ background:"rgba(255,255,255,0.02)" }}>
+                    <td style={{ padding:"8px 6px", textAlign:"center", color:"#E2E8F0", fontWeight:800 }}>2011~2020</td>
+                    <td style={{ padding:"8px 6px", textAlign:"center", color:"#00DC82", fontWeight:800 }}>연도별</td>
+                    <td colSpan="5" style={{ padding:"8px 6px", color:"#CBD5E1", fontSize:11, lineHeight:1.6 }}>
+                      2011~2020년은 동일 Payzone 표를 적용합니다. CL2는 MT 1.5% / ES 5.0% / EM 7.0% 기준, CL3·CL4는 Payzone에 따라 차등 적용합니다.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop:9, fontSize:10, color:"#64748B", lineHeight:1.5 }}>
+              * 2023년부터는 그룹장/팀장이 CL2~4 가/나 각 6개 그룹 내에서 성과인상률을 조정하는 구조로 해석했습니다. 실제 개인값은 회사/조직/평가에 따라 달라질 수 있어 참고값으로만 사용하세요.
             </div>
           </FieldBox>
 
