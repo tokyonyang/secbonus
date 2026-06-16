@@ -85,5 +85,12 @@ alter table public.salary_users add column if not exists recovery_hash text;
 alter table public.inquiries add column if not exists user_id uuid references public.salary_users(id) on delete set null;
 create index if not exists inquiries_user_id_idx on public.inquiries (user_id);
 
+
+-- 헤더 주가 검색 선호 종목 저장용 컬럼입니다.
+alter table public.salary_users add column if not exists preferred_stock_symbol text;
+alter table public.salary_users add column if not exists preferred_stock_name text;
+alter table public.salary_users add column if not exists preferred_stock_market text;
+alter table public.salary_users add column if not exists preferred_stock_updated_at timestamptz;
+
 -- 사용자 등록리스트 및 개인 연봉정보 전체 초기화가 필요할 때 Supabase SQL Editor에서 아래 한 줄만 실행하세요.
 -- truncate table public.salary_users cascade;
