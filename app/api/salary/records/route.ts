@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     const payload = {
       user_id: auth.userId,
       year,
-      cl: clean(body.cl, 20) || 'CL23',
+      cl: clean(body.cl, 20) || 'CL3',
       division: clean(body.division, 30) || 'memory',
       contract_salary_man: Math.round(num(body.contractSalaryMan, 1, 200000)),
       base_up_raise_rate: num(body.baseUpRaiseRate, -100, 100),
