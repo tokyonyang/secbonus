@@ -450,6 +450,7 @@ function App() {
   const [myCl, setMyCl] = useState("CL3");
   const [mySalary, setMySalary] = useState(8000);
   const [agreedSalary, setAgreedSalary] = useState(0); // 올해 체결 연봉(만) — 입력 시 인상률 계산보다 우선 적용
+  const [salarySyncMode, setSalarySyncMode] = useState("current"); // current: 올해연봉 기준 역산, prev: 전년도연봉 기준 산출
   const [baseUpRaise, setBaseUpRaise] = useState(4.1); // 베이스업 인상률(%)
   const [performanceRaise, setPerformanceRaise] = useState(0); // 업무성과 인상률(%)
   const [myRaise, setMyRaise] = useState(4.1); // 총 임금인상률 = 베이스업 + 업무성과
@@ -651,8 +652,36 @@ function App() {
     return Math.round(contract / denominator);
   };
 
+  const calcContractSalaryFromPrev = (prevSalary, raiseRate) => {
+    const prev = Number(prevSalary) || 0;
+    const raise = Number(raiseRate) || 0;
+    if (prev <= 0) return null;
+    return Math.round(prev * (1 + raise / 100));
+  };
+
+  const syncSalaryByMode = (mode, raiseRate = myRaise, prevSalary = mySalary, contractSalary = agreedSalary) => {
+    const syncMode = mode || salarySyncMode;
+    if (syncMode === "prev") {
+      const calculatedContract = calcContractSalaryFromPrev(prevSalary, raiseRate);
+      if (calculatedContract !== null) setAgreedSalary(calculatedContract);
+    } else {
+      const reverseBaseSalary = splitSalaryByCap(myCl, contractSalary).baseSalary;
+      const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, raiseRate);
+      if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
+    }
+  };
+
+  const handlePrevSalaryChange = (nextValue) => {
+    const prev = Number(nextValue) || 0;
+    setSalarySyncMode("prev");
+    setMySalary(prev);
+    const calculatedContract = calcContractSalaryFromPrev(prev, myRaise);
+    if (calculatedContract !== null) setAgreedSalary(calculatedContract);
+  };
+
   const handleAgreedSalaryChange = (nextValue) => {
     const contract = Number(nextValue) || 0;
+    setSalarySyncMode("current");
     setAgreedSalary(contract);
     const reverseBaseSalary = splitSalaryByCap(myCl, contract).baseSalary;
     const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, myRaise);
@@ -739,9 +768,7 @@ function App() {
     const perf = Number(perfValue) || 0;
     const total = roundRaise(base + perf);
     setMyRaise(total);
-    const reverseBaseSalary = splitSalaryByCap(myCl, agreedSalary).baseSalary;
-    const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, total);
-    if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
+    syncSalaryByMode(salarySyncMode, total, mySalary, agreedSalary);
   };
 
   const handleBaseUpRaiseChange = (nextValue) => {
@@ -762,9 +789,7 @@ function App() {
     const perf = roundRaise(total - base);
     setPerformanceRaise(perf);
     setMyRaise(total);
-    const reverseBaseSalary = splitSalaryByCap(myCl, agreedSalary).baseSalary;
-    const reversedPrevSalary = reversePrevSalaryFromContract(reverseBaseSalary, total);
-    if (reversedPrevSalary !== null) setMySalary(reversedPrevSalary);
+    syncSalaryByMode(salarySyncMode, total, mySalary, agreedSalary);
   };
 
   const handleClChange = (e) => {
@@ -2512,12 +2537,13 @@ function App() {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>{myCl === "CL1" ? "전년도 기초액(만)" : "전년도 연봉(만)"}</div>
-                <NumInput value={mySalary} onChange={setMySalary} step={100} min={1}/>
+                <NumInput value={mySalary} onChange={handlePrevSalaryChange} step={100} min={1}/>
+                <div style={{ fontSize:10, color: salarySyncMode === "prev" ? "#7DD3FC" : "#94A3B8", marginTop:4 }}>입력 시 올해 체결연봉 자동 계산</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>{myCl === "CL1" ? "올해 체결 기초액(만)" : "올해 체결연봉(만)"}</div>
                 <NumInput value={agreedSalary} onChange={handleAgreedSalaryChange} step={100} min={0}/>
-                <div style={{ fontSize:10, color: agreedSalary >= 100000 ? "#FCA5A5" : "#94A3B8", marginTop:4 }}>{agreedSalary >= 100000 ? `단위 확인: ${comma(agreedSalary)}만원 = 약 ${(agreedSalary/10000).toFixed(1)}억원` : (agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산")}</div>
+                <div style={{ fontSize:10, color: agreedSalary >= 100000 ? "#FCA5A5" : (salarySyncMode === "current" ? "#7DD3FC" : "#94A3B8"), marginTop:4 }}>{agreedSalary >= 100000 ? `단위 확인: ${comma(agreedSalary)}만원 = 약 ${(agreedSalary/10000).toFixed(1)}억원` : (agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산")}</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>베이스업 인상률(%)</div>
@@ -2543,13 +2569,26 @@ function App() {
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>전년도 원천징수(만)</div>
                 <NumInput value={prevWithholding} onChange={setPrevWithholding} step={100} color="#00DC82" min={0}/>
               </div>
+              <div style={{ ...sBase.inBox, borderColor: r.excessCash > 0 ? "rgba(255,107,107,0.35)" : "rgba(255,255,255,0.08)", background: r.excessCash > 0 ? "rgba(255,107,107,0.08)" : "rgba(255,255,255,0.03)" }}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>연봉상한초과분 지급액(만)</div>
+                <div style={{ fontSize:20, fontWeight:900, color: r.excessCash > 0 ? "#FF6B6B" : "#94A3B8" }}>{comma(r.excessCash || 0)}</div>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>상한 초과 시 1회성 현금 성과급</div>
+              </div>
             </div>
             {agreedSalary > 0 && (
               <div style={{ margin:"-2px 0 10px", padding:"10px 12px", borderRadius:12, background:"rgba(0,198,255,0.08)", border:"1px solid rgba(0,198,255,0.18)", color:"#BAE6FD", fontSize:11, lineHeight:1.5 }}>
-                {r.salaryCap && r.excessCash > 0 ? (
-                  <>올해 체결연봉 {comma(agreedSalary)}만원 중 기준연봉은 상한 {comma(r.salaryCap)}만원으로 적용됩니다. 상한 초과 {comma(r.excessCash)}만원은 1회성 현금 성과급으로 분리하고, 전년도 연봉은 기준연봉 {comma(r.cappedBaseSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = {comma(mySalary)}만원으로 역산됩니다.</>
+                {salarySyncMode === "prev" ? (
+                  r.salaryCap && r.excessCash > 0 ? (
+                    <>전년도 연봉 {comma(mySalary)}만원 × (1 + 총 임금인상률 {myRaise}%) = 올해 체결연봉 {comma(agreedSalary)}만원으로 자동 계산됩니다. 기준연봉은 상한 {comma(r.salaryCap)}만원으로 적용하고, 상한 초과 {comma(r.excessCash)}만원은 1회성 현금 성과급으로 분리됩니다.</>
+                  ) : (
+                    <>전년도 연봉 {comma(mySalary)}만원 × (1 + 총 임금인상률 {myRaise}%) = 올해 체결연봉 {comma(agreedSalary)}만원으로 자동 계산됩니다.</>
+                  )
                 ) : (
-                  <>올해 체결연봉 {comma(agreedSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = 전년도 연봉 {comma(mySalary)}만원으로 자동 역산됩니다.</>
+                  r.salaryCap && r.excessCash > 0 ? (
+                    <>올해 체결연봉 {comma(agreedSalary)}만원 중 기준연봉은 상한 {comma(r.salaryCap)}만원으로 적용됩니다. 상한 초과 {comma(r.excessCash)}만원은 1회성 현금 성과급으로 분리하고, 전년도 연봉은 기준연봉 {comma(r.cappedBaseSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = {comma(mySalary)}만원으로 역산됩니다.</>
+                  ) : (
+                    <>올해 체결연봉 {comma(agreedSalary)}만원 ÷ (1 + 총 임금인상률 {myRaise}%) = 전년도 연봉 {comma(mySalary)}만원으로 자동 역산됩니다.</>
+                  )
                 )}<br/>
                 {agreedSalary >= 100000 && <span style={{ color:"#FCA5A5", display:"block", marginTop:4 }}>단위 확인: 현재 입력값은 {comma(agreedSalary)}만원, 즉 약 {(agreedSalary/10000).toFixed(1)}억원입니다. 1.3억원은 13,000으로 입력하세요.</span>}
                 <span style={{ color:"#93C5FD" }}>총 임금인상률 = 베이스업 {baseUpRaise}% + 업무성과 {performanceRaise}%</span>
