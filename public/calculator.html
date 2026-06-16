@@ -1095,20 +1095,26 @@ function App() {
       setMarketFromPayload(data, 'stock');
       setStockSearchText(data.name || data.symbol || q);
       if (options.save && salaryToken) {
-        const saveRes = await fetch('/api/market/preference', {
-          method:'POST',
-          headers: salaryHeaders(),
-          body: JSON.stringify({ symbol:data.symbol, name:data.name, market:data.market || '' }),
-        });
-        const saveData = await saveRes.json().catch(() => ({}));
-        if (!saveRes.ok) throw new Error(saveData.error || '선호 종목 저장 실패');
-        setHasPreferredStock(true);
-        setMarketMsg(`${data.name || data.symbol} 종목을 로그인 계정 기본값으로 저장했습니다.`);
+        try {
+          const saveRes = await fetch('/api/market/preference', {
+            method:'POST',
+            headers: salaryHeaders(),
+            body: JSON.stringify({ symbol:data.symbol, name:data.name, market:data.market || '' }),
+          });
+          const saveData = await saveRes.json().catch(() => ({}));
+          if (!saveRes.ok) throw new Error(saveData.error || '선호 종목 저장 실패');
+          setHasPreferredStock(true);
+          setMarketMsg(`${data.name || data.symbol} 종목을 로그인 계정 기본값으로 저장했습니다.`);
+        } catch(saveError) {
+          setHasPreferredStock(false);
+          setMarketMsg(`${data.name || data.symbol} 현재가는 조회했습니다. 다만 계정 기본 종목 저장은 실패했습니다. Supabase schema.sql 실행 여부를 확인해주세요.`);
+        }
       } else if (options.fromPreference) {
         setHasPreferredStock(true);
         setMarketMsg(`${data.name || data.symbol} 종목을 로그인 계정 기본값으로 불러왔습니다.`);
       } else {
         setHasPreferredStock(false);
+        setMarketMsg(`${data.name || data.symbol} 현재가를 조회했습니다.`);
       }
     } catch(e) {
       console.warn('종목 조회 실패', e);
@@ -2949,6 +2955,7 @@ function App() {
             <button type="submit" disabled={marketLoading} style={{ border:0, borderRadius:10, padding:"8px 9px", background:"rgba(0,220,130,.18)", color:"#A7F3D0", fontWeight:900, fontSize:11, cursor:marketLoading?'wait':'pointer' }}>검색</button>
             {(marketInfo?.type === 'stock' || hasPreferredStock) && <button type="button" onClick={resetPreferredStock} style={{ border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"8px 8px", background:"rgba(255,255,255,.04)", color:"#CBD5E1", fontWeight:900, fontSize:11, cursor:'pointer' }}>리셋</button>}
           </form>
+          {marketMsg && <div style={{ maxWidth:210, color: marketMsg.includes('실패') ? '#FCA5A5' : '#A7F3D0', fontSize:10, fontWeight:800, lineHeight:1.25, whiteSpace:'normal' }}>{marketMsg}</div>}
         </div>
       </div>
 
