@@ -37,6 +37,8 @@ create table if not exists public.salary_records (
   user_id uuid not null references public.salary_users(id) on delete cascade,
   year int not null check (year >= 2011),
   cl text not null default 'CL3',
+  cl_year int,
+  job_family text not null default 'general',
   division text not null default 'memory',
   contract_salary_man numeric not null check (contract_salary_man >= 0),
   base_up_raise_rate numeric not null default 0,
@@ -82,6 +84,8 @@ alter table public.salary_records add column if not exists promotion_yn boolean 
 alter table public.salary_records add column if not exists promotion_from_cl text;
 alter table public.salary_records add column if not exists promotion_to_cl text;
 alter table public.salary_records add column if not exists promotion_raise_rate numeric not null default 0;
+alter table public.salary_records add column if not exists cl_year int;
+alter table public.salary_records add column if not exists job_family text not null default 'general';
 
 -- 기존에 salary_users 테이블을 이미 만든 경우, 아이디/비밀번호 찾기용 컬럼을 추가합니다.
 alter table public.salary_users add column if not exists recovery_salt text;
