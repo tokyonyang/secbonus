@@ -884,6 +884,161 @@
     .result-card-value-text { font-size:28px !important; }
   }
 
+
+
+  /* Reward Reveal premium polish */
+  .content-panel {
+    background:
+      radial-gradient(circle at 12% 8%, rgba(32,212,255,.065), transparent 28%),
+      radial-gradient(circle at 88% 2%, rgba(255,202,69,.055), transparent 30%),
+      #070B12 !important;
+  }
+  .result-panel-root {
+    position: relative;
+  }
+  .result-panel-root::before {
+    content:"";
+    position:absolute;
+    left:24px;
+    right:24px;
+    top:14px;
+    height:1px;
+    background:linear-gradient(90deg, transparent, rgba(32,212,255,.30), rgba(255,202,69,.22), transparent);
+    pointer-events:none;
+  }
+  .result-hero {
+    padding-top: 4px;
+  }
+  .result-hero-title {
+    font-size:30px;
+    background:linear-gradient(90deg,#EAF2FF 0%,#BFEFFF 48%,#FFE8A6 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+    text-shadow:0 0 24px rgba(32,212,255,.045);
+  }
+  .result-chip-row > span {
+    backdrop-filter: blur(8px);
+  }
+  .reward-main-card {
+    border-color:rgba(255,202,69,.18) !important;
+    box-shadow:
+      0 26px 60px rgba(0,0,0,.40),
+      0 0 0 1px rgba(32,212,255,.06),
+      inset 0 1px 0 rgba(255,255,255,.055) !important;
+  }
+  .reward-main-card::after {
+    content:"";
+    position:absolute;
+    left:22px;
+    right:22px;
+    top:0;
+    height:2px;
+    background:linear-gradient(90deg, transparent, #20D4FF, #FFCA45, transparent);
+    opacity:.85;
+  }
+  .reward-main-kicker {
+    color:#DCEBFF;
+    background:linear-gradient(135deg, rgba(32,212,255,.10), rgba(255,202,69,.075));
+    border-color:rgba(255,255,255,.10);
+  }
+  .reward-main-title {
+    color:#BFE8FF;
+    letter-spacing:-.02em;
+  }
+  .reward-main-amount {
+    font-size:44px;
+    color:#FFDE83;
+    text-shadow:0 0 28px rgba(255,202,69,.16), 0 0 12px rgba(32,212,255,.08);
+  }
+  .reward-main-caption {
+    color:#A6B9D1;
+  }
+  .reward-side-card {
+    background:rgba(8,15,28,.46);
+    border-color:rgba(255,255,255,.075);
+  }
+  .reward-side-card:hover,
+  .summary-card:hover,
+  .result-card-shell:hover {
+    border-color:rgba(32,212,255,.18) !important;
+    box-shadow:0 18px 44px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.035);
+  }
+  .reward-side-value {
+    letter-spacing:-.04em;
+  }
+  .summary-grid {
+    grid-auto-rows: 1fr;
+  }
+  .summary-card {
+    position:relative;
+    overflow:hidden;
+  }
+  .summary-card::before {
+    content:"";
+    position:absolute;
+    left:0; right:0; top:0;
+    height:1px;
+    background:linear-gradient(90deg, transparent, rgba(32,212,255,.20), transparent);
+  }
+  .summary-card-total {
+    background:
+      radial-gradient(circle at top right, rgba(255,202,69,.12), transparent 32%),
+      linear-gradient(180deg, rgba(21,34,53,.98), rgba(16,24,38,.96)) !important;
+    border-color:rgba(255,202,69,.20) !important;
+  }
+  .summary-card-total::before {
+    background:linear-gradient(90deg, transparent, rgba(255,202,69,.65), rgba(32,212,255,.38), transparent);
+  }
+  .summary-card-total .summary-card-label::after {
+    content:"  핵심";
+    margin-left:6px;
+    padding:2px 7px;
+    border-radius:999px;
+    background:rgba(255,202,69,.10);
+    border:1px solid rgba(255,202,69,.18);
+    color:#FFCA45;
+    font-size:10px;
+    font-weight:800;
+  }
+  .summary-card-total .summary-card-value {
+    color:#FFDE83 !important;
+    text-shadow:0 0 16px rgba(255,202,69,.10);
+  }
+  .result-card-shell {
+    transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+  .result-card-shell:hover {
+    transform:translateY(-1px);
+  }
+  .result-card-header {
+    border-bottom:1px solid rgba(255,255,255,.055);
+    padding-bottom:14px;
+  }
+  .result-card-content {
+    padding-top:2px;
+  }
+  .premium-warning-card {
+    background:linear-gradient(180deg, rgba(47,19,29,.52), rgba(31,16,24,.42)) !important;
+    border-color:rgba(255,92,115,.14) !important;
+  }
+  .premium-warning-title {
+    color:#FFA0AF !important;
+  }
+  .floating-chat-button {
+    background:linear-gradient(135deg,#20D4FF,#28E6A3) !important;
+    color:#06121D !important;
+    box-shadow:0 14px 34px rgba(32,212,255,.22) !important;
+  }
+  .header .nav-tabs button[aria-current="page"] {
+    box-shadow:0 8px 22px rgba(32,212,255,.18) !important;
+  }
+  @media (max-width:768px) {
+    .result-hero-title { font-size:25px; }
+    .reward-main-amount { font-size:36px; }
+    .result-panel-root::before { left:14px; right:14px; }
+  }
+
 </style>
 </head>
 <body>
@@ -3617,12 +3772,11 @@ function App() {
           <div className="reward-main-title">올해 예상 보상</div>
           <div className="reward-main-amount">{fmtM(r.totalBonus)}</div>
           <div className="reward-main-caption">
-            올해 기준 예상 총 보상입니다. <strong>가장 먼저 확인해야 할 핵심 리워드</strong>를 전면에 배치해,
-            성과 보상 확인의 기대감이 가장 먼저 느껴지도록 구성했습니다.
+            올해 기준 예상 총 보상입니다. <strong>핵심 리워드를 먼저 공개</strong>하고, 아래에서 항목별 보상 구조를 확인할 수 있습니다.
           </div>
           <div className="reward-main-badges">
-            <span className="reward-status-badge success">세전 기준 총 예상 보상</span>
-            <span className="reward-status-badge gold">리워드 공개 기준연도 {simYear}</span>
+            <span className="reward-status-badge success">총 예상 보상 공개</span>
+            <span className="reward-status-badge gold">기준연도 {simYear}</span>
           </div>
         </div>
         <div className="reward-main-side">
@@ -3655,7 +3809,7 @@ function App() {
           ...(r.excessCash>0?[{label:"추가 현금보상",val:fmtM(r.excessCash),color:"#FF5C73"}]:[]),
           {label:"총 예상 보상", val:fmtM(r.totalBonus), color:"#EAF2FF"},
         ].map(item=>(
-          <div key={item.label} className="summary-card">
+          <div key={item.label} className={item.label === "총 예상 보상" ? "summary-card summary-card-total" : "summary-card"}>
             <div className="summary-card-label">{item.label}</div>
             <div className="summary-card-value" style={{ color:item.color }}>{item.val}</div>
           </div>
@@ -3663,7 +3817,7 @@ function App() {
       </div>
 
       {/* OPI */}
-      <ResultCard icon="📈" title="OPI (연간 성과인센티브)" valueColor="#00C6FF"
+      <ResultCard icon="📈" title="예상 OPI 수령액" valueColor="#20D4FF"
         sub={<>{r.isCL1 ? '기초액의 최대 700% 한도' : `연봉의 최대 ${(50*r.perf).toFixed(0)}% 한도`} <span style={{marginLeft:6, color:"#CBD5E1"}}>*전사 공통 비율 적용</span></>}
         value={fmtM(r.opi)} accent="rgba(0,198,255,0.08)">
         {multiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{multiTagHtml}</div>}
@@ -3699,7 +3853,7 @@ function App() {
 
       {/* 특별성과급 */}
       {r.sp > 0 ? (
-        <ResultCard icon="⭐" title="스페셜 보너스" valueColor="#FFB400"
+        <ResultCard icon="⭐" title="스페셜 보너스" valueColor="#FFCA45"
           sub={`성과에 따른 특별 보상 · DS영업이익×${r.appliedSprate}% (OPI와 독립 재원)`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
           {multiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{multiTagHtml}</div>}
           {currentPrice && currentPrice > 0 && (
@@ -3823,7 +3977,7 @@ function App() {
           </div>
         </ResultCard>
       ) : (
-        <ResultCard icon="❌" title="스페셜 보너스" valueColor="#FF6B6B" value="현재 기준 미지급" accent="rgba(255,92,115,0.05)">
+        <ResultCard icon="❌" title="스페셜 보너스" valueColor="#FF5C73" value="현재 기준 미지급" accent="rgba(255,92,115,0.05)">
           <div style={{ fontSize:12, color:"#CBD5E1", textAlign:"center", padding:"4px 0", marginBottom:8 }}>
             {simYear}년 영업이익이 지급 조건({r.spThreshold}조원)에 아직 도달하지 않았습니다.
           </div>
@@ -3846,7 +4000,7 @@ function App() {
       )}
 
       {/* 삼성 TAI(PI) - 목표달성인센티브 */}
-      <ResultCard icon="🎯" title="TAI (목표달성인센티브)" valueColor="#A78BFA"
+      <ResultCard icon="🎯" title="예상 TAI 수령액" valueColor="#8B7CFF"
         sub={`기준급(연봉÷24) × ${(r.taiRateVal*100).toFixed(1)}% × 연2회 · 세전 기준`}
         value={fmtM(r.samsungTaiAnnual)} accent="rgba(167,139,250,0.08)">
         <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:10 }}>
