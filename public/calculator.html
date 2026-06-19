@@ -2103,6 +2103,7 @@ function App() {
     const spSchedule = [
       {
         date:`${spSaleBaseYear}년 1월 31일 이후`,
+        dateObj:new Date(spSaleBaseYear, 0, 31),
         current:currentSp1,
         prev1:prevOneSp2,
         prev2:prevTwoSp3,
@@ -2111,6 +2112,7 @@ function App() {
       },
       {
         date:`${spSaleBaseYear + 1}년 1월 31일 이후`,
+        dateObj:new Date(spSaleBaseYear + 1, 0, 31),
         current:currentSp2,
         prev1:prevOneSp3,
         prev2:0,
@@ -2119,6 +2121,7 @@ function App() {
       },
       {
         date:`${spSaleBaseYear + 2}년 1월 31일 이후`,
+        dateObj:new Date(spSaleBaseYear + 2, 0, 31),
         current:currentSp3,
         prev1:0,
         prev2:0,
@@ -2151,10 +2154,20 @@ function App() {
     const rsuNetFutureMan = Math.round(rsuGrossFutureMan * (1 - (Number(rsuTaxRate) || 0) / 100));
     const rsuThirdShares = Math.round((finalShareCount / 3) * 100) / 100;
     const rsuSchedule = [
-      { date:'2028년 10월 13일', shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
-      { date:'2029년 10월 15일', shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
-      { date:'2030년 10월 15일', shares:Math.round((finalShareCount - rsuThirdShares * 2) * 100) / 100, amount:Math.round(((finalShareCount - rsuThirdShares * 2) * futureBasePrice) / 10000) },
-    ];
+      { date:'2028년 10월 13일', dateObj:new Date(2028, 9, 13), shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
+      { date:'2029년 10월 15일', dateObj:new Date(2029, 9, 15), shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
+      { date:'2030년 10월 15일', dateObj:new Date(2030, 9, 15), shares:Math.round((finalShareCount - rsuThirdShares * 2) * 100) / 100, amount:Math.round(((finalShareCount - rsuThirdShares * 2) * futureBasePrice) / 10000) },
+    ].map(x => ({ ...x, netAmount:Math.round(x.amount * (1 - (Number(rsuTaxRate) || 0) / 100)) }));
+    const isUnlockedAsOfToday = (dateObj) => todayDate >= dateObj;
+    const spCashableNet = spSchedule.filter(x => isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
+    const spRestrictedNet = spSchedule.filter(x => !isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
+    const rsuCashableGross = rsuSchedule.filter(x => isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
+    const rsuRestrictedGross = rsuSchedule.filter(x => !isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
+    const rsuCashableNet = rsuSchedule.filter(x => isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.netAmount, 0);
+    const rsuRestrictedNet = rsuSchedule.filter(x => !isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.netAmount, 0);
+    const totalCashableNet = spCashableNet + rsuCashableNet;
+    const totalRestrictedNet = spRestrictedNet + rsuRestrictedNet;
+    const totalRestrictedGross = spRestrictedNet + rsuRestrictedGross;
     const totalNet = spFuturePayoutTotal + rsuNetFutureMan;
     const totalGross = spFuturePayoutTotal + rsuGrossFutureMan;
 
@@ -2198,6 +2211,8 @@ function App() {
       { label:'SP 향후 매도 가능 합계', desc:`${targetSpYear}년 SP + 최근 2년 이월 잔여분`, values:fmtM(spFuturePayoutTotal) },
       { label:'기준년도 이전 2년 SP', desc:`${targetSpYear-1}년·${targetSpYear-2}년 이월 반영분`, values:`${targetSpYear-1}년 ${fmtM(prevOneSp2 + prevOneSp3)} · ${targetSpYear-2}년 ${fmtM(prevTwoSp3)} · 합계 ${fmtM(priorTwoSpCarryoverTotal)}` },
       { label:'RSU/PSU 지급 주식', desc:rsuEligible ? `${normalizeCl(myCl)} 기준 기초 ${baseShareCount}주 × ${multiplierLabel}` : '25.10.15 재직/약정 조건 미충족', values:`${comma(finalShareCount)}주 · 세전 ${fmtM(rsuGrossFutureMan)} · 세후 ${fmtM(rsuNetFutureMan)}` },
+      { label:'현재 현금화 가능액', desc:`${todayLabel} 기준 매도 가능분`, values:`SP ${fmtM(spCashableNet)} + RSU/PSU 세후 ${fmtM(rsuCashableNet)} = ${fmtM(totalCashableNet)}` },
+      { label:'자사주 매도 제한 규모', desc:'아직 매도 가능일이 오지 않은 제한분', values:`세후 ${fmtM(totalRestrictedNet)} · 세전 참고 ${fmtM(totalRestrictedGross)}` },
     ];
     return (
       <div className="sp-rsu-root" style={{ maxWidth:900, margin:'0 auto', padding:'20px 18px 60px', width:'100%' }}>
@@ -2350,7 +2365,7 @@ function App() {
               ))}
             </div>
             <div style={{ marginTop:12, background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.15)', borderRadius:12, padding:12, color:'#FDE68A', fontSize:12, lineHeight:1.6 }}>
-              {spSchedule.map((x,i)=><div key={x.date}>{i+1}차: {x.date} · {fmtM(x.amount)} <span style={{ color:'#94a3b8' }}>({x.desc})</span></div>)}
+              {spSchedule.map((x,i)=><div key={x.date}>{i+1}차: {x.date} · {fmtM(x.amount)} <span style={{ color:isUnlockedAsOfToday(x.dateObj)?'#86EFAC':'#FCA5A5' }}>{isUnlockedAsOfToday(x.dateObj)?'현금화 가능':'매도 제한'}</span> <span style={{ color:'#94a3b8' }}>({x.desc})</span></div>)}
             </div>
           </div>
 
@@ -2378,6 +2393,8 @@ function App() {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:14 }} className="summary-grid">
           <div style={{ background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.22)', borderRadius:15, padding:14 }}><div style={{ color:'#A7F3D0', fontSize:12, fontWeight:800 }}>총 지급 예상 세전</div><div style={{ color:'#34D399', fontSize:24, fontWeight:900 }}>{fmtM(totalGross)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>기준년도 SP {fmtM(currentSpTotalInSchedule)} + 이전 2년 이월 {fmtM(priorTwoSpCarryoverTotal)} + RSU {fmtM(rsuGrossFutureMan)}</div></div>
           <div style={{ background:'rgba(0,198,255,.08)', border:'1px solid rgba(0,198,255,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800 }}>총 지급 예상 세후</div><div style={{ color:'#38BDF8', fontSize:24, fontWeight:900 }}>{fmtM(totalNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>SP 합계 {fmtM(spFuturePayoutTotal)} 안에 이전 2년치 이월분 포함</div></div>
+          <div style={{ background:'rgba(34,197,94,.08)', border:'1px solid rgba(34,197,94,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BBF7D0', fontSize:12, fontWeight:800 }}>현재 현금화 가능액</div><div style={{ color:'#86EFAC', fontSize:18, fontWeight:900 }}>{fmtM(totalCashableNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>{todayLabel} 기준 · SP {fmtM(spCashableNet)} + RSU/PSU 세후 {fmtM(rsuCashableNet)}</div></div>
+          <div style={{ background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FECACA', fontSize:12, fontWeight:800 }}>자사주 매도 제한액</div><div style={{ color:'#FCA5A5', fontSize:18, fontWeight:900 }}>{fmtM(totalRestrictedNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>세후 기준 · 세전 참고 {fmtM(totalRestrictedGross)}</div></div>
           <div style={{ background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FDE68A', fontSize:12, fontWeight:800 }}>{spSaleBaseYear}년 SP 예정</div><div style={{ color:'#FACC15', fontSize:18, fontWeight:900 }}>{fmtM(spNextYearPayout)}</div></div>
           <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#DDD6FE', fontSize:12, fontWeight:800 }}>RSU/PSU 세전/세후</div><div style={{ color:'#C4B5FD', fontSize:18, fontWeight:900 }}>{fmtM(rsuGrossFutureMan)} / {fmtM(rsuNetFutureMan)}</div></div>
         </div>
@@ -2403,7 +2420,7 @@ function App() {
             <div key={x.date} style={{ display:'grid', gridTemplateColumns:'1.1fr .7fr .8fr', gap:10, alignItems:'center', padding:'11px 0', borderTop:'1px solid rgba(255,255,255,.07)' }}>
               <div style={{ color:'#fff', fontWeight:900 }}>{i+1}차 · {x.date}</div>
               <div style={{ color:'#C4B5FD', fontWeight:900 }}>{comma(x.shares)}주</div>
-              <div style={{ color:'#38BDF8', fontWeight:900 }}>{fmtM(x.amount)}</div>
+              <div style={{ color:'#38BDF8', fontWeight:900 }}>{fmtM(x.amount)} <span style={{ color:isUnlockedAsOfToday(x.dateObj)?'#86EFAC':'#FCA5A5', fontSize:11 }}>· {isUnlockedAsOfToday(x.dateObj)?'현금화 가능':'매도 제한'}</span><div style={{ color:'#94A3B8', fontSize:10 }}>세후 {fmtM(x.netAmount)}</div></div>
             </div>
           ))}
         </div>
