@@ -356,11 +356,13 @@ function ChipGroup({ options, value, onChange }) {
 }
 
 function NumInput({ value, onChange, step=1, color="#fff", size=16, min=undefined, max=undefined }) {
-  const [local, setLocal] = React.useState(String(value));
+  const [local, setLocal] = React.useState(String(value ?? ''));
   const ref = React.useRef(null);
   React.useEffect(() => {
+    // 입력 중에는 부모 상태값으로 덮어쓰지 않습니다.
+    // 모바일 숫자 키보드가 한 글자 입력마다 닫히는 문제를 막기 위한 처리입니다.
     if (!ref.current || ref.current !== document.activeElement) {
-      setLocal(String(value));
+      setLocal(String(value ?? ''));
     }
   }, [value]);
   const clamp = (n) => {
@@ -368,19 +370,31 @@ function NumInput({ value, onChange, step=1, color="#fff", size=16, min=undefine
     if (max !== undefined) n = Math.min(max, n);
     return n;
   };
+  const commit = (raw) => {
+    let n = parseFloat(String(raw).replace(/,/g, ''));
+    if (isNaN(n)) n = (min !== undefined ? Math.max(min, 0) : 0);
+    n = clamp(n);
+    onChange(n);
+    setLocal(String(n));
+  };
   return (
-    <input ref={ref} type="number" value={local} step={step}
+    <input
+      ref={ref}
+      type="text"
+      inputMode="decimal"
+      value={local}
       onChange={e => {
+        // 숫자를 치는 동안에는 로컬 입력값만 바꿉니다.
+        // 부모 계산/역산은 blur 또는 Enter에서만 반영되어 포커스가 끊기지 않습니다.
         setLocal(e.target.value);
-        const n = parseFloat(e.target.value);
-        if (!isNaN(n)) onChange(clamp(n));
       }}
-      onBlur={e => {
-        let n = parseFloat(e.target.value);
-        if (isNaN(n)) n = (min !== undefined ? Math.max(min, 0) : 0);
-        n = clamp(n);
-        onChange(n);
-        setLocal(String(n));
+      onBlur={e => commit(e.target.value)}
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit(e.currentTarget.value);
+          e.currentTarget.blur();
+        }
       }}
       style={{ width:"100%", background:"transparent", border:"none", outline:"none",
         color, fontSize:size, fontWeight:700, fontFamily:"inherit", padding:0 }} />
@@ -388,25 +402,33 @@ function NumInput({ value, onChange, step=1, color="#fff", size=16, min=undefine
 }
 
 function PriceInput({ val, set }) {
-  const [local, setLocal] = React.useState(String(val));
+  const [local, setLocal] = React.useState(String(val ?? ''));
   const ref = React.useRef(null);
   React.useEffect(() => {
     if (!ref.current || ref.current !== document.activeElement) {
-      setLocal(String(val));
+      setLocal(String(val ?? ''));
     }
   }, [val]);
+  const commit = (raw) => {
+    const n = parseInt(String(raw).replace(/,/g, ''), 10);
+    const safe = (!isNaN(n) && n > 0) ? n : val;
+    set(safe);
+    setLocal(String(safe));
+  };
   return (
-    <input ref={ref} type="number" value={local}
-      onChange={e => {
-        setLocal(e.target.value);
-        const n = parseInt(e.target.value, 10);
-        if (!isNaN(n) && n > 0) set(n);
-      }}
-      onBlur={e => {
-        const n = parseInt(e.target.value, 10);
-        const safe = (!isNaN(n) && n > 0) ? n : val;
-        set(safe);
-        setLocal(String(safe));
+    <input
+      ref={ref}
+      type="text"
+      inputMode="numeric"
+      value={local}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={e => commit(e.target.value)}
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit(e.currentTarget.value);
+          e.currentTarget.blur();
+        }
       }}
       style={{ background:"transparent", border:"none", outline:"none", color:"#FFB400", fontSize:17, fontWeight:700, fontFamily:"inherit", width:110, textAlign:"right" }}/>
   );
