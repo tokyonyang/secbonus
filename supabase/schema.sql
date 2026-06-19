@@ -106,3 +106,20 @@ alter table public.salary_users add column if not exists preferred_stock_updated
 
 -- 사용자 등록리스트 및 개인 연봉정보 전체 초기화가 필요할 때 Supabase SQL Editor에서 아래 한 줄만 실행하세요.
 -- truncate table public.salary_users cascade;
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 실시간 채팅용 메시지 테이블
+-- 클라이언트는 직접 DB를 호출하지 않고 Vercel API Route(service role)를 통해서만 접근합니다.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.salary_users(id) on delete set null,
+  nick text not null,
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.chat_messages enable row level security;
+create index if not exists chat_messages_created_at_idx on public.chat_messages (created_at desc);
+create index if not exists chat_messages_user_id_idx on public.chat_messages (user_id);
