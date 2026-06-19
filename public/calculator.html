@@ -464,6 +464,45 @@ function PriceInput({ val, set }) {
   );
 }
 
+
+function DraftNumberInput({ value, onCommit, inputMode="numeric", disabled=false, readOnly=false, placeholder='', style={} }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const next = String(value ?? '');
+    // 모바일 입력 중 키보드/포커스가 튕기지 않도록 포커스 상태에서는 React 값으로 덮어쓰지 않습니다.
+    if (document.activeElement !== el && el.value !== next) el.value = next;
+  }, [value, disabled, readOnly]);
+  const sanitize = (raw) => String(raw ?? '').replace(inputMode === 'numeric' ? /[^0-9]/g : /[^0-9.\-]/g, '');
+  const commit = (raw) => {
+    const cleaned = sanitize(raw);
+    if (ref.current && ref.current.value !== cleaned) ref.current.value = cleaned;
+    if (!disabled && !readOnly && typeof onCommit === 'function') onCommit(cleaned);
+  };
+  return (
+    <input
+      ref={ref}
+      type="text"
+      inputMode={inputMode}
+      disabled={disabled}
+      readOnly={readOnly}
+      defaultValue={String(value ?? '')}
+      placeholder={placeholder}
+      onChange={e => { e.currentTarget.value = sanitize(e.currentTarget.value); }}
+      onBlur={e => commit(e.currentTarget.value)}
+      onKeyDown={e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit(e.currentTarget.value);
+          e.currentTarget.blur();
+        }
+      }}
+      style={style}
+    />
+  );
+}
+
 function ResultCard({ icon, title, valueColor, sub, value, accent, children }) {
   return (
     <div style={{
@@ -2429,6 +2468,26 @@ function App() {
     const payoutTableMap = new Map();
     [...spPayoutDetailRows, ...psuPayoutDetailRows].forEach(item => addPayoutTableItem(payoutTableMap, item));
     const totalReceiptRows = Array.from(payoutTableMap.values()).sort((a,b)=>a.dateObj-b.dateObj);
+    const buildReceiptRowsByType = (items) => {
+      const map = new Map();
+      items.forEach(item => {
+        if (!item || !item.dateObj || !Number(item.amount || 0)) return;
+        const key = `${item.dateObj.getFullYear()}-${String(item.dateObj.getMonth()+1).padStart(2,'0')}`;
+        const existing = map.get(key) || {
+          key,
+          dateObj:item.dateObj,
+          dateLabel:`${item.dateObj.getFullYear()}년 ${item.dateObj.getMonth()+1}월`,
+          amount:0,
+          details:[],
+        };
+        existing.amount += item.amount;
+        existing.details.push(item.detail);
+        map.set(key, existing);
+      });
+      return Array.from(map.values()).sort((a,b)=>a.dateObj-b.dateObj);
+    };
+    const spReceiptRows = buildReceiptRowsByType(spPayoutDetailRows);
+    const psuReceiptRows = buildReceiptRowsByType(psuPayoutDetailRows);
 
     const applySpecialManual = () => {
       const value = parseManInput(specialCashDraftMan);
@@ -2500,10 +2559,10 @@ function App() {
               {spTargetYearManualMode ? '☑ 예상 조회기준 직접 설정 사용중' : '☐ 예상 조회기준 직접 설정'}
               <div style={{ fontSize:11, fontWeight:600, marginTop:4, color:spTargetYearManualMode?'#BBF7D0':'#94A3B8' }}>예: 2028년 기준으로 바꾸면 2026·2027·2028년 예상값을 넣어 이월 SP를 확인합니다.</div>
             </button>
-            <input
-              type="text" inputMode="numeric" disabled={!spTargetYearManualMode}
+            <DraftNumberInput
+              inputMode="numeric" disabled={!spTargetYearManualMode}
               value={spTargetYearDraft}
-              onChange={e=>setSpTargetYearDraft(e.target.value.replace(/[^0-9]/g,''))}
+              onCommit={v=>setSpTargetYearDraft(v)}
               placeholder={String(simYear || 2026)}
               style={{ width:'100%', background:spTargetYearManualMode?'#0b1220':'rgba(15,23,42,.5)', color:spTargetYearManualMode?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontWeight:900, outline:'none' }}
             />
@@ -2531,16 +2590,16 @@ function App() {
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>연봉(만)</label>
-                    <input type="text" inputMode="numeric" disabled={!!savedRec} value={savedRec ? String(scenarioSalaryForRow || '') : (row.salary ?? '')} onChange={e=>updateSpRsuScenarioRow(year, { salary:e.target.value.replace(/[^0-9]/g,'') })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : (savedRec?.contract_salary_man ? `저장값 ${comma(savedRec.contract_salary_man)}` : '예: 11000')} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <DraftNumberInput inputMode="numeric" disabled={!!savedRec} value={savedRec ? String(scenarioSalaryForRow || '') : (row.salary ?? '')} onCommit={v=>updateSpRsuScenarioRow(year, { salary:v })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : (savedRec?.contract_salary_man ? `저장값 ${comma(savedRec.contract_salary_man)}` : '예: 11000')} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
                     {savedRec ? <div style={{ color:'#86EFAC', fontSize:10, marginTop:3, fontWeight:800 }}>개인 연봉저장값 우선 반영</div> : (salaryAutoApplied && <div style={{ color:'#7DD3FC', fontSize:10, marginTop:3, fontWeight:800 }}>전년 연봉×총 {rates.total.toFixed(1)}% 자동</div>)}
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>베업%</label>
-                    <input type="text" inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.baseUpRaise ?? 0) : (row.baseUpRaise ?? 3)} onChange={e=>updateSpRsuScenarioRow(year, { baseUpRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.baseUpRaise ?? 0) : (row.baseUpRaise ?? 3)} onCommit={v=>updateSpRsuScenarioRow(year, { baseUpRaise:v })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>성과%</label>
-                    <input type="text" inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.performanceRaise ?? 0) : (row.performanceRaise ?? getScenarioPerformanceDefault(year, effectiveRow.cl))} onChange={e=>updateSpRsuScenarioRow(year, { performanceRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder={String(getScenarioPerformanceDefault(year, effectiveRow.cl))} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.performanceRaise ?? 0) : (row.performanceRaise ?? getScenarioPerformanceDefault(year, effectiveRow.cl))} onCommit={v=>updateSpRsuScenarioRow(year, { performanceRaise:v })} placeholder={String(getScenarioPerformanceDefault(year, effectiveRow.cl))} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
                     <div style={{ color:'#94A3B8', fontSize:10, marginTop:3 }}>총 {rates.total.toFixed(1)}%</div>
                   </div>
                   <div>
@@ -2574,7 +2633,7 @@ function App() {
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>DS영업이익(조)</label>
-                    <input type="text" inputMode="decimal" value={row.profit ?? ''} onChange={e=>updateSpRsuScenarioRow(year, { profit:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder="200" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <DraftNumberInput inputMode="decimal" value={row.profit ?? ''} onCommit={v=>updateSpRsuScenarioRow(year, { profit:v })} placeholder="200" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
                   </div>
                   <div style={{ background:eligible?'rgba(34,197,94,.12)':'rgba(239,68,68,.10)', border:'1px solid rgba(255,255,255,.09)', borderRadius:11, padding:'9px 10px' }}>
                     <div style={{ color:eligible?'#86EFAC':'#FCA5A5', fontSize:11, fontWeight:900 }}>{eligible ? 'SP 예상' : 'SP 미달/연봉확인'}</div>
@@ -2591,19 +2650,19 @@ function App() {
             <div style={{ fontSize:15, fontWeight:900, color:'#FACC15', marginBottom:12 }}>SP 특별경영성과급</div>
             <label style={{ display:'block', color:'#CBD5E1', fontSize:12, marginBottom:6 }}>{targetSpYear}년 세후 SP 수동 지급액(만) · 비워두면 연봉저장값 또는 산출결과 사용</label>
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
-              <input type="text" inputMode="numeric" value={specialCashDraftMan} onChange={e=>setSpecialCashDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={String(spBaseNet || 0)} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
+              <DraftNumberInput inputMode="numeric" value={specialCashDraftMan} onCommit={v=>setSpecialCashDraftMan(v)} placeholder={String(spBaseNet || 0)} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
               <button onClick={applySpecialManual} style={{ background:'#16A34A', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetSpecialManual} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
-              <input type="text" inputMode="numeric" value={recentSpOneYearDraftMan} onChange={e=>setRecentSpOneYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${targetSpYear-1}년 세후 SP(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <DraftNumberInput inputMode="numeric" value={recentSpOneYearDraftMan} onCommit={v=>setRecentSpOneYearDraftMan(v)} placeholder={`${targetSpYear-1}년 세후 SP(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
               <button onClick={applyPrevSpOne} style={{ background:'#2563EB', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetPrevSpOne} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center' }}>
-              <input type="text" inputMode="numeric" value={recentSpTwoYearDraftMan} onChange={e=>setRecentSpTwoYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${targetSpYear-2}년 세후 SP(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <DraftNumberInput inputMode="numeric" value={recentSpTwoYearDraftMan} onCommit={v=>setRecentSpTwoYearDraftMan(v)} placeholder={`${targetSpYear-2}년 세후 SP(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
               <button onClick={applyPrevSpTwo} style={{ background:'#2563EB', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetPrevSpTwo} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
@@ -2658,33 +2717,85 @@ function App() {
           <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#DDD6FE', fontSize:12, fontWeight:800 }}>RSU/PSU 세전/세후</div><div style={{ color:'#C4B5FD', fontSize:18, fontWeight:900 }}>{fmtM(rsuGrossFutureMan)} / {fmtM(rsuNetFutureMan)}</div></div>
         </div>
 
-        <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(34,197,94,.18)', borderRadius:18, padding:16, marginBottom:14 }}>
-          <div style={{ fontSize:15, fontWeight:900, color:'#BBF7D0', marginBottom:6 }}>총 수령액 기준 현금화 테이블</div>
-          <div style={{ color:'#94A3B8', fontSize:12, lineHeight:1.6, marginBottom:12 }}>
-            SP는 귀속연도별 금액을 3분할하여 다음해부터 3년에 걸쳐 1월 기준으로 합산하고, PSU/RSU는 각 지급 예정일의 세후 주식가치를 같은 기준으로 더합니다.
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:14, marginBottom:14 }} className="two-col-grid sp-rsu-panel-grid">
+          <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(250,204,21,.22)', borderRadius:18, padding:16 }}>
+            <div style={{ fontSize:15, fontWeight:900, color:'#FDE68A', marginBottom:6 }}>SP 현금화 예정표</div>
+            <div style={{ color:'#94A3B8', fontSize:12, lineHeight:1.6, marginBottom:12 }}>연도별 SP를 3등분해 다음해부터 3년간 1월 기준으로 합산합니다.</div>
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:520 }}>
+                <thead>
+                  <tr style={{ borderBottom:'1px solid rgba(255,255,255,.12)' }}>
+                    <th style={{ textAlign:'left', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>현금화 기준월</th>
+                    <th style={{ textAlign:'right', color:'#FDE68A', fontSize:12, padding:'9px 8px' }}>SP 합계</th>
+                    <th style={{ textAlign:'left', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>구성 내역</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {spReceiptRows.length ? spReceiptRows.map(row => (
+                    <tr key={`sp-${row.key}`} style={{ borderBottom:'1px solid rgba(255,255,255,.07)' }}>
+                      <td style={{ color:'#fff', fontWeight:900, padding:'10px 8px', whiteSpace:'nowrap' }}>{row.dateLabel}</td>
+                      <td style={{ color:'#FACC15', fontWeight:900, textAlign:'right', padding:'10px 8px', whiteSpace:'nowrap' }}>{fmtM(row.amount)}</td>
+                      <td style={{ color:'#94A3B8', fontSize:11, lineHeight:1.55, padding:'10px 8px' }}>{row.details.join(' / ')}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="3" style={{ color:'#94A3B8', padding:'14px 8px', textAlign:'center' }}>표시할 SP 지급 예정액이 없습니다.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(167,139,250,.22)', borderRadius:18, padding:16 }}>
+            <div style={{ fontSize:15, fontWeight:900, color:'#DDD6FE', marginBottom:6 }}>RSU/PSU 지급 예정표</div>
+            <div style={{ color:'#94A3B8', fontSize:12, lineHeight:1.6, marginBottom:12 }}>지급 예정일의 주식 수와 예상 기준주가를 반영한 세후 주식가치입니다.</div>
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:520 }}>
+                <thead>
+                  <tr style={{ borderBottom:'1px solid rgba(255,255,255,.12)' }}>
+                    <th style={{ textAlign:'left', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>지급 예정월</th>
+                    <th style={{ textAlign:'right', color:'#DDD6FE', fontSize:12, padding:'9px 8px' }}>RSU/PSU 세후</th>
+                    <th style={{ textAlign:'left', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>구성 내역</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {psuReceiptRows.length ? psuReceiptRows.map(row => (
+                    <tr key={`psu-${row.key}`} style={{ borderBottom:'1px solid rgba(255,255,255,.07)' }}>
+                      <td style={{ color:'#fff', fontWeight:900, padding:'10px 8px', whiteSpace:'nowrap' }}>{row.dateLabel}</td>
+                      <td style={{ color:'#C4B5FD', fontWeight:900, textAlign:'right', padding:'10px 8px', whiteSpace:'nowrap' }}>{fmtM(row.amount)}</td>
+                      <td style={{ color:'#94A3B8', fontSize:11, lineHeight:1.55, padding:'10px 8px' }}>{row.details.join(' / ')}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="3" style={{ color:'#94A3B8', padding:'14px 8px', textAlign:'center' }}>표시할 RSU/PSU 지급 예정액이 없습니다.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(34,197,94,.18)', borderRadius:18, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:900, color:'#BBF7D0', marginBottom:6 }}>총 수령액 월별 합계</div>
+          <div style={{ color:'#94A3B8', fontSize:12, lineHeight:1.6, marginBottom:12 }}>SP와 RSU/PSU를 지급 예상월 기준으로 합산한 요약표입니다.</div>
           <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:680 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:560 }}>
               <thead>
                 <tr style={{ borderBottom:'1px solid rgba(255,255,255,.12)' }}>
-                  <th style={{ textAlign:'left', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>현금화 기준월</th>
-                  <th style={{ textAlign:'right', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>SP 합계</th>
-                  <th style={{ textAlign:'right', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>PSU/RSU 세후</th>
+                  <th style={{ textAlign:'left', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>기준월</th>
+                  <th style={{ textAlign:'right', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>SP</th>
+                  <th style={{ textAlign:'right', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>RSU/PSU</th>
                   <th style={{ textAlign:'right', color:'#BBF7D0', fontSize:12, padding:'9px 8px' }}>총 수령액</th>
-                  <th style={{ textAlign:'left', color:'#CBD5E1', fontSize:12, padding:'9px 8px' }}>구성 내역</th>
                 </tr>
               </thead>
               <tbody>
                 {totalReceiptRows.length ? totalReceiptRows.map(row => (
-                  <tr key={row.key} style={{ borderBottom:'1px solid rgba(255,255,255,.07)' }}>
+                  <tr key={`total-${row.key}`} style={{ borderBottom:'1px solid rgba(255,255,255,.07)' }}>
                     <td style={{ color:'#fff', fontWeight:900, padding:'10px 8px', whiteSpace:'nowrap' }}>{row.dateLabel}</td>
                     <td style={{ color:'#FACC15', fontWeight:900, textAlign:'right', padding:'10px 8px', whiteSpace:'nowrap' }}>{fmtM(row.spAmount)}</td>
                     <td style={{ color:'#C4B5FD', fontWeight:900, textAlign:'right', padding:'10px 8px', whiteSpace:'nowrap' }}>{fmtM(row.psuAmount)}</td>
                     <td style={{ color:'#86EFAC', fontWeight:900, textAlign:'right', padding:'10px 8px', whiteSpace:'nowrap' }}>{fmtM(row.totalAmount)}</td>
-                    <td style={{ color:'#94A3B8', fontSize:11, lineHeight:1.55, padding:'10px 8px' }}>{[...row.spDetails, ...row.psuDetails].join(' / ')}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="5" style={{ color:'#94A3B8', padding:'14px 8px', textAlign:'center' }}>표시할 SP/PSU 지급 예정액이 없습니다.</td></tr>
+                  <tr><td colSpan="4" style={{ color:'#94A3B8', padding:'14px 8px', textAlign:'center' }}>표시할 지급 예정액이 없습니다.</td></tr>
                 )}
               </tbody>
             </table>
