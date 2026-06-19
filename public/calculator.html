@@ -3114,8 +3114,8 @@ function App() {
       const capInfo = splitSalaryByCap(scenarioCl, scenarioSalary);
       const baseSalary = capInfo.baseSalary || scenarioSalary;
       let perf = 1.0;
-      // OPI-2/RSU 예상 입력에서는 CL4 고과 선택 시 평고과(MT) 대비 ES +10%, EM +20%를 적용합니다.
-      if (scenarioCl === 'CL4') { if (scenarioRating === 'EM') perf = 1.2; else if (scenarioRating === 'ES') perf = 1.1; }
+      // OPI-2/RSU 예상 입력에서는 CL4 고과 선택 시 평고과(MT) 대비 ES +20%, EM +40%를 적용합니다.
+      if (scenarioCl === 'CL4') { if (scenarioRating === 'EM') perf = 1.4; else if (scenarioRating === 'ES') perf = 1.2; }
       let spGross = 0;
       if (scenarioDiv === 'lepan' && year >= 2027 && scenarioDeficit !== 'none') spGross = (baseSalary * 0.24) * perf;
       else spGross = baseByDiv * perf;
@@ -3407,7 +3407,7 @@ function App() {
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:12 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#7DD3FC' }}>조회연도 및 최근 2년 OPI-2 자동 시뮬레이션 입력</div>
-              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·예상 인상률·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, OPI-2 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 OPI-2를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과 선택에 따라 ES +10%, EM +20%가 반영됩니다.</div>
+              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·예상 인상률·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, OPI-2 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 OPI-2를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과 선택에 따라 ES +20%, EM +40%가 반영됩니다.</div>
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) 150px', gap:10, alignItems:'center', marginBottom:10 }} className="two-col-grid">
@@ -3494,8 +3494,8 @@ function App() {
                       <label>CL4 고과</label>
                       <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (effectiveRow.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(15,23,42,.45)', color:cl4RatingEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                         <option value="MT">MT</option>
-                        <option value="ES">ES +10%</option>
-                        <option value="EM">EM +20%</option>
+                        <option value="ES">ES +20%</option>
+                        <option value="EM">EM +40%</option>
                       </select>
                     </div>
                     <div className="scenario-field">
