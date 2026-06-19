@@ -576,10 +576,14 @@ function LiveChatPopup({ salaryUser, salaryToken, onLoginClick }) {
   };
 
   React.useEffect(() => {
+    // 성능 최적화: 채팅창이 열려 있을 때만 이전 대화 조회/폴링을 시작합니다.
+    // 팝업이 닫혀 있으면 /api/chat 호출을 하지 않아 초기 로딩과 모바일 배터리 부담을 줄입니다.
+    if (!open) return;
     loadMessages();
-    const timer = setInterval(loadMessages, 3000);
+    if (!canViewHistory) return;
+    const timer = setInterval(loadMessages, 5000);
     return () => clearInterval(timer);
-  }, [canViewHistory, salaryToken]);
+  }, [open, canViewHistory, salaryToken]);
 
   React.useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -1556,14 +1560,31 @@ function App() {
     return null;
   };
 
+
+  // ── 가벼운 클라이언트 캐시: 동일 세션에서 반복 API 호출 방지 ────────────────
+  const fetchJsonCached = async (cacheKey, url, ttlMs, options = {}) => {
+    const now = Date.now();
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+      if (cached && cached.expiresAt > now && cached.data) return cached.data;
+    } catch(e) {}
+
+    const res = await fetch(url, options);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '데이터 조회 실패');
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ expiresAt: now + ttlMs, data }));
+    } catch(e) {}
+    return data;
+  };
+
   // ── 현재가 조회: Vercel API Route 사용 ──────────────────────────────
   const fetchCurrentPrice = async () => {
     setPriceLoading(true);
     setPriceSource(null);
     try {
-      const res = await fetch('/api/stock/current', { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok || !data.price) throw new Error(data.error || '현재가 조회 실패');
+      const data = await fetchJsonCached('secbonus:stock:current:005930', '/api/stock/current', 60000);
+      if (!data.price) throw new Error(data.error || '현재가 조회 실패');
       setCurrentPrice(Math.round(Number(data.price)));
       setPriceSource(data.source || 'api');
     } catch(e) {
@@ -1578,9 +1599,8 @@ function App() {
     setVwapLoading(true);
     setVwapSource(null);
     try {
-      const res = await fetch('/api/stock/vwap', { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok || !data.vwap) throw new Error(data.error || 'VWAP 조회 실패');
+      const data = await fetchJsonCached('secbonus:stock:vwap:005930', '/api/stock/vwap', 60 * 60 * 1000);
+      if (!data.vwap) throw new Error(data.error || 'VWAP 조회 실패');
       setVwapPrice(Math.round(Number(data.vwap)));
       setVwapSource(data.source || 'api');
     } catch(e) {
@@ -1609,9 +1629,8 @@ function App() {
     setMarketLoading(true);
     setMarketMsg('');
     try {
-      const res = await fetch('/api/market/kospi', { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok || !data.price) throw new Error(data.error || 'KOSPI 조회 실패');
+      const data = await fetchJsonCached('secbonus:market:kospi', '/api/market/kospi', 60000);
+      if (!data.price) throw new Error(data.error || 'KOSPI 조회 실패');
       setMarketFromPayload({ ...data, type:'index', name:'KOSPI', symbol:'KOSPI' }, 'index');
       setHasPreferredStock(false);
     } catch(e) {
@@ -1628,9 +1647,8 @@ function App() {
     setMarketLoading(true);
     setMarketMsg('');
     try {
-      const res = await fetch(`/api/market/quote?query=${encodeURIComponent(q)}`, { cache:'no-store' });
-      const data = await res.json();
-      if (!res.ok || !data.price) throw new Error(data.error || '종목 조회 실패');
+      const data = await fetchJsonCached(`secbonus:market:quote:${q}`, `/api/market/quote?query=${encodeURIComponent(q)}`, 30000);
+      if (!data.price) throw new Error(data.error || '종목 조회 실패');
       setMarketFromPayload(data, 'stock');
       setStockSearchText(data.name || data.symbol || q);
       if (options.save && salaryToken) {
@@ -1698,14 +1716,34 @@ function App() {
     await fetchStockQuote(stockSearchText, { save: !!salaryToken });
   };
 
-  useEffect(() => { fetchCurrentPrice(); fetchVwapPrice(); }, []);
+  // 성능 최적화: 초기 진입 시 무거운 API를 한꺼번에 호출하지 않습니다.
+  // 현재가는 시뮬레이션/산출결과/기준주가 설정 화면을 볼 때만 1회 조회합니다.
+  useEffect(() => {
+    if ((tab === 0 || tab === 1 || tab === 2) && !currentPrice && !priceLoading) {
+      const timer = setTimeout(fetchCurrentPrice, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [tab]);
+
+  // VWAP/PSU 기준주가는 SP/RSU 탭 진입 시 또는 사용자가 새로고침을 누를 때만 조회합니다.
+  useEffect(() => {
+    if (tab === 7 && !vwapPrice && !vwapLoading) {
+      const timer = setTimeout(fetchVwapPrice, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [tab]);
 
   useEffect(() => {
     if (!rsuFutureBasePriceManual && vwapPrice) {
       setRsuFutureBasePrice(Math.round(Number(vwapPrice)));
     }
   }, [vwapPrice, rsuFutureBasePriceManual]);
-  useEffect(() => { loadPreferredStock(); }, [salaryToken]);
+
+  // 헤더 시장정보도 첫 렌더링 직후 약간 지연시켜 본문 렌더링을 우선합니다.
+  useEffect(() => {
+    const timer = setTimeout(loadPreferredStock, 500);
+    return () => clearTimeout(timer);
+  }, [salaryToken]);
 
   const calc = useCallback(() => {
     const buPct = burate * 10, saPct = 100 - buPct;
