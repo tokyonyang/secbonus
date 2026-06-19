@@ -593,6 +593,297 @@
     .sp-scenario-year { font-size:18px; }
   }
 
+
+
+  /* Reward Reveal Dashboard redesign */
+  .result-panel-root {
+    max-width: 1380px;
+    margin: 0 auto;
+    gap: 18px;
+    padding: 22px 24px 36px;
+  }
+  .result-hero {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom: 2px;
+  }
+  .result-hero-kicker {
+    font-size:12px;
+    color:#20D4FF;
+    letter-spacing:.14em;
+    font-weight:800;
+    margin-bottom:6px;
+    text-transform: uppercase;
+  }
+  .result-hero-title {
+    font-size:28px;
+    font-weight:900;
+    color:#EAF2FF;
+    line-height:1.15;
+    letter-spacing:-0.03em;
+    margin-bottom:8px;
+  }
+  .result-chip-row { gap:8px !important; }
+  .result-chip-row > span {
+    border-radius:999px !important;
+    padding:5px 11px !important;
+    font-size:12px !important;
+    font-weight:700 !important;
+  }
+  .result-positive-badge {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:rgba(40,230,163,.10);
+    color:#7BF2C4;
+    border:1px solid rgba(40,230,163,.24);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .reward-main-card {
+    position:relative;
+    overflow:hidden;
+    display:grid;
+    grid-template-columns:minmax(0, 1.35fr) minmax(280px, .95fr);
+    gap:18px;
+    padding:26px 26px 24px;
+    border-radius:24px;
+    background:
+      radial-gradient(circle at top right, rgba(255,202,69,.16), transparent 32%),
+      radial-gradient(circle at bottom left, rgba(32,212,255,.12), transparent 36%),
+      linear-gradient(135deg, rgba(16,24,38,.98), rgba(21,34,53,.95));
+    border:1px solid rgba(255,255,255,.06);
+    box-shadow: 0 18px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .reward-main-card::before {
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(120deg, rgba(32,212,255,.08), transparent 30%, transparent 72%, rgba(255,202,69,.08));
+    pointer-events:none;
+  }
+  .reward-main-kicker {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:7px 12px;
+    border-radius:999px;
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.08);
+    color:#8FA3BF;
+    font-size:12px;
+    font-weight:700;
+    margin-bottom:16px;
+  }
+  .reward-main-title {
+    font-size:22px;
+    font-weight:800;
+    color:#EAF2FF;
+    margin-bottom:10px;
+  }
+  .reward-main-amount {
+    font-size:40px;
+    font-weight:950;
+    line-height:1.02;
+    letter-spacing:-0.05em;
+    color:#FFF2CF;
+    text-shadow:0 0 20px rgba(255,202,69,.10);
+    margin-bottom:10px;
+  }
+  .reward-main-caption {
+    font-size:14px;
+    color:#8FA3BF;
+    line-height:1.6;
+    max-width:720px;
+  }
+  .reward-main-caption strong { color:#EAF2FF; font-weight:800; }
+  .reward-main-badges {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:18px;
+  }
+  .reward-status-badge {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    min-height:34px;
+    padding:7px 12px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+    border:1px solid rgba(255,255,255,.08);
+    color:#B8C9DE;
+    background:rgba(255,255,255,.04);
+  }
+  .reward-status-badge.gold {
+    color:#FFCA45;
+    border-color:rgba(255,202,69,.24);
+    background:rgba(255,202,69,.08);
+  }
+  .reward-status-badge.success {
+    color:#92F4CD;
+    border-color:rgba(40,230,163,.22);
+    background:rgba(40,230,163,.10);
+  }
+  .reward-main-side {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    position:relative;
+    z-index:1;
+  }
+  .reward-side-card {
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:18px;
+    padding:14px 14px 15px;
+    min-height:100px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+  }
+  .reward-side-card.highlight {
+    grid-column:1 / -1;
+    min-height:auto;
+    background:linear-gradient(135deg, rgba(32,212,255,.08), rgba(255,202,69,.06));
+  }
+  .reward-side-label {
+    color:#8FA3BF;
+    font-size:12px;
+    font-weight:700;
+    margin-bottom:8px;
+  }
+  .reward-side-value {
+    font-size:24px;
+    font-weight:900;
+    line-height:1.05;
+    letter-spacing:-0.03em;
+    color:#EAF2FF;
+  }
+  .reward-side-value.cyan { color:#6EE7FF; }
+  .reward-side-value.gold { color:#FFCA45; }
+  .reward-side-value.mint { color:#7BF2C4; }
+  .reward-side-note {
+    color:#B8C9DE;
+    font-size:12px;
+    line-height:1.6;
+  }
+  .summary-grid {
+    gap:12px;
+    margin-bottom: 2px;
+  }
+  .summary-card {
+    min-height:110px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:flex-start;
+    gap:7px;
+    padding:18px 18px 16px;
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(16,24,38,.96), rgba(13,22,35,.94));
+    border:1px solid rgba(255,255,255,.06);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .summary-card-label {
+    font-size:12px;
+    color:#8FA3BF;
+    line-height:1.35;
+    white-space:normal;
+    overflow:visible;
+    text-overflow:clip;
+    text-align:left;
+  }
+  .summary-card-value {
+    font-size:28px;
+    font-weight:900;
+    line-height:1.04;
+    letter-spacing:-0.04em;
+  }
+  .result-card-shell {
+    border-radius:22px;
+    padding:22px 22px 20px;
+    background:linear-gradient(180deg, rgba(16,24,38,.96), rgba(13,21,33,.95));
+    border:1px solid rgba(255,255,255,.06);
+    box-shadow: 0 16px 36px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.02);
+  }
+  .result-card-title {
+    font-size:21px !important;
+    font-weight:900 !important;
+    letter-spacing:-0.02em;
+    margin-bottom:7px !important;
+  }
+  .result-card-sub {
+    font-size:13px;
+    color:#8FA3BF;
+    line-height:1.55;
+    max-width:800px;
+  }
+  .result-card-value-text {
+    font-size:34px !important;
+    font-weight:950 !important;
+    letter-spacing:-0.05em;
+  }
+  .card-status-grid { gap:10px; margin-bottom:12px; }
+  .card-status-grid > div,
+  .shares-grid > div,
+  .dc-ratio-grid > div {
+    background:rgba(255,255,255,.035) !important;
+    border:1px solid rgba(255,255,255,.06) !important;
+    border-radius:16px !important;
+    padding:12px 12px !important;
+  }
+  .result-card-shell [style*="background:rgba(255,255,255,0.04)"],
+  .result-card-shell [style*="background: rgba(255,255,255,0.04)"],
+  .result-card-shell [style*="background:rgba(255,255,255,0.03)"],
+  .result-card-shell [style*="background: rgba(255,255,255,0.03)"] {
+    background:rgba(255,255,255,.035) !important;
+    border:1px solid rgba(255,255,255,.06) !important;
+    border-radius:14px !important;
+  }
+  .result-card-shell [style*="background:rgba(255,107,107,0.1)"],
+  .result-card-shell [style*="background: rgba(255,107,107,0.1)"] {
+    background:rgba(255,92,115,.07) !important;
+    border:1px solid rgba(255,92,115,.16) !important;
+  }
+  .premium-warning-card {
+    background:linear-gradient(180deg, rgba(47,19,29,.62), rgba(31,16,24,.56)) !important;
+    border:1px solid rgba(255,92,115,.18) !important;
+    border-radius:16px !important;
+    padding:14px 14px 12px !important;
+  }
+  .premium-warning-title {
+    color:#FF92A4 !important;
+    font-size:12px !important;
+    font-weight:800 !important;
+    margin-bottom:8px !important;
+    text-align:center;
+  }
+  @media (max-width: 1180px) {
+    .result-panel-root { padding:20px 18px 32px; }
+    .reward-main-card { grid-template-columns:1fr; }
+    .reward-main-side { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .summary-card-value { font-size:24px; }
+    .result-card-value-text { font-size:30px !important; }
+  }
+  @media (max-width: 768px) {
+    .result-panel-root { padding:16px 14px 24px; gap:14px; }
+    .result-hero { gap:10px; }
+    .result-hero-title { font-size:24px; }
+    .reward-main-card { padding:20px 18px 18px; border-radius:20px; }
+    .reward-main-title { font-size:18px; }
+    .reward-main-amount { font-size:34px; }
+    .reward-main-side { grid-template-columns:1fr; }
+    .summary-grid { gap:10px; }
+    .summary-card { min-height:96px; padding:16px 16px 14px; }
+    .summary-card-value { font-size:22px; }
+    .result-card-shell { padding:18px 16px 16px; border-radius:18px; }
+    .result-card-title { font-size:18px !important; }
+    .result-card-value-text { font-size:28px !important; }
+  }
+
 </style>
 </head>
 <body>
@@ -3300,32 +3591,69 @@ function App() {
   const ResultPanel = () => (
     <div className="result-panel-root">
       <div className="result-hero">
-        <div style={{ fontSize:11, color:"#1E90FF", letterSpacing:"0.12em", fontWeight:800, marginBottom:4 }}>결과 요약</div>
-        <div style={{ fontSize:20, fontWeight:900, background:"linear-gradient(90deg,#fff,#7ec8ff)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>성과급 계산 결과</div>
-        <div className="result-chip-row" style={{ display:"flex", flexWrap:"wrap", alignItems:"center" }}>
-          <span style={{ fontSize:11, background:"rgba(0,198,255,0.1)", border:"1px solid rgba(0,198,255,0.25)", color:"#00C6FF", borderRadius:7, padding:"3px 10px", fontWeight:700 }}>
-            DS 영업이익: {profit}조
-          </span>
-          {dsAutoMode && (
-            <span style={{ fontSize:11, background:"rgba(160,174,192,0.1)", border:"1px solid rgba(160,174,192,0.2)", color:"#A0AEC0", borderRadius:7, padding:"3px 10px" }}>
-              전사 {totalProfit}조 × DS {dsRatio}% 자동환산
+        <div>
+          <div className="result-hero-kicker">Reward Reveal Dashboard</div>
+          <div className="result-hero-title">올해 예상 보상 결과</div>
+          <div className="result-chip-row" style={{ display:"flex", flexWrap:"wrap", alignItems:"center" }}>
+            <span style={{ background:"rgba(0,198,255,0.10)", border:"1px solid rgba(0,198,255,0.22)", color:"#20D4FF" }}>
+              DS 영업이익 {profit}조
             </span>
-          )}
-          <span style={{ fontSize:11, background: r.isSpEligible ? "rgba(0,220,130,0.1)" : "rgba(255,107,107,0.1)", border:`1px solid ${r.isSpEligible ? "rgba(0,220,130,0.25)" : "rgba(255,107,107,0.25)"}`, color: r.isSpEligible ? "#00DC82" : "#FF6B6B", borderRadius:7, padding:"3px 10px", fontWeight:700 }}>
-            허들 {r.isSpEligible ? "✅ 달성" : "❌ 미달"} ({r.spThreshold}조)
-          </span>
+            {dsAutoMode && (
+              <span style={{ background:"rgba(143,163,191,0.10)", border:"1px solid rgba(143,163,191,0.16)", color:"#8FA3BF" }}>
+                전사 {totalProfit}조 × DS {dsRatio}% 자동환산
+              </span>
+            )}
+            <span className="result-positive-badge">🎉 예상 보상 확인 완료</span>
+            <span style={{ background: r.isSpEligible ? "rgba(40,230,163,0.10)" : "rgba(255,92,115,0.08)", border:`1px solid ${r.isSpEligible ? "rgba(40,230,163,0.22)" : "rgba(255,92,115,0.18)"}`, color: r.isSpEligible ? "#28E6A3" : "#FF94A5" }}>
+              지급 조건 {r.isSpEligible ? "충족" : "추가 달성 필요"} ({r.spThreshold}조)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="reward-main-card">
+        <div>
+          <div className="reward-main-kicker">🏆 Reward Reveal</div>
+          <div className="reward-main-title">올해 예상 보상</div>
+          <div className="reward-main-amount">{fmtM(r.totalBonus)}</div>
+          <div className="reward-main-caption">
+            올해 기준 예상 총 보상입니다. <strong>가장 먼저 확인해야 할 핵심 리워드</strong>를 전면에 배치해,
+            성과 보상 확인의 기대감이 가장 먼저 느껴지도록 구성했습니다.
+          </div>
+          <div className="reward-main-badges">
+            <span className="reward-status-badge success">세전 기준 총 예상 보상</span>
+            <span className="reward-status-badge gold">리워드 공개 기준연도 {simYear}</span>
+          </div>
+        </div>
+        <div className="reward-main-side">
+          <div className="reward-side-card">
+            <div className="reward-side-label">예상 OPI 수령액</div>
+            <div className="reward-side-value cyan">{fmtM(r.opiNet)}</div>
+          </div>
+          <div className="reward-side-card">
+            <div className="reward-side-label">스페셜 보너스</div>
+            <div className="reward-side-value gold">{fmtM(r.spNet)}</div>
+          </div>
+          <div className="reward-side-card">
+            <div className="reward-side-label">예상 TAI 수령액</div>
+            <div className="reward-side-value">{fmtM(r.taiNet)}</div>
+          </div>
+          <div className="reward-side-card highlight">
+            <div className="reward-side-label">보상 리포트 포인트</div>
+            <div className="reward-side-note">아래 카드에서 OPI, 스페셜 보너스, TAI, 비교 시나리오와 지급 조건을 순서대로 확인할 수 있습니다.</div>
+          </div>
         </div>
       </div>
 
       {/* 상단 요약 반응형 그리드 */}
       <div className="summary-grid" style={{ gridTemplateColumns:`repeat(${numResultCols},1fr)` }}>
         {[
-          {label:"OPI(세후)", val:fmtM(r.opiNet), color:"#00C6FF"},
-          {label:"특별성과(세후)", val:fmtM(r.spNet), color:"#FFB400"},
-          ...(r.samsungTaiAnnual>0?[{label:"TAI(세후)",val:fmtM(r.taiNet),color:"#A78BFA"}]:[]),
-          ...(r.bizPerfBonus>0?[{label:"업무성과",val:fmtM(r.bizPerfBonus),color:"#34D399"}]:[]),
-          ...(r.excessCash>0?[{label:"상한초과 1회성",val:fmtM(r.excessCash),color:"#FF6B6B"}]:[]),
-          {label:"총 영끌(세전)", val:fmtM(r.totalBonus), color:"#fff"},
+          {label:"예상 OPI 수령액", val:fmtM(r.opiNet), color:"#20D4FF"},
+          {label:"스페셜 보너스", val:fmtM(r.spNet), color:"#FFCA45"},
+          ...(r.samsungTaiAnnual>0?[{label:"예상 TAI 수령액",val:fmtM(r.taiNet),color:"#8B7CFF"}]:[]),
+          ...(r.bizPerfBonus>0?[{label:"업무성과 보너스",val:fmtM(r.bizPerfBonus),color:"#28E6A3"}]:[]),
+          ...(r.excessCash>0?[{label:"추가 현금보상",val:fmtM(r.excessCash),color:"#FF5C73"}]:[]),
+          {label:"총 예상 보상", val:fmtM(r.totalBonus), color:"#EAF2FF"},
         ].map(item=>(
           <div key={item.label} className="summary-card">
             <div className="summary-card-label">{item.label}</div>
@@ -3371,8 +3699,8 @@ function App() {
 
       {/* 특별성과급 */}
       {r.sp > 0 ? (
-        <ResultCard icon="⭐" title="특별성과급" valueColor="#FFB400"
-          sub={`세후 자사주 지급 · DS영업이익×${r.appliedSprate}% (OPI와 독립 재원)`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
+        <ResultCard icon="⭐" title="스페셜 보너스" valueColor="#FFB400"
+          sub={`성과에 따른 특별 보상 · DS영업이익×${r.appliedSprate}% (OPI와 독립 재원)`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
           {multiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{multiTagHtml}</div>}
           {currentPrice && currentPrice > 0 && (
             <div style={{ background:"rgba(0,220,130,0.08)", border:"1px solid rgba(0,220,130,0.2)", borderRadius:12, padding:"10px 12px", marginBottom:10 }}>
@@ -3495,22 +3823,22 @@ function App() {
           </div>
         </ResultCard>
       ) : (
-        <ResultCard icon="❌" title="특별성과급" valueColor="#FF6B6B" value="미지급" accent="rgba(255,107,107,0.06)">
+        <ResultCard icon="❌" title="스페셜 보너스" valueColor="#FF6B6B" value="현재 기준 미지급" accent="rgba(255,92,115,0.05)">
           <div style={{ fontSize:12, color:"#CBD5E1", textAlign:"center", padding:"4px 0", marginBottom:8 }}>
-            {simYear}년 영업이익이 허들({r.spThreshold}조원)에 미달했습니다.
+            {simYear}년 영업이익이 지급 조건({r.spThreshold}조원)에 아직 도달하지 않았습니다.
           </div>
-          <div style={{ background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontSize: 12, color: "#FF6B6B", fontWeight: 700, marginBottom: 6, textAlign: "center" }}>💸 허들 미달로 인한 개인 손실 추정액</div>
+          <div className="premium-warning-card" style={{ background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: 10, padding: "10px 12px" }}>
+            <div className="premium-warning-title" style={{ fontSize: 12, color: "#FF6B6B", fontWeight: 700, marginBottom: 6, textAlign: "center" }}>📌 추가 달성 필요 시 참고</div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: "#CBD5E1" }}>OPI 손실분 ({r.rerate}% → 10% 적용)</span>
+              <span style={{ fontSize: 12, color: "#CBD5E1" }}>OPI 기회 차이 ({r.rerate}% → 10% 적용)</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#FF6B6B" }}>{fmtM(r.lostOpi)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: "#CBD5E1" }}>특별성과급 손실분 (전액 미지급)</span>
+              <span style={{ fontSize: 12, color: "#CBD5E1" }}>스페셜 보너스 미반영분</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#FF6B6B" }}>{fmtM(r.lostSp)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(255,107,107,0.2)", paddingTop: 6 }}>
-              <span style={{ fontSize: 12, color: "#FF6B6B", fontWeight: 700 }}>총 손실액</span>
+              <span style={{ fontSize: 12, color: "#FF6B6B", fontWeight: 700 }}>잠재 보상 차이</span>
               <span style={{ fontSize: 14, fontWeight: 800, color: "#FF6B6B" }}>{fmtM(r.lostTotal)}</span>
             </div>
           </div>
