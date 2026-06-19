@@ -123,6 +123,86 @@
     .shares-grid { grid-template-columns: 1fr !important; }
     .dc-ratio-grid { grid-template-columns: repeat(3, 1fr) !important; }
   }
+
+
+  /* ── 추가 반응형 보정: 모바일 브라우저 데스크톱 모드/태블릿 폭 대응 ── */
+  @media (max-width: 1180px) {
+    .header {
+      height: auto;
+      padding: 14px 18px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      position: relative;
+    }
+    .header-left {
+      width: 100%;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .nav-tabs {
+      margin-left: 0;
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 8px;
+      border-radius: 18px;
+    }
+    .nav-tabs button {
+      width: 100%;
+      min-width: 0;
+      justify-content: center;
+      padding: 10px 6px !important;
+      border-radius: 14px !important;
+    }
+    .nav-tabs button span:last-child {
+      white-space: normal;
+      line-height: 1.15;
+      word-break: keep-all;
+    }
+    .header-right {
+      min-width: 0 !important;
+      width: 100%;
+      max-width: 720px;
+      align-self: center;
+      justify-content: center !important;
+      flex-wrap: wrap;
+    }
+    .main-layout {
+      height: auto;
+      min-height: calc(100vh - 120px);
+      overflow: visible;
+    }
+    .sidebar {
+      width: min(430px, 42vw);
+      min-width: min(430px, 42vw);
+    }
+    .sp-scenario-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 10px !important;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .main-layout { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      min-width: 100%;
+      border-right: 0;
+      height: auto;
+      overflow: visible;
+    }
+    .content-panel {
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    .header { position: relative; }
+    .nav-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+
 </style>
 </head>
 <body>
@@ -1853,11 +1933,14 @@ function App() {
       const perf = normalizeScenarioNumber(row.performanceRaise, getScenarioPerformanceDefault(year, cl));
       return { base, perf, total: base + perf };
     };
-    const getScenarioEstimatedSalary = (year, row={}) => {
+    const getScenarioEstimatedSalary = (year, row={}, visited=new Set()) => {
       const direct = normalizeScenarioNumber(row.salary, 0);
       if (direct > 0) return direct;
+      if (visited.has(year)) return 0;
+      visited.add(year);
       const prev = spRsuScenarioRows[year - 1];
-      const prevSalary = prev ? normalizeScenarioNumber(prev.salary, 0) : 0;
+      if (!prev) return 0;
+      const prevSalary = getScenarioEstimatedSalary(year - 1, prev, visited);
       if (prevSalary <= 0) return 0;
       const rates = getScenarioRaiseRates(year, row);
       return Math.round(prevSalary * (1 + rates.total / 100));
