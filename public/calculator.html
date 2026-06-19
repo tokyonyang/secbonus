@@ -775,6 +775,181 @@
     }
   }
 
+
+
+  /* 라이트톤 가시성 재개선 */
+  .app-light-theme {
+    background: linear-gradient(180deg, #F7FAFE 0%, #EEF4FB 100%) !important;
+    color: #1F2F46 !important;
+  }
+  .app-light-theme .header {
+    background: rgba(255,255,255,.97) !important;
+    border-bottom: 1px solid rgba(148,163,184,.18) !important;
+    box-shadow: 0 10px 24px rgba(15,23,42,.06) !important;
+  }
+  .app-light-theme .nav-tabs {
+    background: #F3F7FD !important;
+    border: 1px solid rgba(148,163,184,.18) !important;
+    border-radius: 20px !important;
+    padding: 8px !important;
+    gap: 8px !important;
+  }
+  .app-light-theme .nav-tabs button {
+    min-height: 56px !important;
+    border-radius: 16px !important;
+    padding: 10px 8px !important;
+    color: #52657C !important;
+    background: rgba(255,255,255,.72) !important;
+    border: 1px solid rgba(203,213,225,.75) !important;
+    font-weight: 800 !important;
+  }
+  .app-light-theme .nav-tabs button span:last-child {
+    color: #52657C !important;
+    line-height: 1.2 !important;
+  }
+  .app-light-theme .nav-tabs button[aria-current="page"] {
+    background: linear-gradient(135deg, #2F6FED, #46B7FF) !important;
+    border-color: transparent !important;
+    box-shadow: 0 10px 22px rgba(37,99,235,.18) !important;
+  }
+  .app-light-theme .nav-tabs button[aria-current="page"] span { color: #fff !important; }
+  .app-light-theme .opi-shortcut-button {
+    background: #EEF3FF !important;
+    color: #4F46E5 !important;
+    border: 1px solid rgba(99,102,241,.18) !important;
+  }
+  .app-light-theme .header-right > div,
+  .app-light-theme .market-search-form {
+    background: rgba(255,255,255,.92) !important;
+    border: 1px solid rgba(148,163,184,.18) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 20px rgba(15,23,42,.04);
+  }
+  .app-light-theme .market-search-form { padding: 4px !important; }
+  .app-light-theme .market-search-form input {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    color: #1F2F46 !important;
+  }
+  .app-light-theme .market-search-form button,
+  .app-light-theme button[type="submit"] {
+    background: linear-gradient(135deg,#2F6FED,#39B7FF) !important;
+    color: #fff !important;
+    border-radius: 14px !important;
+    border: 0 !important;
+    font-weight: 800 !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+  .app-light-theme .field-box,
+  .app-light-theme .result-card-shell,
+  .app-light-theme .summary-card,
+  .app-light-theme .sp-rsu-card,
+  .app-light-theme .sp-year-row-card,
+  .app-light-theme .sp-rsu-panel-grid > div {
+    background: rgba(255,255,255,.97) !important;
+    border: 1px solid rgba(148,163,184,.18) !important;
+    box-shadow: 0 14px 32px rgba(15,23,42,.05) !important;
+  }
+  .app-light-theme .field-box > div:first-child,
+  .app-light-theme .result-card-sub,
+  .app-light-theme .summary-card-label {
+    color: #7A8EA6 !important;
+  }
+  .app-light-theme .field-box > div[style*="grid-template-columns"] > div,
+  .app-light-theme .field-box > div[style*="display: grid"] > div,
+  .app-light-theme .field-box > div[style*="display:flex"][style*="justify-content:space-between"] {
+    background: #F8FBFF !important;
+    border: 1px solid rgba(203,213,225,.9) !important;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+  }
+  .app-light-theme .field-box .input-info-card {
+    background: #F8FBFF !important;
+    border: 1px solid rgba(203,213,225,.9) !important;
+    border-radius: 16px !important;
+  }
+  .app-light-theme .field-box input,
+  .app-light-theme .field-box select,
+  .app-light-theme .field-box textarea,
+  .app-light-theme .field-box [style*="background:#0e1525"] input,
+  .app-light-theme .field-box [style*="background: #0e1525"] input {
+    background: #FFFFFF !important;
+    color: #16263A !important;
+    border: 1px solid rgba(148,163,184,.24) !important;
+    box-shadow: inset 0 1px 0 rgba(15,23,42,.02) !important;
+  }
+  .app-light-theme .field-box div[style*="fontSize:11"],
+  .app-light-theme .field-box div[style*="font-size: 11px"] {
+    color: #6B8097 !important;
+  }
+  .app-light-theme .field-box div[style*="fontSize:10"],
+  .app-light-theme .field-box div[style*="font-size: 10px"] {
+    color: #7A8EA6 !important;
+  }
+  .app-light-theme .field-box span[style*="#00DC82"],
+  .app-light-theme .field-box div[style*="#00DC82"] { color: #0F9F6E !important; }
+  .app-light-theme .field-box span[style*="#FF6B6B"],
+  .app-light-theme .field-box div[style*="#FF6B6B"] { color: #D54B4B !important; }
+  .app-light-theme .field-box span[style*="#7DD3FC"],
+  .app-light-theme .field-box div[style*="#7DD3FC"],
+  .app-light-theme .field-box span[style*="#38BDF8"],
+  .app-light-theme .field-box div[style*="#38BDF8"] { color: #1E88D3 !important; }
+  .app-light-theme .field-box button:not([aria-current="page"]) {
+    background: #F6F9FD !important;
+    border: 1px solid rgba(203,213,225,.9) !important;
+    color: #31465F !important;
+    min-height: 46px !important;
+    font-weight: 800 !important;
+  }
+  .app-light-theme .field-box button[style*="1E90FF"],
+  .app-light-theme .field-box button[style*="00C6FF"],
+  .app-light-theme .field-box button[style*="0,198,255"],
+  .app-light-theme .field-box button[style*="30,144,255"] {
+    background: linear-gradient(135deg,#2F6FED,#39B7FF) !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    box-shadow: 0 8px 18px rgba(37,99,235,.16) !important;
+  }
+  .app-light-theme .field-box button[style*="FFD700"],
+  .app-light-theme .field-box button[style*="255,215,0"] {
+    background: #FFF7E6 !important;
+    color: #B86A00 !important;
+    border-color: rgba(251,191,36,.28) !important;
+  }
+  .app-light-theme .field-box button[style*="FF6B6B"],
+  .app-light-theme .field-box button[style*="255,107,107"] {
+    background: #FFF1F2 !important;
+    color: #CC4A57 !important;
+    border-color: rgba(244,114,182,.22) !important;
+  }
+  @media (max-width: 640px) {
+    .app-light-theme .nav-tabs {
+      grid-template-columns: repeat(4, minmax(0,1fr)) !important;
+      padding: 8px !important;
+      gap: 8px !important;
+    }
+    .app-light-theme .nav-tabs button {
+      min-height: 62px !important;
+      padding: 10px 6px !important;
+    }
+    .app-light-theme .header-right {
+      gap: 10px !important;
+      align-items: stretch !important;
+    }
+    .app-light-theme .header-right > div,
+    .app-light-theme .market-search-form {
+      width: calc(50% - 5px);
+      min-width: 0;
+    }
+    .app-light-theme .field-box,
+    .app-light-theme .result-card-shell,
+    .app-light-theme .summary-card {
+      border-radius: 18px !important;
+    }
+  }
+
 </style>
 </head>
 <body>
