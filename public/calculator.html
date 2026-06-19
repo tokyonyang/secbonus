@@ -356,14 +356,14 @@ function ChipGroup({ options, value, onChange }) {
 }
 
 function NumInput({ value, onChange, step=1, color="#fff", size=16, min=undefined, max=undefined }) {
-  const [local, setLocal] = React.useState(String(value ?? ''));
   const ref = React.useRef(null);
   React.useEffect(() => {
-    // 입력 중에는 부모 상태값으로 덮어쓰지 않습니다.
-    // 모바일 숫자 키보드가 한 글자 입력마다 닫히는 문제를 막기 위한 처리입니다.
-    if (!ref.current || ref.current !== document.activeElement) {
-      setLocal(String(value ?? ''));
-    }
+    const el = ref.current;
+    if (!el) return;
+    const next = String(value ?? '');
+    // 입력 중에는 외부 상태값으로 덮어쓰지 않습니다.
+    // controlled input(value+setState)이 모바일 키보드를 한 글자마다 닫는 문제를 피하기 위해 uncontrolled 방식으로 운용합니다.
+    if (document.activeElement !== el && el.value !== next) el.value = next;
   }, [value]);
   const clamp = (n) => {
     if (min !== undefined) n = Math.max(min, n);
@@ -374,21 +374,17 @@ function NumInput({ value, onChange, step=1, color="#fff", size=16, min=undefine
     let n = parseFloat(String(raw).replace(/,/g, ''));
     if (isNaN(n)) n = (min !== undefined ? Math.max(min, 0) : 0);
     n = clamp(n);
+    if (ref.current) ref.current.value = String(n);
     onChange(n);
-    setLocal(String(n));
   };
   return (
     <input
       ref={ref}
       type="text"
       inputMode="decimal"
-      value={local}
-      onChange={e => {
-        // 숫자를 치는 동안에는 로컬 입력값만 바꿉니다.
-        // 부모 계산/역산은 blur 또는 Enter에서만 반영되어 포커스가 끊기지 않습니다.
-        setLocal(e.target.value);
-      }}
-      onBlur={e => commit(e.target.value)}
+      defaultValue={String(value ?? '')}
+      onChange={e => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9.\-]/g, ''); }}
+      onBlur={e => commit(e.currentTarget.value)}
       onKeyDown={e => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -401,30 +397,29 @@ function NumInput({ value, onChange, step=1, color="#fff", size=16, min=undefine
   );
 }
 
-
 function PercentRateInput({ value, onCommit, min=0, max=100, step="0.5", color="#A78BFA", size=20 }) {
-  const [local, setLocal] = React.useState(String(value ?? ''));
   const ref = React.useRef(null);
   React.useEffect(() => {
-    if (!ref.current || ref.current !== document.activeElement) {
-      setLocal(String(value ?? ''));
-    }
+    const el = ref.current;
+    if (!el) return;
+    const next = String(value ?? '');
+    if (document.activeElement !== el && el.value !== next) el.value = next;
   }, [value]);
   const commit = (raw) => {
     let n = parseFloat(String(raw).replace(/,/g, ''));
     if (isNaN(n)) n = min;
     n = Math.max(min, Math.min(max, n));
+    if (ref.current) ref.current.value = String(n);
     onCommit(n);
-    setLocal(String(n));
   };
   return (
     <input
       ref={ref}
       type="text"
       inputMode="decimal"
-      value={local}
-      onChange={e => setLocal(e.target.value.replace(/[^0-9.\-]/g,''))}
-      onBlur={e => commit(e.target.value)}
+      defaultValue={String(value ?? '')}
+      onChange={e => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9.\-]/g,''); }}
+      onBlur={e => commit(e.currentTarget.value)}
       onKeyDown={e => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -437,27 +432,27 @@ function PercentRateInput({ value, onCommit, min=0, max=100, step="0.5", color="
 }
 
 function PriceInput({ val, set }) {
-  const [local, setLocal] = React.useState(String(val ?? ''));
   const ref = React.useRef(null);
   React.useEffect(() => {
-    if (!ref.current || ref.current !== document.activeElement) {
-      setLocal(String(val ?? ''));
-    }
+    const el = ref.current;
+    if (!el) return;
+    const next = String(val ?? '');
+    if (document.activeElement !== el && el.value !== next) el.value = next;
   }, [val]);
   const commit = (raw) => {
     const n = parseInt(String(raw).replace(/,/g, ''), 10);
     const safe = (!isNaN(n) && n > 0) ? n : val;
+    if (ref.current) ref.current.value = String(safe);
     set(safe);
-    setLocal(String(safe));
   };
   return (
     <input
       ref={ref}
       type="text"
       inputMode="numeric"
-      value={local}
-      onChange={e => setLocal(e.target.value)}
-      onBlur={e => commit(e.target.value)}
+      defaultValue={String(val ?? '')}
+      onChange={e => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g,''); }}
+      onBlur={e => commit(e.currentTarget.value)}
       onKeyDown={e => {
         if (e.key === 'Enter') {
           e.preventDefault();
