@@ -615,10 +615,15 @@ function App() {
   const [rsuAgreementSigned, setRsuAgreementSigned] = useState(true);
   const [rsuFutureBasePrice, setRsuFutureBasePrice] = useState(0);
   const [rsuFutureBasePriceManual, setRsuFutureBasePriceManual] = useState(false);
+  const [spTargetYearManualMode, setSpTargetYearManualMode] = useState(false);
+  const [spTargetYearDraft, setSpTargetYearDraft] = useState('2026');
   const [spRsuScenarioRows, setSpRsuScenarioRows] = useState({
-    2026: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200 },
-    2027: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200 },
-    2028: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200 },
+    2025: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
+    2026: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
+    2027: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
+    2028: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
+    2029: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
+    2030: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
   });
 
   // ── DS 비중 연도별 기본값 (2026~2035 예측) ──────────────────────────────
@@ -1813,10 +1818,14 @@ function App() {
 
   const EquityRewardSimContent = () => {
     const parseManInput = (value) => Math.max(0, Math.round(Number(String(value ?? '').replace(/,/g,'')) || 0));
-    const targetSpYear = Number(simYear || 2026);
+    const parseTargetYear = (value) => {
+      const n = Math.round(Number(String(value ?? '').replace(/[^0-9]/g,'')) || 0);
+      return Math.min(2035, Math.max(2026, n || Number(simYear || 2026)));
+    };
+    const targetSpYear = spTargetYearManualMode ? parseTargetYear(spTargetYearDraft) : Number(simYear || 2026);
     const spBaseNet = Math.round(Number(r.spNet || 0));
     const updateSpRsuScenarioRow = (year, patch) => {
-      setSpRsuScenarioRows(prev => ({ ...prev, [year]: { ...(prev[year] || {}), ...patch } }));
+      setSpRsuScenarioRows(prev => ({ ...prev, [year]: { salary:0, cl:'CL3', division:'memory', deficit:'none', profit:200, rating:'MT', ...(prev[year] || {}), ...patch } }));
     };
     const divisionName = (division) => division === 'memory' ? '메모리' : division === 'common' ? '공통' : '르팡';
     const calcScenarioSpecialNet = (year) => {
@@ -1826,7 +1835,8 @@ function App() {
       const scenarioSalary = Number(row.salary || 0);
       const scenarioCl = normalizeCl(row.cl || 'CL3');
       const scenarioDiv = row.division || 'memory';
-      const scenarioDeficit = row.deficit || 'none';
+      const scenarioDeficit = (year >= 2027 && scenarioDiv === 'lepan') ? (row.deficit || 'none') : 'none';
+      const scenarioRating = row.rating || 'MT';
       const threshold = year >= 2026 ? 200 : 100;
       if (scenarioProfit < threshold || scenarioSalary <= 0) return 0;
 
@@ -1841,7 +1851,8 @@ function App() {
       const capInfo = splitSalaryByCap(scenarioCl, scenarioSalary);
       const baseSalary = capInfo.baseSalary || scenarioSalary;
       let perf = 1.0;
-      if (scenarioCl === 'CL4') { if (myRating === 'EM') perf = 1.4; else if (myRating === 'ES') perf = 1.2; }
+      // SP/RSU 예상 입력에서는 CL4 고과 선택 시 평고과(MT) 대비 ES +10%, EM +20%를 적용합니다.
+      if (scenarioCl === 'CL4') { if (scenarioRating === 'EM') perf = 1.2; else if (scenarioRating === 'ES') perf = 1.1; }
       let spGross = 0;
       if (scenarioDiv === 'lepan' && year >= 2027 && scenarioDeficit !== 'none') spGross = (baseSalary * 0.24) * perf;
       else spGross = baseByDiv * perf;
@@ -1852,10 +1863,7 @@ function App() {
       const spTaxWon = Math.max(0, totalTax(curW + spW) - totalTax(curW));
       return Math.max(0, Math.round(spGross - spTaxWon / MAN));
     };
-    const getAutoSpForYear = (year) => {
-      if (year >= 2026 && year <= 2028) return calcScenarioSpecialNet(year);
-      return 0;
-    };
+    const getAutoSpForYear = (year) => calcScenarioSpecialNet(year);
     const currentSavedSpNet = getRecordSpecialSpNet(targetSpYear);
     const prevOneSavedSpNet = getRecordSpecialSpNet(targetSpYear - 1);
     const prevTwoSavedSpNet = getRecordSpecialSpNet(targetSpYear - 2);
@@ -1996,8 +2004,28 @@ function App() {
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:12 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#7DD3FC' }}>조회연도 및 최근 2년 SP 자동 시뮬레이션 입력</div>
-              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·직급·사업부·적자여부·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, SP 이월 계산의 보조값으로 사용합니다. 예: 2027년 조회 시 2025·2026·2027년 SP를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다.</div>
+              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, SP 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 SP를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과 선택에 따라 ES +10%, EM +20%가 반영됩니다.</div>
             </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) 150px', gap:10, alignItems:'center', marginBottom:10 }} className="two-col-grid">
+            <button
+              onClick={()=>{
+                const next = !spTargetYearManualMode;
+                setSpTargetYearManualMode(next);
+                if (next) setSpTargetYearDraft(String(targetSpYear || simYear || 2026));
+              }}
+              style={{ textAlign:'left', background:spTargetYearManualMode?'rgba(34,197,94,.15)':'rgba(255,255,255,.055)', color:spTargetYearManualMode?'#86EFAC':'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'11px 12px', fontWeight:900 }}
+            >
+              {spTargetYearManualMode ? '☑ 예상 조회기준 직접 설정 사용중' : '☐ 예상 조회기준 직접 설정'}
+              <div style={{ fontSize:11, fontWeight:600, marginTop:4, color:spTargetYearManualMode?'#BBF7D0':'#94A3B8' }}>예: 2028년 기준으로 바꾸면 2026·2027·2028년 예상값을 넣어 이월 SP를 확인합니다.</div>
+            </button>
+            <input
+              type="text" inputMode="numeric" disabled={!spTargetYearManualMode}
+              value={spTargetYearDraft}
+              onChange={e=>setSpTargetYearDraft(e.target.value.replace(/[^0-9]/g,''))}
+              placeholder={String(simYear || 2026)}
+              style={{ width:'100%', background:spTargetYearManualMode?'#0b1220':'rgba(15,23,42,.5)', color:spTargetYearManualMode?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontWeight:900, outline:'none' }}
+            />
           </div>
           <div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800, marginBottom:10 }}>
             현재 조회 기준: {targetSpYear}년 SP · 반영 연도: {scenarioYears.join('년 / ')}년
@@ -2006,8 +2034,10 @@ function App() {
             {scenarioSummaryRows.map(({year, row, spNet}) => {
               const threshold = year >= 2026 ? 200 : 100;
               const eligible = Number(row.profit || 0) >= threshold && Number(row.salary || 0) > 0;
+              const deficitEnabled = year >= 2027 && (row.division || 'memory') === 'lepan';
+              const cl4RatingEnabled = normalizeCl(row.cl || 'CL3') === 'CL4';
               return (
-                <div key={year} style={{ display:'grid', gridTemplateColumns:'70px 1fr 96px 108px 104px 118px 128px', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
+                <div key={year} style={{ display:'grid', gridTemplateColumns:'70px 1fr 88px 104px 104px 96px 116px 128px', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
                   <div style={{ color:'#E0F2FE', fontWeight:900, fontSize:15 }}>{year}년</div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>연봉(만)</label>
@@ -2021,7 +2051,7 @@ function App() {
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>사업부</label>
-                    <select value={row.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select value={row.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       <option value="memory">메모리</option>
                       <option value="common">공통</option>
                       <option value="lepan">르팡</option>
@@ -2029,9 +2059,17 @@ function App() {
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>적자여부</label>
-                    <select value={row.deficit || 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select disabled={!deficitEnabled} value={deficitEnabled ? (row.deficit || 'none') : 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:deficitEnabled?'#0b1220':'rgba(15,23,42,.45)', color:deficitEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       <option value="none">해당없음</option>
                       <option value="lepan">르팡적자</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>CL4 고과</label>
+                    <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (row.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(15,23,42,.45)', color:cl4RatingEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                      <option value="MT">MT</option>
+                      <option value="ES">ES +10%</option>
+                      <option value="EM">EM +20%</option>
                     </select>
                   </div>
                   <div>
