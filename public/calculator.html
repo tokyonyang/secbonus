@@ -618,12 +618,12 @@ function App() {
   const [spTargetYearManualMode, setSpTargetYearManualMode] = useState(false);
   const [spTargetYearDraft, setSpTargetYearDraft] = useState('2026');
   const [spRsuScenarioRows, setSpRsuScenarioRows] = useState({
-    2025: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
-    2026: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
-    2027: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
-    2028: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
-    2029: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
-    2030: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT' },
+    2025: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 3.3 },
+    2026: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 3.3 },
+    2027: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 3.3 },
+    2028: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 3.3 },
+    2029: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 3.3 },
+    2030: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 3.3 },
   });
 
   // ── DS 비중 연도별 기본값 (2026~2035 예측) ──────────────────────────────
@@ -1824,15 +1824,49 @@ function App() {
     };
     const targetSpYear = spTargetYearManualMode ? parseTargetYear(spTargetYearDraft) : Number(simYear || 2026);
     const spBaseNet = Math.round(Number(r.spNet || 0));
+    const getScenarioPerformanceDefault = (year, cl='CL3') => {
+      const c = normalizeCl(cl || 'CL3');
+      const byYear = getPerformanceRaiseReference(year, c, 'ES', 2);
+      if (byYear !== null && byYear !== undefined) return Number(byYear);
+      const latest = getPerformanceRaiseReference(2026, c, 'ES', 2);
+      if (latest !== null && latest !== undefined) return Number(latest);
+      return c === 'CL4' ? 2.2 : c === 'CL2' ? 4.5 : 3.3;
+    };
+    const normalizeScenarioNumber = (value, fallback=0) => {
+      const n = Number(String(value ?? '').replace(/,/g,''));
+      return Number.isFinite(n) ? n : fallback;
+    };
     const updateSpRsuScenarioRow = (year, patch) => {
-      setSpRsuScenarioRows(prev => ({ ...prev, [year]: { salary:0, cl:'CL3', division:'memory', deficit:'none', profit:200, rating:'MT', ...(prev[year] || {}), ...patch } }));
+      setSpRsuScenarioRows(prev => {
+        const before = { salary:'', cl:'CL3', division:'memory', deficit:'none', profit:200, rating:'MT', baseUpRaise:3, performanceRaise:getScenarioPerformanceDefault(year, 'CL3'), ...(prev[year] || {}) };
+        const nextPatch = { ...patch };
+        if (Object.prototype.hasOwnProperty.call(patch, 'cl') && !Object.prototype.hasOwnProperty.call(patch, 'performanceRaise')) {
+          nextPatch.performanceRaise = getScenarioPerformanceDefault(year, patch.cl);
+        }
+        return { ...prev, [year]: { ...before, ...nextPatch } };
+      });
     };
     const divisionName = (division) => division === 'memory' ? '메모리' : division === 'common' ? '공통' : '르팡';
+    const getScenarioRaiseRates = (year, row={}) => {
+      const cl = normalizeCl(row.cl || 'CL3');
+      const base = normalizeScenarioNumber(row.baseUpRaise, 3);
+      const perf = normalizeScenarioNumber(row.performanceRaise, getScenarioPerformanceDefault(year, cl));
+      return { base, perf, total: base + perf };
+    };
+    const getScenarioEstimatedSalary = (year, row={}) => {
+      const direct = normalizeScenarioNumber(row.salary, 0);
+      if (direct > 0) return direct;
+      const prev = spRsuScenarioRows[year - 1];
+      const prevSalary = prev ? normalizeScenarioNumber(prev.salary, 0) : 0;
+      if (prevSalary <= 0) return 0;
+      const rates = getScenarioRaiseRates(year, row);
+      return Math.round(prevSalary * (1 + rates.total / 100));
+    };
     const calcScenarioSpecialNet = (year) => {
       const row = spRsuScenarioRows[year];
       if (!row) return 0;
       const scenarioProfit = Number(row.profit || 0);
-      const scenarioSalary = Number(row.salary || 0);
+      const scenarioSalary = getScenarioEstimatedSalary(year, row);
       const scenarioCl = normalizeCl(row.cl || 'CL3');
       const scenarioDiv = row.division || 'memory';
       const scenarioDeficit = (year >= 2027 && scenarioDiv === 'lepan') ? (row.deficit || 'none') : 'none';
@@ -2004,7 +2038,7 @@ function App() {
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:12 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#7DD3FC' }}>조회연도 및 최근 2년 SP 자동 시뮬레이션 입력</div>
-              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, SP 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 SP를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과 선택에 따라 ES +10%, EM +20%가 반영됩니다.</div>
+              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·예상 인상률·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, SP 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 SP를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과 선택에 따라 ES +10%, EM +20%가 반영됩니다.</div>
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) 150px', gap:10, alignItems:'center', marginBottom:10 }} className="two-col-grid">
@@ -2033,19 +2067,32 @@ function App() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
             {scenarioSummaryRows.map(({year, row, spNet}) => {
               const threshold = year >= 2026 ? 200 : 100;
-              const eligible = Number(row.profit || 0) >= threshold && Number(row.salary || 0) > 0;
+              const scenarioSalaryForRow = getScenarioEstimatedSalary(year, row);
+              const rates = getScenarioRaiseRates(year, row);
+              const salaryAutoApplied = !(normalizeScenarioNumber(row.salary, 0) > 0) && scenarioSalaryForRow > 0;
+              const eligible = Number(row.profit || 0) >= threshold && scenarioSalaryForRow > 0;
               const deficitEnabled = year >= 2027 && (row.division || 'memory') === 'lepan';
               const cl4RatingEnabled = normalizeCl(row.cl || 'CL3') === 'CL4';
               return (
-                <div key={year} style={{ display:'grid', gridTemplateColumns:'70px 1fr 88px 104px 104px 96px 116px 128px', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
+                <div key={year} style={{ display:'grid', gridTemplateColumns:'70px 1fr 88px 88px 88px 104px 104px 96px 116px 128px', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
                   <div style={{ color:'#E0F2FE', fontWeight:900, fontSize:15 }}>{year}년</div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>연봉(만)</label>
-                    <input type="number" value={row.salary ?? ''} onChange={e=>updateSpRsuScenarioRow(year, { salary:e.target.value.replace(/[^0-9]/g,'') })} placeholder="예: 11000" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <input type="text" inputMode="numeric" value={row.salary ?? ''} onChange={e=>updateSpRsuScenarioRow(year, { salary:e.target.value.replace(/[^0-9]/g,'') })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : '예: 11000'} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    {salaryAutoApplied && <div style={{ color:'#7DD3FC', fontSize:10, marginTop:3, fontWeight:800 }}>전년 연봉×총 {rates.total.toFixed(1)}% 자동</div>}
+                  </div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>베업%</label>
+                    <input type="text" inputMode="decimal" value={row.baseUpRaise ?? 3} onChange={e=>updateSpRsuScenarioRow(year, { baseUpRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                  </div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>성과%</label>
+                    <input type="text" inputMode="decimal" value={row.performanceRaise ?? getScenarioPerformanceDefault(year, row.cl)} onChange={e=>updateSpRsuScenarioRow(year, { performanceRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder={String(getScenarioPerformanceDefault(year, row.cl))} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <div style={{ color:'#94A3B8', fontSize:10, marginTop:3 }}>총 {rates.total.toFixed(1)}%</div>
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>직급</label>
-                    <select value={row.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select value={row.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value, performanceRaise:getScenarioPerformanceDefault(year, e.target.value) })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       {['CL1','CL2','CL3','CL4'].map(x=><option key={x} value={x}>{x}</option>)}
                     </select>
                   </div>
