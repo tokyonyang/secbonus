@@ -408,6 +408,95 @@
     .result-card-value-text { font-size: 19px !important; }
   }
 
+
+
+  /* 입력 영역 + 결과 영역 톤 통일 */
+  .sidebar {
+    background: linear-gradient(180deg, rgba(10,16,28,.98), rgba(8,12,20,.96)) !important;
+  }
+  .settings-content,
+  .salary-content {
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+    gap: 14px !important;
+    padding: 20px 18px 34px !important;
+  }
+  .field-box {
+    background: linear-gradient(180deg, rgba(14,21,37,.96), rgba(10,16,28,.94)) !important;
+    border-radius: 18px !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
+    padding: 18px 18px !important;
+    box-shadow: 0 14px 28px rgba(0,0,0,.18);
+  }
+  .field-box > div:first-child {
+    font-size: 11px !important;
+    color: #CFE5FF !important;
+    letter-spacing: 0.08em !important;
+    margin-bottom: 12px !important;
+    font-weight: 900 !important;
+  }
+  .field-box select,
+  .field-box input[type="text"],
+  .field-box input[type="password"],
+  .field-box input[type="email"] {
+    background: linear-gradient(180deg, rgba(11,18,32,1), rgba(13,21,35,1)) !important;
+    border: 1px solid rgba(255,255,255,0.14) !important;
+    border-radius: 12px !important;
+    min-height: 46px;
+    padding: 11px 13px !important;
+    color: #EAF2FF !important;
+    font-size: 15px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+  .field-box select:focus,
+  .field-box input[type="text"]:focus,
+  .field-box input[type="password"]:focus,
+  .field-box input[type="email"]:focus {
+    border-color: rgba(56,189,248,.45) !important;
+    box-shadow: 0 0 0 3px rgba(56,189,248,.12);
+  }
+  .input-info-card {
+    border-radius: 14px !important;
+    padding: 13px 14px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+  .result-panel-root,
+  .settings-content,
+  .salary-content {
+    scroll-padding-top: 76px;
+  }
+  @media (max-width: 1180px) {
+    .settings-content,
+    .salary-content {
+      max-width: 100%;
+      padding: 18px 16px 28px !important;
+    }
+    .field-box { padding: 16px 16px !important; }
+  }
+  @media (max-width: 640px) {
+    .settings-content,
+    .salary-content {
+      padding: 14px 12px 24px !important;
+      gap: 12px !important;
+    }
+    .field-box {
+      padding: 14px 14px !important;
+      border-radius: 16px !important;
+    }
+    .field-box > div:first-child {
+      margin-bottom: 10px !important;
+      font-size: 10px !important;
+    }
+    .field-box select,
+    .field-box input[type="text"],
+    .field-box input[type="password"],
+    .field-box input[type="email"] {
+      min-height: 44px;
+      font-size: 16px !important;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -511,9 +600,10 @@ function Slider({ value, min, max, step, onChange, color="#00C6FF" }) {
 function FieldBox({ label, children, accent }) {
   return (
       <div className="field-box" style={{
-        background:"rgba(255,255,255,0.04)",
+        background:"linear-gradient(180deg, rgba(14,21,37,.96), rgba(10,16,28,.94))",
         border:`1px solid ${accent||"rgba(255,255,255,0.1)"}`,
-        borderRadius:14, padding:"14px 16px"
+        borderRadius:18, padding:"18px 18px",
+        boxShadow:"0 14px 28px rgba(0,0,0,.18)"
       }}>
       {label && (
         <div style={{ fontSize:10, color:"#CBD5E1", letterSpacing:"0.12em", marginBottom:10, fontWeight:800, textTransform:"uppercase" }}>
@@ -2264,9 +2354,9 @@ function App() {
   const r = calc();
 
   const sBase = {
-    inBox: { background:"#0e1525", border:"1px solid rgba(255,255,255,0.1)", borderRadius:11, padding:"11px 13px" },
+    inBox: { background:"linear-gradient(180deg, rgba(14,21,37,.94), rgba(10,16,28,.92))", border:"1px solid rgba(255,255,255,0.10)", borderRadius:14, padding:"13px 14px", boxShadow:"inset 0 1px 0 rgba(255,255,255,.02)" },
     row: { display:"flex", justifyContent:"space-between", alignItems:"center" },
-    select: { width:"100%", background:"#0e1525", border:"1px solid rgba(255,255,255,0.14)", borderRadius:10, padding:"10px 13px", color:"#e8eaf0", fontSize:14, fontWeight:700, fontFamily:"inherit", outline:"none", cursor:"pointer" },
+    select: { width:"100%", background:"linear-gradient(180deg, rgba(11,18,32,1), rgba(13,21,35,1))", border:"1px solid rgba(255,255,255,0.14)", borderRadius:12, padding:"11px 13px", color:"#e8eaf0", fontSize:14, fontWeight:700, fontFamily:"inherit", outline:"none", cursor:"pointer", boxShadow:"inset 0 1px 0 rgba(255,255,255,.02)" },
   };
 
   const multiTagHtml = r.perf > 1.0
@@ -4102,12 +4192,12 @@ function App() {
               </div>
             </div>
             <div style={{ marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              <div style={{ ...sBase.inBox, background:"rgba(0,198,255,0.055)", borderColor:"rgba(0,198,255,0.18)" }}>
+              <div className="input-info-card" style={{ ...sBase.inBox, background:"rgba(0,198,255,0.055)", borderColor:"rgba(0,198,255,0.18)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>연차 정보</div>
                 <div style={{ fontSize:18, fontWeight:900, color:"#7DD3FC" }}>{formatCl(myCl)} {currentClYearForMain || '-'}년차</div>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>저장된 진급연도 또는 2026 기준 연차로 자동 추정</div>
               </div>
-              <div style={{ ...sBase.inBox, background: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.075)" : "rgba(255,255,255,0.03)", borderColor: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.28)" : "rgba(255,255,255,0.08)" }}>
+              <div className="input-info-card" style={{ ...sBase.inBox, background: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.075)" : "rgba(255,255,255,0.03)", borderColor: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.28)" : "rgba(255,255,255,0.08)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>진급 대상 참고</div>
                 {currentEligibilityForMain ? (
                   <>
