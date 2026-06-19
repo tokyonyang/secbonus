@@ -456,6 +456,10 @@
     border-color: rgba(56,189,248,.45) !important;
     box-shadow: 0 0 0 3px rgba(56,189,248,.12);
   }
+  .field-box .chip-group button,
+  .field-box .chip-button {
+    border-radius: 12px !important;
+  }
   .input-info-card {
     border-radius: 14px !important;
     padding: 13px 14px !important;
@@ -495,6 +499,98 @@
       min-height: 44px;
       font-size: 16px !important;
     }
+  }
+
+
+
+  /* OPI-2/RSU 연도별 입력 카드 PC 정리 */
+  .sp-scenario-card {
+    background: linear-gradient(180deg, rgba(17,26,43,.96), rgba(13,21,35,.94));
+    border: 1px solid rgba(255,255,255,.095);
+    border-radius: 18px;
+    padding: 16px 16px 15px;
+    box-shadow: 0 14px 30px rgba(0,0,0,.18);
+  }
+  .sp-scenario-card-head {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding-bottom:13px;
+    margin-bottom:13px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .sp-scenario-year {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    color:#E0F2FE;
+    font-weight:900;
+    font-size:20px;
+    letter-spacing:-0.03em;
+  }
+  .sp-scenario-badge {
+    color:#86EFAC;
+    font-size:11px;
+    background:rgba(34,197,94,.12);
+    border:1px solid rgba(34,197,94,.22);
+    border-radius:999px;
+    padding:4px 8px;
+    letter-spacing:0;
+  }
+  .sp-scenario-result {
+    min-width:178px;
+    border-radius:14px;
+    padding:10px 13px;
+    text-align:right;
+    border:1px solid rgba(255,255,255,.10);
+  }
+  .sp-scenario-result div { font-size:11px; font-weight:900; margin-bottom:3px; }
+  .sp-scenario-result strong { display:block; font-size:20px; line-height:1.08; letter-spacing:-0.04em; }
+  .sp-scenario-result.is-ok { background:rgba(34,197,94,.12); color:#BBF7D0; }
+  .sp-scenario-result.is-ok div { color:#86EFAC; }
+  .sp-scenario-result.is-warn { background:rgba(239,68,68,.10); color:#FECACA; }
+  .sp-scenario-result.is-warn div { color:#FCA5A5; }
+  .sp-scenario-primary-grid {
+    display:grid;
+    grid-template-columns:minmax(180px,1.35fr) minmax(110px,.72fr) minmax(110px,.72fr) minmax(120px,.82fr) minmax(130px,.92fr);
+    gap:12px;
+    align-items:start;
+  }
+  .sp-scenario-secondary-grid {
+    display:grid;
+    grid-template-columns:minmax(130px,.75fr) minmax(170px,1fr) minmax(150px,.85fr);
+    gap:12px;
+    align-items:start;
+    margin-top:12px;
+    max-width:560px;
+  }
+  .scenario-field label {
+    display:block;
+    color:#BFD2EA;
+    font-size:11px;
+    margin-bottom:6px;
+    font-weight:800;
+  }
+  .scenario-help { color:#94A3B8; font-size:10px; margin-top:4px; line-height:1.25; font-weight:700; }
+  .scenario-help.ok { color:#86EFAC; }
+  .scenario-help.info { color:#7DD3FC; }
+  .sp-scenario-card input,
+  .sp-scenario-card select {
+    min-height:42px;
+    border-radius:12px !important;
+  }
+  @media (max-width:1180px) {
+    .sp-scenario-primary-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .sp-scenario-secondary-grid { grid-template-columns:repeat(3,minmax(0,1fr)); max-width:none; }
+  }
+  @media (max-width:768px) {
+    .sp-scenario-card { padding:14px; border-radius:16px; }
+    .sp-scenario-card-head { align-items:flex-start; flex-direction:column; gap:10px; }
+    .sp-scenario-result { width:100%; min-width:0; text-align:left; }
+    .sp-scenario-primary-grid,
+    .sp-scenario-secondary-grid { grid-template-columns:1fr; gap:10px; }
+    .sp-scenario-year { font-size:18px; }
   }
 
 </style>
@@ -2904,61 +3000,69 @@ function App() {
               const deficitEnabled = year >= 2027 && (effectiveRow.division || 'memory') === 'lepan';
               const cl4RatingEnabled = normalizeCl(effectiveRow.cl || 'CL3') === 'CL4';
               return (
-                <div key={year} style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(128px,1fr))', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
-                  <div style={{ color:'#E0F2FE', fontWeight:900, fontSize:15, alignSelf:'center' }}>
-                    {year}년
-                    {savedRec && <div style={{ display:'inline-block', marginLeft:6, color:'#86EFAC', fontSize:10, background:'rgba(34,197,94,.12)', border:'1px solid rgba(34,197,94,.22)', borderRadius:999, padding:'3px 6px', verticalAlign:'middle' }}>연봉저장 연동</div>}
+                <div key={year} className="sp-scenario-card">
+                  <div className="sp-scenario-card-head">
+                    <div className="sp-scenario-year">
+                      <span>{year}년</span>
+                      {savedRec && <span className="sp-scenario-badge">연봉저장 연동</span>}
+                    </div>
+                    <div className={eligible ? 'sp-scenario-result is-ok' : 'sp-scenario-result is-warn'}>
+                      <div>{eligible ? 'OPI-2 예상' : 'OPI-2 미달/연봉확인'}</div>
+                      <strong>{fmtM(spNet)}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>연봉(만)</label>
-                    <DraftNumberInput inputMode="numeric" disabled={!!savedRec} value={savedRec ? String(scenarioSalaryForRow || '') : (row.salary ?? '')} onCommit={v=>updateSpRsuScenarioRow(year, { salary:v })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : (savedRec?.contract_salary_man ? `저장값 ${comma(savedRec.contract_salary_man)}` : '예: 11000')} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
-                    {savedRec ? <div style={{ color:'#86EFAC', fontSize:10, marginTop:3, fontWeight:800 }}>개인 연봉저장값 우선 반영</div> : (salaryAutoApplied && <div style={{ color:'#7DD3FC', fontSize:10, marginTop:3, fontWeight:800 }}>전년 연봉×총 {rates.total.toFixed(1)}% 자동</div>)}
+
+                  <div className="sp-scenario-primary-grid">
+                    <div className="scenario-field scenario-field-salary">
+                      <label>연봉(만)</label>
+                      <DraftNumberInput inputMode="numeric" disabled={!!savedRec} value={savedRec ? String(scenarioSalaryForRow || '') : (row.salary ?? '')} onCommit={v=>updateSpRsuScenarioRow(year, { salary:v })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : (savedRec?.contract_salary_man ? `저장값 ${comma(savedRec.contract_salary_man)}` : '예: 11000')} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                      {savedRec ? <div className="scenario-help ok">개인 연봉저장값 우선 반영</div> : (salaryAutoApplied && <div className="scenario-help info">전년 연봉×총 {rates.total.toFixed(1)}% 자동</div>)}
+                    </div>
+                    <div className="scenario-field">
+                      <label>베이스업</label>
+                      <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.baseUpRaise ?? 0) : (row.baseUpRaise ?? 3)} onCommit={v=>updateSpRsuScenarioRow(year, { baseUpRaise:v })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    </div>
+                    <div className="scenario-field">
+                      <label>성과%</label>
+                      <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.performanceRaise ?? 0) : (row.performanceRaise ?? getScenarioPerformanceDefault(year, effectiveRow.cl))} onCommit={v=>updateSpRsuScenarioRow(year, { performanceRaise:v })} placeholder={String(getScenarioPerformanceDefault(year, effectiveRow.cl))} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                      <div className="scenario-help">총 {rates.total.toFixed(1)}%</div>
+                    </div>
+                    <div className="scenario-field">
+                      <label>직급</label>
+                      <select disabled={!!savedRec} value={effectiveRow.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value, performanceRaise:getScenarioPerformanceDefault(year, e.target.value) })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                        {['CL1','CL2','CL3','CL4'].map(x=><option key={x} value={x}>{x}</option>)}
+                      </select>
+                    </div>
+                    <div className="scenario-field">
+                      <label>사업부</label>
+                      <select disabled={!!savedRec} value={effectiveRow.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, divisionManual:true, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                        <option value="memory">메모리</option>
+                        <option value="common">공통</option>
+                        <option value="lepan">르팡</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>베업%</label>
-                    <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.baseUpRaise ?? 0) : (row.baseUpRaise ?? 3)} onCommit={v=>updateSpRsuScenarioRow(year, { baseUpRaise:v })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
-                  </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>성과%</label>
-                    <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.performanceRaise ?? 0) : (row.performanceRaise ?? getScenarioPerformanceDefault(year, effectiveRow.cl))} onCommit={v=>updateSpRsuScenarioRow(year, { performanceRaise:v })} placeholder={String(getScenarioPerformanceDefault(year, effectiveRow.cl))} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
-                    <div style={{ color:'#94A3B8', fontSize:10, marginTop:3 }}>총 {rates.total.toFixed(1)}%</div>
-                  </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>직급</label>
-                    <select disabled={!!savedRec} value={effectiveRow.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value, performanceRaise:getScenarioPerformanceDefault(year, e.target.value) })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
-                      {['CL1','CL2','CL3','CL4'].map(x=><option key={x} value={x}>{x}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>사업부</label>
-                    <select disabled={!!savedRec} value={effectiveRow.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, divisionManual:true, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
-                      <option value="memory">메모리</option>
-                      <option value="common">공통</option>
-                      <option value="lepan">르팡</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>적자여부</label>
-                    <select disabled={!deficitEnabled} value={deficitEnabled ? (effectiveRow.deficit || 'none') : 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:deficitEnabled?'#0b1220':'rgba(15,23,42,.45)', color:deficitEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
-                      <option value="none">해당없음</option>
-                      <option value="lepan">르팡적자</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>CL4 고과</label>
-                    <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (effectiveRow.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(15,23,42,.45)', color:cl4RatingEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
-                      <option value="MT">MT</option>
-                      <option value="ES">ES +10%</option>
-                      <option value="EM">EM +20%</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ color:'#CBD5E1', fontSize:11 }}>DS영업이익(조)</label>
-                    <DraftNumberInput inputMode="decimal" value={row.profit ?? ''} onCommit={v=>updateSpRsuScenarioRow(year, { profit:v })} placeholder="200" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
-                  </div>
-                  <div style={{ background:eligible?'rgba(34,197,94,.12)':'rgba(239,68,68,.10)', border:'1px solid rgba(255,255,255,.09)', borderRadius:11, padding:'9px 10px' }}>
-                    <div style={{ color:eligible?'#86EFAC':'#FCA5A5', fontSize:11, fontWeight:900 }}>{eligible ? 'OPI-2 예상' : 'OPI-2 미달/연봉확인'}</div>
-                    <div style={{ color:eligible?'#BBF7D0':'#FECACA', fontSize:16, fontWeight:900 }}>{fmtM(spNet)}</div>
+
+                  <div className="sp-scenario-secondary-grid">
+                    <div className="scenario-field">
+                      <label>CL4 고과</label>
+                      <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (effectiveRow.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(15,23,42,.45)', color:cl4RatingEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                        <option value="MT">MT</option>
+                        <option value="ES">ES +10%</option>
+                        <option value="EM">EM +20%</option>
+                      </select>
+                    </div>
+                    <div className="scenario-field">
+                      <label>DS영업이익(조)</label>
+                      <DraftNumberInput inputMode="decimal" value={row.profit ?? ''} onCommit={v=>updateSpRsuScenarioRow(year, { profit:v })} placeholder="200" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    </div>
+                    <div className="scenario-field">
+                      <label>적자여부</label>
+                      <select disabled={!deficitEnabled} value={deficitEnabled ? (effectiveRow.deficit || 'none') : 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:deficitEnabled?'#0b1220':'rgba(15,23,42,.45)', color:deficitEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                        <option value="none">해당없음</option>
+                        <option value="lepan">르팡적자</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               );
@@ -4192,12 +4296,12 @@ function App() {
               </div>
             </div>
             <div style={{ marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              <div className="input-info-card" style={{ ...sBase.inBox, background:"rgba(0,198,255,0.055)", borderColor:"rgba(0,198,255,0.18)" }}>
+              <div style={{ className:"input-info-card", ...sBase.inBox, background:"rgba(0,198,255,0.055)", borderColor:"rgba(0,198,255,0.18)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>연차 정보</div>
                 <div style={{ fontSize:18, fontWeight:900, color:"#7DD3FC" }}>{formatCl(myCl)} {currentClYearForMain || '-'}년차</div>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>저장된 진급연도 또는 2026 기준 연차로 자동 추정</div>
               </div>
-              <div className="input-info-card" style={{ ...sBase.inBox, background: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.075)" : "rgba(255,255,255,0.03)", borderColor: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.28)" : "rgba(255,255,255,0.08)" }}>
+              <div style={{ className:"input-info-card", ...sBase.inBox, background: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.075)" : "rgba(255,255,255,0.03)", borderColor: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.28)" : "rgba(255,255,255,0.08)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>진급 대상 참고</div>
                 {currentEligibilityForMain ? (
                   <>
@@ -4249,7 +4353,7 @@ function App() {
                 <NumInput value={performanceRaise} onChange={handlePerformanceRaiseChange} step={0.1} min={-99.9} max={100}/>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>베이스업과 합산 반영</div>
               </div>
-              <div style={{ ...sBase.inBox, borderColor:"rgba(0,198,255,0.24)", background:"rgba(0,198,255,0.06)" }}>
+              <div style={{ className:"input-info-card", ...sBase.inBox, borderColor:"rgba(0,198,255,0.24)", background:"rgba(0,198,255,0.06)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>총 임금인상률(%)</div>
                 <NumInput value={myRaise} onChange={handleTotalRaiseChange} step={0.1} min={-99.9} max={100} color="#38BDF8" size={20}/>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>입력 시 업무성과 = 총 인상률 - 베이스업</div>
@@ -4263,7 +4367,7 @@ function App() {
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>전년도 원천징수(만)</div>
                 <NumInput value={prevWithholding} onChange={setPrevWithholding} step={100} color="#00DC82" min={0}/>
               </div>
-              <div style={{ ...sBase.inBox, borderColor: r.excessCash > 0 ? "rgba(255,107,107,0.35)" : "rgba(255,255,255,0.08)", background: r.excessCash > 0 ? "rgba(255,107,107,0.08)" : "rgba(255,255,255,0.03)" }}>
+              <div style={{ className:"input-info-card", ...sBase.inBox, borderColor: r.excessCash > 0 ? "rgba(255,107,107,0.35)" : "rgba(255,255,255,0.08)", background: r.excessCash > 0 ? "rgba(255,107,107,0.08)" : "rgba(255,255,255,0.03)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>연봉상한초과분 지급액(만)</div>
                 <div style={{ fontSize:20, fontWeight:900, color: r.excessCash > 0 ? "#FF6B6B" : "#94A3B8" }}>{comma(r.excessCash || 0)}</div>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>상한 초과 시 1회성 현금 성과급</div>
