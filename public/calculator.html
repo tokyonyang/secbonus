@@ -848,6 +848,18 @@ function App() {
   const getPromotionTargetFromCl = (cl) => normalizeCl(cl) === 'CL2' ? 'CL3' : normalizeCl(cl) === 'CL3' ? 'CL4' : '';
 
   const findRecordByYear = (records, year) => (records || []).find(rec => Number(rec.year) === Number(year));
+
+  const todayDate = new Date();
+  const todayIso = todayDate.toISOString().slice(0, 10);
+  const todayLabel = todayDate.toLocaleDateString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit' });
+  const getSpConfirmDate = (year) => new Date(Number(year) + 1, 0, 31);
+  const getSpecialSpStatusForYear = (year, asOf = todayDate) => asOf >= getSpConfirmDate(year) ? '확정' : '예상';
+  const getSpecialSpStatusColor = (status) => status === '확정' ? '#86EFAC' : '#FDE68A';
+  const getRecordSpecialSpNet = (year, records = salaryRecords) => {
+    const rec = findRecordByYear(records, Number(year));
+    const value = Math.round(Number(rec?.special_sp_net_man ?? 0) || 0);
+    return value > 0 ? value : 0;
+  };
   const getRecordClYear = (rec) => {
     const v = Math.round(Number(rec?.cl_year ?? rec?.clYear ?? 0));
     return v > 0 ? v : null;
@@ -991,6 +1003,7 @@ function App() {
   const [salaryManualPromotionTo, setSalaryManualPromotionTo] = useState("CL3");
   const [salaryManualPromotionRate, setSalaryManualPromotionRate] = useState(5);
   const [salaryManualBizBonus, setSalaryManualBizBonus] = useState(0);
+  const [salaryManualSpecialSpNet, setSalaryManualSpecialSpNet] = useState(0);
   const [salaryManualDsPsRate, setSalaryManualDsPsRate] = useState(0);
   const [salaryManualPiRate, setSalaryManualPiRate] = useState(100); // 전년도 PI: 기준급 100% × 2회 기본
   const [salaryManualWithholdingAuto, setSalaryManualWithholdingAuto] = useState(true);
@@ -1214,6 +1227,9 @@ function App() {
           promotionRaiseRate: savePromotionRate,
           dsPsRate: saveDsPsRate,
           businessPerformanceBonusMan: Math.round(Number(isManual ? salaryManualBizBonus : bizPerfBonus) || 0),
+          specialSpNetMan: Math.round(Number(isManual ? salaryManualSpecialSpNet : r.spNet) || 0),
+          specialSpStatus: getSpecialSpStatusForYear(recordYear),
+          specialSpReferenceDate: todayIso,
           withholdingIncomeMan: Math.round(Number(isManual ? salaryManualWithholding : prevWithholding) || 0),
           withholdingPiRate: isManual ? roundRaise(salaryManualPiRate) : 100,
           withholdingPsMan: defaultWithholdingForSave ? defaultWithholdingForSave.psMan : 0,
@@ -1266,6 +1282,7 @@ function App() {
     setSalaryManualPromotionTo(rec.promotion_to_cl || 'CL3');
     setSalaryManualPromotionRate(Number(rec.promotion_raise_rate ?? 5));
     setSalaryManualBizBonus(Math.round(Number(rec.business_performance_bonus_man) || 0));
+    setSalaryManualSpecialSpNet(Math.round(Number(rec.special_sp_net_man) || 0));
     setSalaryManualDsPsRate(Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0));
     setSalaryManualPiRate(Number(rec.withholding_pi_rate ?? 100));
     setSalaryManualWithholdingAuto(false);
@@ -1749,10 +1766,19 @@ function App() {
 
   const EquityRewardSimContent = () => {
     const parseManInput = (value) => Math.max(0, Math.round(Number(String(value ?? '').replace(/,/g,'')) || 0));
+    const targetSpYear = Number(simYear || 2026);
     const spBaseNet = Math.round(Number(r.spNet || 0));
-    const specialNet = Number(specialCashOverrideMan) > 0 ? Math.round(Number(specialCashOverrideMan)) : spBaseNet;
-    const prevOneSpNet = Math.round(Number(recentSpOneYearMan) || 0);
-    const prevTwoSpNet = Math.round(Number(recentSpTwoYearMan) || 0);
+    const currentSavedSpNet = getRecordSpecialSpNet(targetSpYear);
+    const prevOneSavedSpNet = getRecordSpecialSpNet(targetSpYear - 1);
+    const prevTwoSavedSpNet = getRecordSpecialSpNet(targetSpYear - 2);
+    const specialNet = Number(specialCashOverrideMan) > 0 ? Math.round(Number(specialCashOverrideMan)) : (currentSavedSpNet || spBaseNet);
+    const prevOneSpNet = prevOneSavedSpNet || Math.round(Number(recentSpOneYearMan) || 0);
+    const prevTwoSpNet = prevTwoSavedSpNet || Math.round(Number(recentSpTwoYearMan) || 0);
+    const spYearRefs = [
+      { year: targetSpYear, amount: specialNet, saved: currentSavedSpNet, fallback: spBaseNet, status: getSpecialSpStatusForYear(targetSpYear) },
+      { year: targetSpYear - 1, amount: prevOneSpNet, saved: prevOneSavedSpNet, fallback: Math.round(Number(recentSpOneYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 1) },
+      { year: targetSpYear - 2, amount: prevTwoSpNet, saved: prevTwoSavedSpNet, fallback: Math.round(Number(recentSpTwoYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 2) },
+    ];
 
     const splitThirds = (amount) => {
       const first = Math.round(amount / 3);
@@ -1764,7 +1790,7 @@ function App() {
     const [, prevOneSp2, prevOneSp3] = splitThirds(prevOneSpNet);
     const [, , prevTwoSp3] = splitThirds(prevTwoSpNet);
 
-    const spSaleBaseYear = Number(simYear || 2026) + 1;
+    const spSaleBaseYear = targetSpYear + 1;
     const spSchedule = [
       {
         date:`${spSaleBaseYear}년 1월 31일 이후`,
@@ -1772,7 +1798,7 @@ function App() {
         prev1:prevOneSp2,
         prev2:prevTwoSp3,
         amount:currentSp1 + prevOneSp2 + prevTwoSp3,
-        desc:`${simYear}년 SP 1/3 + ${Number(simYear)-1}년 이월 1/3 + ${Number(simYear)-2}년 이월 1/3`,
+        desc:`${targetSpYear}년 SP 1/3 + ${targetSpYear-1}년 이월 1/3 + ${targetSpYear-2}년 이월 1/3`,
       },
       {
         date:`${spSaleBaseYear + 1}년 1월 31일 이후`,
@@ -1780,7 +1806,7 @@ function App() {
         prev1:prevOneSp3,
         prev2:0,
         amount:currentSp2 + prevOneSp3,
-        desc:`${simYear}년 SP 1/3 + ${Number(simYear)-1}년 이월 1/3`,
+        desc:`${targetSpYear}년 SP 1/3 + ${targetSpYear-1}년 이월 1/3`,
       },
       {
         date:`${spSaleBaseYear + 2}년 1월 31일 이후`,
@@ -1788,7 +1814,7 @@ function App() {
         prev1:0,
         prev2:0,
         amount:currentSp3,
-        desc:`${simYear}년 SP 1/3`,
+        desc:`${targetSpYear}년 SP 1/3`,
       },
     ];
     const spNextYearPayout = spSchedule[0]?.amount || 0;
@@ -1858,7 +1884,7 @@ function App() {
     const multiplierLabel = psuGrowthRate < 20 ? '0배' : `${psuMultiplier}배`;
     const rows = [
       { label:'다음 지급연도 SP', desc:`${spSaleBaseYear}년 수령/매도 가능액 · 전년도 이월분 포함`, values:fmtM(spNextYearPayout) },
-      { label:'SP 향후 매도 가능 합계', desc:`${simYear}년 SP + 최근 2년 이월 잔여분`, values:fmtM(spFuturePayoutTotal) },
+      { label:'SP 향후 매도 가능 합계', desc:`${targetSpYear}년 SP + 최근 2년 이월 잔여분`, values:fmtM(spFuturePayoutTotal) },
       { label:'RSU/PSU 지급 주식', desc:rsuEligible ? `${normalizeCl(myCl)} 기준 기초 ${baseShareCount}주 × ${multiplierLabel}` : '25.10.15 재직/약정 조건 미충족', values:`${comma(finalShareCount)}주 · 세전 ${fmtM(rsuGrossFutureMan)} · 세후 ${fmtM(rsuNetFutureMan)}` },
     ];
     return (
@@ -1866,13 +1892,13 @@ function App() {
         <div style={{ marginBottom:18 }}>
           <div style={{ fontSize:11, color:'#FFB400', letterSpacing:'0.12em', fontWeight:900, marginBottom:4 }}>REWARD SIMULATION</div>
           <div style={{ fontSize:20, fontWeight:900, background:'linear-gradient(90deg,#fff,#facc15)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:6 }}>🎁 SP · RSU/PSU 총액 예상</div>
-          <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>SP는 산출결과의 <b style={{ color:'#FDE68A' }}>세후 특별성과급</b>과 최근 2년 이월분을 함께 반영합니다. RSU/PSU 예상 기준주가는 현재일 기준 PSU 산식 기준주가를 우선 자동 반영하고, 필요하면 직접 수정할 수 있습니다.</div>
+          <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>SP는 연봉저장에 기록된 <b style={{ color:'#FDE68A' }}>연도별 세후 특별경영성과급</b>을 우선 가져오고, 조회 기준일에 따라 확정/예상을 구분합니다. RSU/PSU 예상 기준주가는 현재일 기준 PSU 산식 기준주가를 우선 자동 반영하고, 필요하면 직접 수정할 수 있습니다.</div>
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:14, marginBottom:14 }} className="two-col-grid">
           <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(255,180,0,.22)', borderRadius:18, padding:16 }}>
             <div style={{ fontSize:15, fontWeight:900, color:'#FACC15', marginBottom:12 }}>SP 특별경영성과급</div>
-            <label style={{ display:'block', color:'#CBD5E1', fontSize:12, marginBottom:6 }}>{simYear}년 세후 SP 수동 지급액(만) · 비워두면 산출결과 세후 SP 사용</label>
+            <label style={{ display:'block', color:'#CBD5E1', fontSize:12, marginBottom:6 }}>{targetSpYear}년 세후 SP 수동 지급액(만) · 비워두면 연봉저장값 또는 산출결과 사용</label>
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
               <input type="text" inputMode="numeric" value={specialCashDraftMan} onChange={e=>setSpecialCashDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={String(spBaseNet || 0)} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
               <button onClick={applySpecialManual} style={{ background:'#16A34A', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
@@ -1880,20 +1906,31 @@ function App() {
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
-              <input type="text" inputMode="numeric" value={recentSpOneYearDraftMan} onChange={e=>setRecentSpOneYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${Number(simYear)-1}년 세후 SP(만)`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <input type="text" inputMode="numeric" value={recentSpOneYearDraftMan} onChange={e=>setRecentSpOneYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${targetSpYear-1}년 세후 SP(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
               <button onClick={applyPrevSpOne} style={{ background:'#2563EB', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetPrevSpOne} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center' }}>
-              <input type="text" inputMode="numeric" value={recentSpTwoYearDraftMan} onChange={e=>setRecentSpTwoYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${Number(simYear)-2}년 세후 SP(만)`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <input type="text" inputMode="numeric" value={recentSpTwoYearDraftMan} onChange={e=>setRecentSpTwoYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${targetSpYear-2}년 세후 SP(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
               <button onClick={applyPrevSpTwo} style={{ background:'#2563EB', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetPrevSpTwo} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
 
             <div style={{ marginTop:10, color:'#94a3b8', fontSize:12, lineHeight:1.6 }}>
-              산출결과 {simYear}년 세후 SP: <b style={{ color:'#FACC15' }}>{fmtM(spBaseNet)}</b> · 현재 적용값: <b style={{ color:'#FACC15' }}>{fmtM(specialNet)}</b><br/>
-              최근 이월 입력: {Number(simYear)-1}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevOneSpNet)}</b>, {Number(simYear)-2}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevTwoSpNet)}</b>
+              산출결과 {targetSpYear}년 세후 SP: <b style={{ color:'#FACC15' }}>{fmtM(spBaseNet)}</b> · 현재 적용값: <b style={{ color:'#FACC15' }}>{fmtM(specialNet)}</b><br/>
+              최근 이월/저장: {targetSpYear-1}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevOneSpNet)}</b>, {targetSpYear-2}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevTwoSpNet)}</b><br/>
+              조회 기준일: <b style={{ color:'#BAE6FD' }}>{todayLabel}</b> · 연봉저장값이 있으면 저장값 우선, 없으면 수동입력/현재 산출값을 사용합니다.
+            </div>
+            <div style={{ marginTop:10, display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
+              {spYearRefs.map(item => (
+                <div key={item.year} style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)', borderRadius:10, padding:9 }}>
+                  <div style={{ color:'#CBD5E1', fontSize:11, fontWeight:900 }}>{item.year}년 SP</div>
+                  <div style={{ color:'#FACC15', fontSize:16, fontWeight:900 }}>{fmtM(item.amount)}</div>
+                  <div style={{ color:getSpecialSpStatusColor(item.status), fontSize:10, fontWeight:900 }}>{todayLabel} 기준 {item.status}</div>
+                  <div style={{ color:'#64748B', fontSize:10, marginTop:2 }}>{item.saved ? '연봉저장값 사용' : (item.fallback ? '산출/수동값 사용' : '미입력')}</div>
+                </div>
+              ))}
             </div>
             <div style={{ marginTop:12, background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.15)', borderRadius:12, padding:12, color:'#FDE68A', fontSize:12, lineHeight:1.6 }}>
               {spSchedule.map((x,i)=><div key={x.date}>{i+1}차: {x.date} · {fmtM(x.amount)} <span style={{ color:'#94a3b8' }}>({x.desc})</span></div>)}
@@ -2647,6 +2684,11 @@ function App() {
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>체결연봉(만)</div><NumInput value={salaryManualContract} onChange={setSalaryManualContract} step={10}/></div>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>업무성과급(만)</div><NumInput value={salaryManualBizBonus} onChange={setSalaryManualBizBonus} step={10}/></div>
+                  <div style={sBase.inBox}>
+                    <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>세후 특별경영성과급 SP(만)</div>
+                    <NumInput value={salaryManualSpecialSpNet} onChange={setSalaryManualSpecialSpNet} step={10}/>
+                    <div style={{ fontSize:10, color:getSpecialSpStatusColor(getSpecialSpStatusForYear(salaryRecordYear)), marginTop:4 }}>{salaryRecordYear}년 SP · {todayLabel} 기준 {getSpecialSpStatusForYear(salaryRecordYear)}</div>
+                  </div>
                   <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>DS PS/OPI 이력(%)</div><NumInput value={salaryManualDsPsRate} onChange={setSalaryManualDsPsRate} step={0.1}/></div>
                   <div style={sBase.inBox}>
                     <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>PS 환산액(만)</div>
