@@ -574,11 +574,17 @@ function App() {
   const [hynixProfitMode, setHynixProfitMode] = useState("same"); // "same" | "70pct"
   const [samsungTaiRate, setSamsungTaiRate] = useState("1.0"); // 삼성 TAI(PI) 비율 (기본값 100%)
 
-  const [rsuGrantAmountMan, setRsuGrantAmountMan] = useState(3000);
-  const [rsuVestingYears, setRsuVestingYears] = useState(3);
-  const [rsuExpectedGrowth, setRsuExpectedGrowth] = useState(5);
   const [rsuTaxRate, setRsuTaxRate] = useState(35);
   const [specialCashOverrideMan, setSpecialCashOverrideMan] = useState(0);
+  const [specialCashDraftMan, setSpecialCashDraftMan] = useState('');
+  const [recentSpOneYearMan, setRecentSpOneYearMan] = useState(0);
+  const [recentSpTwoYearMan, setRecentSpTwoYearMan] = useState(0);
+  const [recentSpOneYearDraftMan, setRecentSpOneYearDraftMan] = useState('');
+  const [recentSpTwoYearDraftMan, setRecentSpTwoYearDraftMan] = useState('');
+  const [rsuEligibleOnGrantDate, setRsuEligibleOnGrantDate] = useState(true);
+  const [rsuAgreementSigned, setRsuAgreementSigned] = useState(true);
+  const [rsuFutureBasePrice, setRsuFutureBasePrice] = useState(0);
+  const [rsuFutureBasePriceManual, setRsuFutureBasePriceManual] = useState(false);
 
   // ── DS 비중 연도별 기본값 (2026~2035 예측) ──────────────────────────────
   const DS_RATIO_DEFAULTS = {
@@ -1492,6 +1498,12 @@ function App() {
   };
 
   useEffect(() => { fetchCurrentPrice(); fetchVwapPrice(); }, []);
+
+  useEffect(() => {
+    if (!rsuFutureBasePriceManual && vwapPrice) {
+      setRsuFutureBasePrice(Math.round(Number(vwapPrice)));
+    }
+  }, [vwapPrice, rsuFutureBasePriceManual]);
   useEffect(() => { loadPreferredStock(); }, [salaryToken]);
 
   const calc = useCallback(() => {
@@ -1736,38 +1748,175 @@ function App() {
 
 
   const EquityRewardSimContent = () => {
-    const specialGross = Number(specialCashOverrideMan) > 0 ? Number(specialCashOverrideMan) : Math.round(Number(r.sp || 0));
-    const specialNet = Math.round(Math.max(0, specialGross * (1 - (Number(r.taxRate || 0) / 100))));
-    const rsuGrossFuture = Math.round((Number(rsuGrantAmountMan) || 0) * Math.pow(1 + (Number(rsuExpectedGrowth) || 0) / 100, Math.max(0, Number(rsuVestingYears) || 0)));
-    const rsuNetFuture = Math.round(rsuGrossFuture * (1 - (Number(rsuTaxRate) || 0) / 100));
-    const totalGross = specialGross + rsuGrossFuture;
-    const totalNet = specialNet + rsuNetFuture;
+    const parseManInput = (value) => Math.max(0, Math.round(Number(String(value ?? '').replace(/,/g,'')) || 0));
+    const spBaseNet = Math.round(Number(r.spNet || 0));
+    const specialNet = Number(specialCashOverrideMan) > 0 ? Math.round(Number(specialCashOverrideMan)) : spBaseNet;
+    const prevOneSpNet = Math.round(Number(recentSpOneYearMan) || 0);
+    const prevTwoSpNet = Math.round(Number(recentSpTwoYearMan) || 0);
+
+    const splitThirds = (amount) => {
+      const first = Math.round(amount / 3);
+      const second = Math.round(amount / 3);
+      const third = Math.max(0, Math.round(amount - first - second));
+      return [first, second, third];
+    };
+    const [currentSp1, currentSp2, currentSp3] = splitThirds(specialNet);
+    const [, prevOneSp2, prevOneSp3] = splitThirds(prevOneSpNet);
+    const [, , prevTwoSp3] = splitThirds(prevTwoSpNet);
+
+    const spSaleBaseYear = Number(simYear || 2026) + 1;
+    const spSchedule = [
+      {
+        date:`${spSaleBaseYear}년 1월 31일 이후`,
+        current:currentSp1,
+        prev1:prevOneSp2,
+        prev2:prevTwoSp3,
+        amount:currentSp1 + prevOneSp2 + prevTwoSp3,
+        desc:`${simYear}년 SP 1/3 + ${Number(simYear)-1}년 이월 1/3 + ${Number(simYear)-2}년 이월 1/3`,
+      },
+      {
+        date:`${spSaleBaseYear + 1}년 1월 31일 이후`,
+        current:currentSp2,
+        prev1:prevOneSp3,
+        prev2:0,
+        amount:currentSp2 + prevOneSp3,
+        desc:`${simYear}년 SP 1/3 + ${Number(simYear)-1}년 이월 1/3`,
+      },
+      {
+        date:`${spSaleBaseYear + 2}년 1월 31일 이후`,
+        current:currentSp3,
+        prev1:0,
+        prev2:0,
+        amount:currentSp3,
+        desc:`${simYear}년 SP 1/3`,
+      },
+    ];
+    const spNextYearPayout = spSchedule[0]?.amount || 0;
+    const spFuturePayoutTotal = spSchedule.reduce((sum, x) => sum + x.amount, 0);
+
+    const psuInitialBasePrice = 85385;
+    const futureBasePrice = Math.max(0, Number(rsuFutureBasePrice) || 0);
+    const psuGrowthRate = psuInitialBasePrice > 0 ? ((futureBasePrice / psuInitialBasePrice) - 1) * 100 : 0;
+    const getPsuMultiplier = (growthPct) => {
+      if (growthPct < 20) return 0;
+      if (growthPct < 40) return 0.5;
+      if (growthPct < 60) return 1;
+      if (growthPct < 80) return 1.3;
+      if (growthPct < 100) return 1.7;
+      return 2;
+    };
+    const rsuEligible = !!rsuEligibleOnGrantDate && !!rsuAgreementSigned;
+    const baseShareCount = ['CL3','CL4'].includes(normalizeCl(myCl)) ? 300 : 200;
+    const psuMultiplier = rsuEligible ? getPsuMultiplier(psuGrowthRate) : 0;
+    const finalShareCount = Math.round(baseShareCount * psuMultiplier * 100) / 100;
+    const rsuGrossFutureWon = Math.round(finalShareCount * futureBasePrice);
+    const rsuGrossFutureMan = Math.round(rsuGrossFutureWon / 10000);
+    const rsuNetFutureMan = Math.round(rsuGrossFutureMan * (1 - (Number(rsuTaxRate) || 0) / 100));
+    const rsuThirdShares = Math.round((finalShareCount / 3) * 100) / 100;
+    const rsuSchedule = [
+      { date:'2028년 10월 13일', shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
+      { date:'2029년 10월 15일', shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
+      { date:'2030년 10월 15일', shares:Math.round((finalShareCount - rsuThirdShares * 2) * 100) / 100, amount:Math.round(((finalShareCount - rsuThirdShares * 2) * futureBasePrice) / 10000) },
+    ];
+    const totalNet = spFuturePayoutTotal + rsuNetFutureMan;
+    const totalGross = spFuturePayoutTotal + rsuGrossFutureMan;
+
+    const applySpecialManual = () => {
+      const value = parseManInput(specialCashDraftMan);
+      setSpecialCashOverrideMan(value);
+      setSpecialCashDraftMan(String(value));
+    };
+    const resetSpecialManual = () => {
+      setSpecialCashOverrideMan(0);
+      setSpecialCashDraftMan('');
+    };
+    const applyPrevSpOne = () => {
+      const value = parseManInput(recentSpOneYearDraftMan);
+      setRecentSpOneYearMan(value);
+      setRecentSpOneYearDraftMan(String(value));
+    };
+    const resetPrevSpOne = () => {
+      setRecentSpOneYearMan(0);
+      setRecentSpOneYearDraftMan('');
+    };
+    const applyPrevSpTwo = () => {
+      const value = parseManInput(recentSpTwoYearDraftMan);
+      setRecentSpTwoYearMan(value);
+      setRecentSpTwoYearDraftMan(String(value));
+    };
+    const resetPrevSpTwo = () => {
+      setRecentSpTwoYearMan(0);
+      setRecentSpTwoYearDraftMan('');
+    };
+    const applyAutoPsuBasePrice = () => {
+      if (vwapPrice) {
+        setRsuFutureBasePrice(Math.round(Number(vwapPrice)));
+        setRsuFutureBasePriceManual(false);
+      }
+    };
+
+    const multiplierLabel = psuGrowthRate < 20 ? '0배' : `${psuMultiplier}배`;
     const rows = [
-      { label:'특별경영성과급', gross:specialGross, net:specialNet, desc: Number(specialCashOverrideMan) > 0 ? '수동 입력값 기준' : '현재 시뮬레이션 SP 산출값 기준' },
-      { label:'RSU 예상가치', gross:rsuGrossFuture, net:rsuNetFuture, desc:`부여액 ${comma(rsuGrantAmountMan)}만원 · ${rsuVestingYears}년 · 연 ${rsuExpectedGrowth}% 가정` },
+      { label:'다음 지급연도 SP', desc:`${spSaleBaseYear}년 수령/매도 가능액 · 전년도 이월분 포함`, values:fmtM(spNextYearPayout) },
+      { label:'SP 향후 매도 가능 합계', desc:`${simYear}년 SP + 최근 2년 이월 잔여분`, values:fmtM(spFuturePayoutTotal) },
+      { label:'RSU/PSU 지급 주식', desc:rsuEligible ? `${normalizeCl(myCl)} 기준 기초 ${baseShareCount}주 × ${multiplierLabel}` : '25.10.15 재직/약정 조건 미충족', values:`${comma(finalShareCount)}주 · 세전 ${fmtM(rsuGrossFutureMan)} · 세후 ${fmtM(rsuNetFutureMan)}` },
     ];
     return (
       <div style={{ maxWidth:900, margin:'0 auto', padding:'20px 18px 60px', width:'100%' }}>
         <div style={{ marginBottom:18 }}>
           <div style={{ fontSize:11, color:'#FFB400', letterSpacing:'0.12em', fontWeight:900, marginBottom:4 }}>REWARD SIMULATION</div>
-          <div style={{ fontSize:20, fontWeight:900, background:'linear-gradient(90deg,#fff,#facc15)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:6 }}>🎁 특별경영성과급 · RSU 총액 예상</div>
-          <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>현재 계산기의 특별경영성과급 산출값과 별도 RSU 지급 가정을 합산해 총 지급 예상액을 봅니다. 실제 세율·주가·지급조건에 따라 달라질 수 있습니다.</div>
+          <div style={{ fontSize:20, fontWeight:900, background:'linear-gradient(90deg,#fff,#facc15)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:6 }}>🎁 SP · RSU/PSU 총액 예상</div>
+          <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>SP는 산출결과의 <b style={{ color:'#FDE68A' }}>세후 특별성과급</b>과 최근 2년 이월분을 함께 반영합니다. RSU/PSU 예상 기준주가는 현재일 기준 PSU 산식 기준주가를 우선 자동 반영하고, 필요하면 직접 수정할 수 있습니다.</div>
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:14, marginBottom:14 }} className="two-col-grid">
           <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(255,180,0,.22)', borderRadius:18, padding:16 }}>
-            <div style={{ fontSize:15, fontWeight:900, color:'#FACC15', marginBottom:12 }}>특별경영성과급</div>
-            <label style={{ display:'block', color:'#CBD5E1', fontSize:12, marginBottom:6 }}>수동 지급액(만) · 0이면 현재 SP 산출값 사용</label>
-            <input type="number" value={specialCashOverrideMan} onChange={e=>setSpecialCashOverrideMan(Number(e.target.value)||0)} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
-            <div style={{ marginTop:10, color:'#94a3b8', fontSize:12, lineHeight:1.6 }}>현재 SP 산출값: <b style={{ color:'#FACC15' }}>{fmtM(r.sp || 0)}</b> · 예상 세율 {Number(r.taxRate || 0).toFixed(1)}%</div>
+            <div style={{ fontSize:15, fontWeight:900, color:'#FACC15', marginBottom:12 }}>SP 특별경영성과급</div>
+            <label style={{ display:'block', color:'#CBD5E1', fontSize:12, marginBottom:6 }}>{simYear}년 세후 SP 수동 지급액(만) · 비워두면 산출결과 세후 SP 사용</label>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
+              <input type="text" inputMode="numeric" value={specialCashDraftMan} onChange={e=>setSpecialCashDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={String(spBaseNet || 0)} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
+              <button onClick={applySpecialManual} style={{ background:'#16A34A', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
+              <button onClick={resetSpecialManual} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
+              <input type="text" inputMode="numeric" value={recentSpOneYearDraftMan} onChange={e=>setRecentSpOneYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${Number(simYear)-1}년 세후 SP(만)`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <button onClick={applyPrevSpOne} style={{ background:'#2563EB', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
+              <button onClick={resetPrevSpOne} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center' }}>
+              <input type="text" inputMode="numeric" value={recentSpTwoYearDraftMan} onChange={e=>setRecentSpTwoYearDraftMan(e.target.value.replace(/[^0-9]/g,''))} placeholder={`${Number(simYear)-2}년 세후 SP(만)`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <button onClick={applyPrevSpTwo} style={{ background:'#2563EB', color:'#fff', border:0, borderRadius:12, padding:'12px 14px', fontWeight:900 }}>적용</button>
+              <button onClick={resetPrevSpTwo} style={{ background:'rgba(255,255,255,.08)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 14px', fontWeight:900 }}>리셋</button>
+            </div>
+
+            <div style={{ marginTop:10, color:'#94a3b8', fontSize:12, lineHeight:1.6 }}>
+              산출결과 {simYear}년 세후 SP: <b style={{ color:'#FACC15' }}>{fmtM(spBaseNet)}</b> · 현재 적용값: <b style={{ color:'#FACC15' }}>{fmtM(specialNet)}</b><br/>
+              최근 이월 입력: {Number(simYear)-1}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevOneSpNet)}</b>, {Number(simYear)-2}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevTwoSpNet)}</b>
+            </div>
+            <div style={{ marginTop:12, background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.15)', borderRadius:12, padding:12, color:'#FDE68A', fontSize:12, lineHeight:1.6 }}>
+              {spSchedule.map((x,i)=><div key={x.date}>{i+1}차: {x.date} · {fmtM(x.amount)} <span style={{ color:'#94a3b8' }}>({x.desc})</span></div>)}
+            </div>
           </div>
+
           <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(167,139,250,.22)', borderRadius:18, padding:16 }}>
-            <div style={{ fontSize:15, fontWeight:900, color:'#C4B5FD', marginBottom:12 }}>RSU 지급 가정</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9 }}>
-              <div><label style={{ color:'#CBD5E1', fontSize:12 }}>부여액(만)</label><input type="number" value={rsuGrantAmountMan} onChange={e=>setRsuGrantAmountMan(Number(e.target.value)||0)} style={{ width:'100%', marginTop:5, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'10px', fontWeight:900 }} /></div>
-              <div><label style={{ color:'#CBD5E1', fontSize:12 }}>베스팅(년)</label><input type="number" value={rsuVestingYears} onChange={e=>setRsuVestingYears(Number(e.target.value)||0)} style={{ width:'100%', marginTop:5, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'10px', fontWeight:900 }} /></div>
-              <div><label style={{ color:'#CBD5E1', fontSize:12 }}>연 주가상승률(%)</label><input type="number" value={rsuExpectedGrowth} onChange={e=>setRsuExpectedGrowth(Number(e.target.value)||0)} style={{ width:'100%', marginTop:5, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'10px', fontWeight:900 }} /></div>
+            <div style={{ fontSize:15, fontWeight:900, color:'#C4B5FD', marginBottom:12 }}>RSU/PSU 지급 조건</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:10 }}>
+              <button onClick={()=>setRsuEligibleOnGrantDate(!rsuEligibleOnGrantDate)} style={{ background:rsuEligibleOnGrantDate?'rgba(34,197,94,.18)':'rgba(239,68,68,.12)', color:rsuEligibleOnGrantDate?'#86EFAC':'#FCA5A5', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'11px', fontWeight:900 }}>25.10.15 재직 {rsuEligibleOnGrantDate?'ON':'OFF'}</button>
+              <button onClick={()=>setRsuAgreementSigned(!rsuAgreementSigned)} style={{ background:rsuAgreementSigned?'rgba(34,197,94,.18)':'rgba(239,68,68,.12)', color:rsuAgreementSigned?'#86EFAC':'#FCA5A5', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'11px', fontWeight:900 }}>약정 체결 {rsuAgreementSigned?'ON':'OFF'}</button>
+              <div><label style={{ color:'#CBD5E1', fontSize:12 }}>기준주가 2025.10.15</label><input type="number" value={psuInitialBasePrice} readOnly style={{ width:'100%', marginTop:5, background:'rgba(255,255,255,.04)', color:'#CBD5E1', border:'1px solid rgba(255,255,255,.08)', borderRadius:10, padding:'10px', fontWeight:900 }} /></div>
+              <div>
+                <label style={{ color:'#CBD5E1', fontSize:12 }}>현재 기준 RSU 예상 기준주가</label>
+                <input type="number" value={rsuFutureBasePrice} onChange={e=>{ setRsuFutureBasePriceManual(true); setRsuFutureBasePrice(Number(e.target.value)||0); }} style={{ width:'100%', marginTop:5, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'10px', fontWeight:900 }} />
+                <button onClick={applyAutoPsuBasePrice} disabled={!vwapPrice} style={{ marginTop:6, width:'100%', background:vwapPrice?'rgba(167,139,250,.16)':'rgba(255,255,255,.05)', color:vwapPrice?'#DDD6FE':'#64748B', border:'1px solid rgba(167,139,250,.18)', borderRadius:9, padding:'7px 8px', fontSize:11, fontWeight:900 }}>현재 PSU 기준주가 재적용</button>
+              </div>
               <div><label style={{ color:'#CBD5E1', fontSize:12 }}>예상 세율(%)</label><input type="number" value={rsuTaxRate} onChange={e=>setRsuTaxRate(Number(e.target.value)||0)} style={{ width:'100%', marginTop:5, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'10px', fontWeight:900 }} /></div>
+              <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.16)', borderRadius:10, padding:'10px' }}><div style={{ color:'#DDD6FE', fontSize:12 }}>상승률 / 배수</div><div style={{ color:'#C4B5FD', fontWeight:900, fontSize:18 }}>{psuGrowthRate.toFixed(1)}% · {multiplierLabel}</div></div>
+            </div>
+            <div style={{ color:'#94a3b8', fontSize:12, lineHeight:1.6 }}>
+              CL1·CL2 기초 200주, CL3·CL4 기초 300주. 20% 미만 0배, 20~40% 0.5배, 40~60% 1배, 60~80% 1.3배, 80~100% 1.7배, 100% 이상 2배.<br/>
+              자동 기준주가: {vwapPrice ? <b style={{ color:'#C4B5FD' }}>{comma(vwapPrice)}원</b> : <b style={{ color:'#FCA5A5' }}>조회 대기/실패</b>} · 기준일 전일로부터 1주일, 1개월, 2개월 VWAP 산술평균 산식 기준
             </div>
           </div>
         </div>
@@ -1775,20 +1924,31 @@ function App() {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:14 }} className="summary-grid">
           <div style={{ background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.22)', borderRadius:15, padding:14 }}><div style={{ color:'#A7F3D0', fontSize:12, fontWeight:800 }}>총 지급 예상 세전</div><div style={{ color:'#34D399', fontSize:24, fontWeight:900 }}>{fmtM(totalGross)}</div></div>
           <div style={{ background:'rgba(0,198,255,.08)', border:'1px solid rgba(0,198,255,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800 }}>총 지급 예상 세후</div><div style={{ color:'#38BDF8', fontSize:24, fontWeight:900 }}>{fmtM(totalNet)}</div></div>
-          <div style={{ background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FDE68A', fontSize:12, fontWeight:800 }}>SP 세전/세후</div><div style={{ color:'#FACC15', fontSize:18, fontWeight:900 }}>{fmtM(specialGross)} / {fmtM(specialNet)}</div></div>
-          <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#DDD6FE', fontSize:12, fontWeight:800 }}>RSU 세전/세후</div><div style={{ color:'#C4B5FD', fontSize:18, fontWeight:900 }}>{fmtM(rsuGrossFuture)} / {fmtM(rsuNetFuture)}</div></div>
+          <div style={{ background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FDE68A', fontSize:12, fontWeight:800 }}>{spSaleBaseYear}년 SP 예정</div><div style={{ color:'#FACC15', fontSize:18, fontWeight:900 }}>{fmtM(spNextYearPayout)}</div></div>
+          <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#DDD6FE', fontSize:12, fontWeight:800 }}>RSU/PSU 세전/세후</div><div style={{ color:'#C4B5FD', fontSize:18, fontWeight:900 }}>{fmtM(rsuGrossFutureMan)} / {fmtM(rsuNetFutureMan)}</div></div>
+        </div>
+
+        <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(255,255,255,.1)', borderRadius:18, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:900, color:'#E2E8F0', marginBottom:10 }}>RSU/PSU 지급 일정</div>
+          {rsuSchedule.map((x,i)=>(
+            <div key={x.date} style={{ display:'grid', gridTemplateColumns:'1.1fr .7fr .8fr', gap:10, alignItems:'center', padding:'11px 0', borderTop:'1px solid rgba(255,255,255,.07)' }}>
+              <div style={{ color:'#fff', fontWeight:900 }}>{i+1}차 · {x.date}</div>
+              <div style={{ color:'#C4B5FD', fontWeight:900 }}>{comma(x.shares)}주</div>
+              <div style={{ color:'#38BDF8', fontWeight:900 }}>{fmtM(x.amount)}</div>
+            </div>
+          ))}
         </div>
 
         <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(255,255,255,.1)', borderRadius:18, padding:16 }}>
           <div style={{ fontSize:15, fontWeight:900, color:'#E2E8F0', marginBottom:10 }}>세부 내역</div>
           {rows.map(row => (
-            <div key={row.label} style={{ display:'grid', gridTemplateColumns:'1.1fr .8fr .8fr 1.4fr', gap:10, alignItems:'center', padding:'11px 0', borderTop:'1px solid rgba(255,255,255,.07)' }}>
+            <div key={row.label} style={{ display:'grid', gridTemplateColumns:'1.1fr 1.5fr 2fr', gap:10, alignItems:'center', padding:'11px 0', borderTop:'1px solid rgba(255,255,255,.07)' }}>
               <div style={{ color:'#fff', fontWeight:900 }}>{row.label}</div>
-              <div style={{ color:'#FACC15', fontWeight:900 }}>{fmtM(row.gross)}</div>
-              <div style={{ color:'#38BDF8', fontWeight:900 }}>{fmtM(row.net)}</div>
               <div style={{ color:'#94A3B8', fontSize:12 }}>{row.desc}</div>
+              <div style={{ color:'#E2E8F0', fontSize:12 }}>{row.values}</div>
             </div>
           ))}
+          <div style={{ marginTop:12, color:'#94A3B8', fontSize:11, lineHeight:1.6 }}>PSU 기준주가 = 기준일 전일로부터 1주일, 1개월, 2개월 각각 거래량 가중평균 주가의 산술평균. 현재일 기준 값은 자동 조회하되, 2028년 10월 13일 예상 기준주가는 직접 수정해서 시뮬레이션할 수 있습니다.</div>
         </div>
       </div>
     );
