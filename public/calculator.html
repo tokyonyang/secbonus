@@ -860,6 +860,18 @@ function App() {
     const value = Math.round(Number(rec?.special_sp_net_man ?? 0) || 0);
     return value > 0 ? value : 0;
   };
+  // 특별경영성과급(SP)이 지급되는 영업이익 수준이면 해당 연도 DS PS는 50%로 간주합니다.
+  // 연봉추이/전년도 원천징수 계산에서는 저장된 ds_ps_rate보다 이 보정값을 우선 적용합니다.
+  const hasSpecialSpForRecord = (rec) => Math.round(Number(rec?.special_sp_net_man ?? 0) || 0) > 0;
+  const getEffectiveDsPsRateForRecord = (rec) => {
+    if (!rec) return 0;
+    const baseRate = Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0);
+    return hasSpecialSpForRecord(rec) ? 50 : baseRate;
+  };
+  const getEffectiveDsPsRateForYear = (year, records = salaryRecords) => {
+    const rec = findRecordByYear(records, Number(year));
+    return rec ? getEffectiveDsPsRateForRecord(rec) : Number(getHistoricalDsPs(year) ?? 0);
+  };
   const getRecordClYear = (rec) => {
     const v = Math.round(Number(rec?.cl_year ?? rec?.clYear ?? 0));
     return v > 0 ? v : null;
@@ -910,7 +922,7 @@ function App() {
     const prevRec = findRecordByYear(records, prevYear);
     if (!prevRec) return null;
     const prevSalary = Math.round(Number(prevRec.contract_salary_man) || 0);
-    const psRate = Number(prevRec.ds_ps_rate ?? getHistoricalDsPs(prevYear) ?? 0);
+    const psRate = getEffectiveDsPsRateForRecord(prevRec);
     const psMan = calcPsAmountMan(prevSalary, psRate);
     const piRateNum = Number(piRate) || 0;
     const piMan = calcPiAmountMan(prevSalary, piRateNum);
@@ -1206,7 +1218,8 @@ function App() {
     const autoManualPerformance = isManual ? calcManualPerformanceFromSalary(recordYear, contractSalaryMan, saveBaseUp, salaryRecords, savePromotionRate, salaryManualCl) : null;
     const savePerformance = roundRaise(isManual ? (autoManualPerformance !== null ? autoManualPerformance : salaryManualPerformance) : performanceRaise);
     const saveRaiseRate = roundRaise(saveBaseUp + savePromotionRate + savePerformance);
-    const saveDsPsRate = roundRaise(isManual ? salaryManualDsPsRate : (getHistoricalDsPs(recordYear) ?? 0));
+    const saveSpecialSpNet = Math.round(Number(isManual ? salaryManualSpecialSpNet : r.spNet) || 0);
+    const saveDsPsRate = roundRaise(saveSpecialSpNet > 0 ? 50 : (isManual ? salaryManualDsPsRate : (getHistoricalDsPs(recordYear) ?? 0)));
     const defaultWithholdingForSave = isManual ? calcDefaultWithholdingFromPrevYear(recordYear, salaryRecords, salaryManualPiRate) : null;
     try {
       const res = await fetch('/api/salary/records', {
@@ -1227,7 +1240,7 @@ function App() {
           promotionRaiseRate: savePromotionRate,
           dsPsRate: saveDsPsRate,
           businessPerformanceBonusMan: Math.round(Number(isManual ? salaryManualBizBonus : bizPerfBonus) || 0),
-          specialSpNetMan: Math.round(Number(isManual ? salaryManualSpecialSpNet : r.spNet) || 0),
+          specialSpNetMan: saveSpecialSpNet,
           specialSpStatus: getSpecialSpStatusForYear(recordYear),
           specialSpReferenceDate: todayIso,
           withholdingIncomeMan: Math.round(Number(isManual ? salaryManualWithholding : prevWithholding) || 0),
@@ -2689,7 +2702,7 @@ function App() {
                     <NumInput value={salaryManualSpecialSpNet} onChange={setSalaryManualSpecialSpNet} step={10}/>
                     <div style={{ fontSize:10, color:getSpecialSpStatusColor(getSpecialSpStatusForYear(salaryRecordYear)), marginTop:4 }}>{salaryRecordYear}년 SP · {todayLabel} 기준 {getSpecialSpStatusForYear(salaryRecordYear)}</div>
                   </div>
-                  <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>DS PS/OPI 이력(%)</div><NumInput value={salaryManualDsPsRate} onChange={setSalaryManualDsPsRate} step={0.1}/></div>
+                  <div style={sBase.inBox}><div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>DS PS/OPI 이력(%)</div><NumInput value={salaryManualDsPsRate} onChange={setSalaryManualDsPsRate} step={0.1}/><div style={{ fontSize:10, color:Number(salaryManualSpecialSpNet)>0 ? "#FDE68A" : "#94A3B8", marginTop:6, lineHeight:1.4 }}>{Number(salaryManualSpecialSpNet)>0 ? "세후 SP 입력 시 저장 DS PS는 50%로 자동 보정됩니다." : "세후 SP가 없으면 입력한 DS PS가 그대로 저장됩니다."}</div></div>
                   <div style={sBase.inBox}>
                     <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>PS 환산액(만)</div>
                     <div style={{ color:"#7DD3FC", fontSize:16, fontWeight:900 }}>{comma(calcPsAmountMan(salaryManualContract, salaryManualDsPsRate))}만원</div>
@@ -2766,7 +2779,7 @@ function App() {
                     <div>
                       <div style={{ fontSize:15, fontWeight:900, color:"#E2E8F0" }}>{rec.year}년 · {comma(Number(rec.contract_salary_man)||0)}만원</div>
                       <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>{formatCl(rec.cl)}{recClYear ? ` ${recClYear}년차` : ''} · {rec.division === 'memory' ? '메모리' : rec.division === 'common' ? '공통' : '르팡'} · 베업 {Number(rec.base_up_raise_rate ?? 0).toFixed(1)}%{getPromotionRaiseForRecord(rec) ? ` · 진급 ${getPromotionRaiseForRecord(rec).toFixed(1)}%` : ''} · 성과 {recPerf.toFixed(1)}% · 총 {getTotalRaiseForRecord(rec, salaryRecords).toFixed(1)}%</div>
-                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원{rec.withholding_pi_rate !== undefined && rec.withholding_pi_rate !== null ? ` · PI ${Number(rec.withholding_pi_rate).toFixed(0)}%×2회` : ''}</div>
+                      <div style={{ fontSize:11, color:"#94A3B8", marginTop:3 }}>업무성과급 {comma(Number(rec.business_performance_bonus_man)||0)}만원 · DS PS {getEffectiveDsPsRateForRecord(rec).toFixed(1)}% · 전년도 원천 {comma(Number(rec.withholding_income_man)||0)}만원{rec.withholding_pi_rate !== undefined && rec.withholding_pi_rate !== null ? ` · PI ${Number(rec.withholding_pi_rate).toFixed(0)}%×2회` : ''}</div>
                       {recEstimatedGrade && <div style={{ fontSize:11, color:"#7DD3FC", marginTop:3, fontWeight:800 }}>{recEstimatedGrade.gradeYear}년 예상 고과 {recEstimatedGrade.label} · {recEstimatedGrade.basis}</div>}
                       {recEligibility && <div style={{ fontSize:11, color: recEligibility.eligible ? "#00DC82" : "#FBBF24", marginTop:3, fontWeight:800 }}>{formatPromotionEligibilityText(recEligibility, recClYear)} · {getJobFamilyLabel(rec.job_family || salaryManualJobFamily)}</div>}
                     </div>
@@ -2794,7 +2807,7 @@ function App() {
     const salaryGrowth = firstRec && lastRec ? (Number(lastRec.contract_salary_man || 0) - Number(firstRec.contract_salary_man || 0)) : 0;
     const avgBaseUp = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.base_up_raise_rate || 0), 0) / trendRecords.length : 0;
     const avgPerformanceRaise = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + getPerformanceRaiseForRecord(rec, trendRecords), 0) / trendRecords.length : 0;
-    const avgDsPs = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0), 0) / trendRecords.length : 0;
+    const avgDsPs = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + getEffectiveDsPsRateForRecord(rec), 0) / trendRecords.length : 0;
     const latestWithholding = Number(lastRec?.withholding_income_man || 0);
     const withholdingGrowth = firstRec && lastRec ? (Number(lastRec.withholding_income_man || 0) - Number(firstRec.withholding_income_man || 0)) : 0;
     const avgWithholding = trendRecords.length ? trendRecords.reduce((sum, rec) => sum + Number(rec.withholding_income_man || 0), 0) / trendRecords.length : 0;
@@ -2802,7 +2815,7 @@ function App() {
     const maxWithholding = Math.max(1, ...trendRecords.map(rec => Number(rec.withholding_income_man || 0)));
     const maxMoneyTrend = Math.max(maxSalary, maxWithholding, 1);
     const maxRaise = Math.max(1, ...trendRecords.map(rec => Math.max(Number(rec.base_up_raise_rate || 0), getPromotionRaiseForRecord(rec), getPerformanceRaiseForRecord(rec, trendRecords))));
-    const maxPs = Math.max(1, ...trendRecords.map(rec => Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0)));
+    const maxPs = Math.max(1, ...trendRecords.map(rec => getEffectiveDsPsRateForRecord(rec)));
     const chartW = 720;
     const chartH = 220;
     const chartPad = 30;
@@ -2834,7 +2847,7 @@ function App() {
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               <div style={{ fontSize:12, color:"#CBD5E1", lineHeight:1.6 }}>
-                저장된 연봉정보를 기준으로 <b>연봉, 베이스업, 진급인상률, 성과인상률, DS PS 이력, 전년도 고과, 비고</b>를 연도순으로 정리합니다. 비고는 저장 시 입력한 메모를 우선 표시하고, 직급이 바뀐 경우 자동으로 함께 표시합니다.
+                저장된 연봉정보를 기준으로 <b>연봉, 베이스업, 진급인상률, 성과인상률, DS PS 이력, 전년도 고과, 비고</b>를 연도순으로 정리합니다. 세후 특별경영성과급이 기록된 연도는 DS PS를 50%로 자동 보정합니다. 비고는 저장 시 입력한 메모를 우선 표시하고, 직급이 바뀐 경우 자동으로 함께 표시합니다.
               </div>
 
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(132px, 1fr))", gap:8 }}>
@@ -2892,7 +2905,7 @@ function App() {
                     const promotionRate = getPromotionRaiseForRecord(rec);
                     const recClYear = inferClYearFromHistory(rec.year, rec.cl, trendRecords);
                     const recEligibility = getPromotionEligibility(rec.cl, recClYear, rec.job_family || salaryManualJobFamily, rec.year);
-                    const dsPs = Number(rec.ds_ps_rate ?? getHistoricalDsPs(rec.year) ?? 0);
+                    const dsPs = getEffectiveDsPsRateForRecord(rec);
                     const psAmount = calcPsAmountMan(salary, dsPs);
                     const estimatedGrade = getEstimatedPerformanceGrade(rec.year, rec.cl, perfRaise, 2);
                     const note = getAutoNote(rec, idx);
@@ -2937,7 +2950,7 @@ function App() {
                           <div style={{ marginTop:5, height:6, background:"rgba(255,255,255,0.08)", borderRadius:999, overflow:"hidden" }}>
                             <div style={{ width:`${Math.max(4, Math.min(100, dsPs / maxPs * 100))}%`, height:"100%", background:"rgba(251,191,36,0.75)", borderRadius:999 }} />
                           </div>
-                          <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>{comma(psAmount)}만원</div>
+                          <div style={{ fontSize:10, color:"#64748B", marginTop:3 }}>{comma(psAmount)}만원</div>{hasSpecialSpForRecord(rec) && <div style={{ fontSize:10, color:"#FDE68A", marginTop:2 }}>SP 지급연도 · PS 50%</div>}
                         </div>
                         <div>
                           {estimatedGrade ? (
