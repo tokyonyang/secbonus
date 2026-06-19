@@ -108,6 +108,7 @@
     
     .summary-grid { grid-template-columns: repeat(2, 1fr) !important; }
     .card-status-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .sp-scenario-row { grid-template-columns: 1fr 1fr !important; }
 
     .hide-on-mobile { display: none !important; }
   }
@@ -118,6 +119,7 @@
     .settings-content, .salary-content { padding-left: 12px !important; padding-right: 12px !important; }
     .field-box { padding: 13px 14px !important; }
     .card-status-grid { grid-template-columns: 1fr !important; }
+    .sp-scenario-row { grid-template-columns: 1fr !important; }
     .shares-grid { grid-template-columns: 1fr !important; }
     .dc-ratio-grid { grid-template-columns: repeat(3, 1fr) !important; }
   }
@@ -445,17 +447,28 @@ function CommentBoard({ salaryUser, salaryToken, onLoginClick }) {
 /* ── 메인 앱 ── */
 
 /* ── 실시간 채팅 컴포넌트: Vercel API polling 기반 ── */
-function LiveChatRoom({ salaryUser, salaryToken, onLoginClick }) {
+function LiveChatPopup({ salaryUser, salaryToken, onLoginClick }) {
+  const [open, setOpen] = React.useState(false);
   const [messages, setMessages] = React.useState([]);
+  const [guestMessages, setGuestMessages] = React.useState([]);
   const [input, setInput] = React.useState('');
-  const [loading, setLoading] = React.useState(true);
+  const [guestNick, setGuestNick] = React.useState(() => localStorage.getItem('chatGuestNick') || '방문자');
+  const [loading, setLoading] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [errMsg, setErrMsg] = React.useState('');
   const listRef = React.useRef(null);
 
+  const canViewHistory = !!salaryToken && !!salaryUser;
+
   const loadMessages = async () => {
+    if (!canViewHistory) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
-      const res = await fetch('/api/chat', { cache:'no-store' });
+      const res = await fetch('/api/chat', { cache:'no-store', headers:{ Authorization:`Bearer ${salaryToken}` } });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || '채팅을 불러오지 못했습니다.');
       setMessages(Array.isArray(data.messages) ? data.messages : []);
@@ -470,69 +483,86 @@ function LiveChatRoom({ salaryUser, salaryToken, onLoginClick }) {
     loadMessages();
     const timer = setInterval(loadMessages, 3000);
     return () => clearInterval(timer);
-  }, []);
+  }, [canViewHistory, salaryToken]);
 
   React.useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, guestMessages.length, open]);
 
   const submit = async () => {
-    if (!salaryToken || !salaryUser) { setErrMsg('채팅은 개인 연봉저장 계정 로그인이 필요합니다.'); return; }
     const msg = input.trim();
     if (!msg) return;
     setSending(true);
     setErrMsg('');
+    const nick = salaryUser ? (salaryUser.display_name || salaryUser.login_id) : (guestNick.trim() || '방문자');
+    if (!salaryUser) localStorage.setItem('chatGuestNick', nick.slice(0, 30));
     try {
+      const headers = { 'Content-Type':'application/json' };
+      if (salaryToken) headers.Authorization = `Bearer ${salaryToken}`;
       const res = await fetch('/api/chat', {
         method:'POST',
-        headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${salaryToken}` },
-        body: JSON.stringify({ message: msg.slice(0, 500) })
+        headers,
+        body: JSON.stringify({ message: msg.slice(0, 500), nick: nick.slice(0, 30) })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || '메시지 전송에 실패했습니다.');
       setInput('');
-      await loadMessages();
+      if (canViewHistory) {
+        await loadMessages();
+      } else if (data.message) {
+        setGuestMessages(prev => [...prev.slice(-4), data.message]);
+      }
     } catch(e) {
       setErrMsg(e.message || '메시지 전송에 실패했습니다.');
     }
     setSending(false);
   };
 
+  const visibleMessages = canViewHistory ? messages : guestMessages;
+
   return (
-    <div style={{ maxWidth:760, margin:'0 auto', padding:'20px 18px 60px', width:'100%' }}>
-      <div style={{ marginBottom:18 }}>
-        <div style={{ fontSize:11, color:'#00DC82', letterSpacing:'0.12em', fontWeight:900, marginBottom:4 }}>LIVE CHAT</div>
-        <div style={{ fontSize:20, fontWeight:900, background:'linear-gradient(90deg,#fff,#86efac)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:6 }}>
-          🟢 실시간 채팅
-        </div>
-        <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>
-          개인 연봉저장 계정으로 로그인한 사용자끼리 대화할 수 있습니다. 3초마다 자동 새로고침되는 실시간형 채팅입니다.
-        </div>
-      </div>
+    <>
+      {!open && (
+        <button onClick={() => setOpen(true)} style={{ position:'fixed', right:18, bottom:18, zIndex:2000, border:0, borderRadius:999, padding:'13px 16px', background:'linear-gradient(135deg,#00DC82,#00C6FF)', color:'#00111f', fontWeight:950, boxShadow:'0 18px 45px rgba(0,0,0,.36)', cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:16 }}>💬</span> 실시간 채팅
+        </button>
+      )}
+      {open && (
+        <div style={{ position:'fixed', right:16, bottom:16, zIndex:2000, width:'min(420px, calc(100vw - 32px))', maxHeight:'min(680px, calc(100vh - 32px))', background:'rgba(15,23,42,.96)', border:'1px solid rgba(0,220,130,.26)', borderRadius:20, boxShadow:'0 24px 80px rgba(0,0,0,.55)', overflow:'hidden', backdropFilter:'blur(18px)' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, padding:'13px 14px', borderBottom:'1px solid rgba(255,255,255,.08)', background:'linear-gradient(135deg,rgba(0,220,130,.16),rgba(0,198,255,.08))' }}>
+            <div>
+              <div style={{ fontSize:14, fontWeight:950, color:'#fff' }}>🟢 실시간 채팅</div>
+              <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>{canViewHistory ? '가입자 모드 · 이전 대화 확인 가능' : '비회원 모드 · 대화 가능 / 이전 내용 비공개'}</div>
+            </div>
+            <button onClick={() => setOpen(false)} style={{ border:0, background:'rgba(255,255,255,.08)', color:'#E2E8F0', borderRadius:10, width:34, height:34, fontWeight:900, cursor:'pointer' }}>×</button>
+          </div>
 
-      <div style={{ background:'rgba(15,23,42,0.72)', border:'1px solid rgba(0,220,130,.2)', borderRadius:18, padding:14, boxShadow:'0 16px 36px rgba(0,0,0,0.24)' }}>
-        <div style={{ background: salaryUser ? 'rgba(34,197,94,.1)' : 'rgba(251,191,36,.1)', border: salaryUser ? '1px solid rgba(34,197,94,.25)' : '1px solid rgba(251,191,36,.25)', color: salaryUser ? '#86efac' : '#fbbf24', borderRadius:12, padding:'10px 12px', fontSize:13, lineHeight:1.6, marginBottom:12 }}>
-          {salaryUser ? <>참여 계정: <b>{salaryUser.display_name || salaryUser.login_id}</b></> : <>채팅 참여는 개인 연봉저장 계정 로그인이 필요합니다. <button onClick={onLoginClick} style={{ marginLeft:8, background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)', color:'#fff', borderRadius:8, padding:'5px 8px', fontWeight:800 }}>연봉저장 로그인으로 이동</button></>}
-        </div>
+          <div style={{ padding:12 }}>
+            <div style={{ background: canViewHistory ? 'rgba(34,197,94,.1)' : 'rgba(251,191,36,.1)', border: canViewHistory ? '1px solid rgba(34,197,94,.25)' : '1px solid rgba(251,191,36,.25)', color: canViewHistory ? '#86efac' : '#fbbf24', borderRadius:12, padding:'9px 10px', fontSize:12, lineHeight:1.55, marginBottom:10 }}>
+              {canViewHistory ? <>참여 계정: <b>{salaryUser.display_name || salaryUser.login_id}</b></> : <>비회원도 메시지 작성은 가능합니다. 단, 이전 대화 내용은 가입자 로그인 후 확인할 수 있습니다. <button onClick={onLoginClick} style={{ marginLeft:6, background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)', color:'#fff', borderRadius:8, padding:'4px 7px', fontWeight:800, fontSize:11 }}>로그인</button></>}
+            </div>
 
-        <div ref={listRef} style={{ height:360, overflowY:'auto', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:12, background:'#07101f', display:'flex', flexDirection:'column', gap:9 }}>
-          {loading ? <div style={{ color:'#94a3b8', textAlign:'center', padding:30 }}>채팅 불러오는 중...</div> : messages.length === 0 ? <div style={{ color:'#94a3b8', textAlign:'center', padding:30 }}>아직 메시지가 없습니다.</div> : messages.map(m => {
-            const mine = salaryUser && m.user_id === salaryUser.id;
-            return <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth:'82%' }}>
-              <div style={{ fontSize:11, color: mine ? '#86efac' : '#93c5fd', fontWeight:900, margin:'0 4px 3px' }}>{m.nick || '익명'} <span style={{ color:'#64748b', fontWeight:700 }}>{new Date(m.created_at).toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' })}</span></div>
-              <div style={{ background: mine ? 'linear-gradient(135deg,rgba(0,220,130,.25),rgba(0,198,255,.12))' : 'rgba(255,255,255,.06)', border: mine ? '1px solid rgba(0,220,130,.28)' : '1px solid rgba(255,255,255,.09)', color:'#e5e7eb', borderRadius:14, padding:'9px 11px', lineHeight:1.5, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{m.message}</div>
-            </div>;
-          })}
-        </div>
+            <div ref={listRef} style={{ height:310, overflowY:'auto', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10, background:'#07101f', display:'flex', flexDirection:'column', gap:9 }}>
+              {loading ? <div style={{ color:'#94a3b8', textAlign:'center', padding:26 }}>채팅 불러오는 중...</div> : visibleMessages.length === 0 ? <div style={{ color:'#94a3b8', textAlign:'center', padding:26, lineHeight:1.6 }}>{canViewHistory ? '아직 메시지가 없습니다.' : '이전 채팅은 가입자만 볼 수 있습니다. 메시지를 남기면 현재 창에서만 확인됩니다.'}</div> : visibleMessages.map(m => {
+                const mine = salaryUser ? m.user_id === salaryUser.id : !m.user_id;
+                return <div key={m.id || m.created_at} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth:'84%' }}>
+                  <div style={{ fontSize:10, color: mine ? '#86efac' : '#93c5fd', fontWeight:900, margin:'0 4px 3px' }}>{m.nick || '방문자'} <span style={{ color:'#64748b', fontWeight:700 }}>{m.created_at ? new Date(m.created_at).toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' }) : ''}</span></div>
+                  <div style={{ background: mine ? 'linear-gradient(135deg,rgba(0,220,130,.25),rgba(0,198,255,.12))' : 'rgba(255,255,255,.06)', border: mine ? '1px solid rgba(0,220,130,.28)' : '1px solid rgba(255,255,255,.09)', color:'#e5e7eb', borderRadius:14, padding:'8px 10px', lineHeight:1.5, whiteSpace:'pre-wrap', wordBreak:'break-word', fontSize:13 }}>{m.message}</div>
+                </div>;
+              })}
+            </div>
 
-        {errMsg && <div style={{ color:'#ffb4b4', background:'rgba(255,107,107,.1)', border:'1px solid rgba(255,107,107,.25)', borderRadius:10, padding:'9px 11px', fontSize:13, marginTop:10 }}>{errMsg}</div>}
+            {errMsg && <div style={{ color:'#ffb4b4', background:'rgba(255,107,107,.1)', border:'1px solid rgba(255,107,107,.25)', borderRadius:10, padding:'8px 10px', fontSize:12, marginTop:9 }}>{errMsg}</div>}
 
-        <div style={{ display:'flex', gap:8, marginTop:12 }}>
-          <input value={input} disabled={!salaryUser} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); submit(); } }} placeholder={salaryUser ? '메시지를 입력하세요' : '로그인 후 채팅 가능'} style={{ flex:1, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'12px 13px', fontSize:14, outline:'none' }} />
-          <button onClick={submit} disabled={!salaryUser || sending} style={{ border:0, borderRadius:12, padding:'0 18px', color:'#00111f', background:'linear-gradient(90deg,#00DC82,#00C6FF)', fontWeight:900, cursor:(!salaryUser||sending)?'not-allowed':'pointer', opacity:(!salaryUser||sending)?.65:1 }}>{sending ? '전송중' : '전송'}</button>
+            {!canViewHistory && <input value={guestNick} onChange={e=>setGuestNick(e.target.value)} placeholder="닉네임" maxLength={30} style={{ width:'100%', boxSizing:'border-box', marginTop:10, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:11, padding:'10px 11px', fontSize:13, outline:'none' }} />}
+            <div style={{ display:'flex', gap:8, marginTop:10 }}>
+              <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); submit(); } }} placeholder="메시지를 입력하세요" style={{ flex:1, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'11px 12px', fontSize:13, outline:'none' }} />
+              <button onClick={submit} disabled={sending} style={{ border:0, borderRadius:12, padding:'0 15px', color:'#00111f', background:'linear-gradient(90deg,#00DC82,#00C6FF)', fontWeight:900, cursor:sending?'wait':'pointer', opacity:sending?.65:1 }}>{sending ? '전송중' : '전송'}</button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
 
@@ -585,6 +615,11 @@ function App() {
   const [rsuAgreementSigned, setRsuAgreementSigned] = useState(true);
   const [rsuFutureBasePrice, setRsuFutureBasePrice] = useState(0);
   const [rsuFutureBasePriceManual, setRsuFutureBasePriceManual] = useState(false);
+  const [spRsuScenarioRows, setSpRsuScenarioRows] = useState({
+    2026: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200 },
+    2027: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200 },
+    2028: { salary: 0, cl: 'CL3', division: 'memory', deficit: 'none', profit: 200 },
+  });
 
   // ── DS 비중 연도별 기본값 (2026~2035 예측) ──────────────────────────────
   const DS_RATIO_DEFAULTS = {
@@ -1771,7 +1806,6 @@ function App() {
     { icon:"💾", label:"연봉저장" },
     { icon:"📈", label:"연봉추이" },
     { icon:"💬", label:"게시판" },
-    { icon:"🟢", label:"실시간채팅" },
     { icon:"🎁", label:"SP/RSU" },
   ];
 
@@ -1781,17 +1815,66 @@ function App() {
     const parseManInput = (value) => Math.max(0, Math.round(Number(String(value ?? '').replace(/,/g,'')) || 0));
     const targetSpYear = Number(simYear || 2026);
     const spBaseNet = Math.round(Number(r.spNet || 0));
+    const updateSpRsuScenarioRow = (year, patch) => {
+      setSpRsuScenarioRows(prev => ({ ...prev, [year]: { ...(prev[year] || {}), ...patch } }));
+    };
+    const divisionName = (division) => division === 'memory' ? '메모리' : division === 'common' ? '공통' : '르팡';
+    const calcScenarioSpecialNet = (year) => {
+      const row = spRsuScenarioRows[year];
+      if (!row) return 0;
+      const scenarioProfit = Number(row.profit || 0);
+      const scenarioSalary = Number(row.salary || 0);
+      const scenarioCl = normalizeCl(row.cl || 'CL3');
+      const scenarioDiv = row.division || 'memory';
+      const scenarioDeficit = row.deficit || 'none';
+      const threshold = (year >= 2026 && year <= 2028) ? 200 : 100;
+      if (scenarioProfit < threshold || scenarioSalary <= 0) return 0;
+
+      const buPct = burate * 10;
+      const totalCount = cntMemory + cntCommon + cntLepan;
+      const fund = scenarioProfit * 1e12 * (sprate / 100);
+      const denom = cntMemory + ratCommon * cntCommon + (buPct / 100) * cntLepan;
+      const perMemory = denom > 0 ? (fund / denom) / MAN : 0;
+      const perCommon = perMemory * ratCommon;
+      const perLepan = perMemory * (buPct / 100);
+      const baseByDiv = scenarioDiv === 'memory' ? perMemory : scenarioDiv === 'common' ? perCommon : perLepan;
+      const capInfo = splitSalaryByCap(scenarioCl, scenarioSalary);
+      const baseSalary = capInfo.baseSalary || scenarioSalary;
+      let perf = 1.0;
+      if (scenarioCl === 'CL4') { if (myRating === 'EM') perf = 1.4; else if (myRating === 'ES') perf = 1.2; }
+      let spGross = 0;
+      if (scenarioDiv === 'lepan' && year >= 2027 && scenarioDeficit !== 'none') spGross = (baseSalary * 0.24) * perf;
+      else spGross = baseByDiv * perf;
+
+      const annualGrossForTax = (scenarioCl === 'CL1' ? scenarioSalary * 14 : baseSalary) + Math.max(0, Number(capInfo.excessCash || 0));
+      const curW = annualGrossForTax * MAN;
+      const spW = spGross * MAN;
+      const spTaxWon = Math.max(0, totalTax(curW + spW) - totalTax(curW));
+      return Math.max(0, Math.round(spGross - spTaxWon / MAN));
+    };
+    const getAutoSpForYear = (year) => {
+      if (year >= 2026 && year <= 2028) return calcScenarioSpecialNet(year);
+      return 0;
+    };
     const currentSavedSpNet = getRecordSpecialSpNet(targetSpYear);
     const prevOneSavedSpNet = getRecordSpecialSpNet(targetSpYear - 1);
     const prevTwoSavedSpNet = getRecordSpecialSpNet(targetSpYear - 2);
-    const specialNet = Number(specialCashOverrideMan) > 0 ? Math.round(Number(specialCashOverrideMan)) : (currentSavedSpNet || spBaseNet);
-    const prevOneSpNet = prevOneSavedSpNet || Math.round(Number(recentSpOneYearMan) || 0);
-    const prevTwoSpNet = prevTwoSavedSpNet || Math.round(Number(recentSpTwoYearMan) || 0);
+    const currentAutoSpNet = getAutoSpForYear(targetSpYear);
+    const prevOneAutoSpNet = getAutoSpForYear(targetSpYear - 1);
+    const prevTwoAutoSpNet = getAutoSpForYear(targetSpYear - 2);
+    const manualSpecialNet = Number(specialCashOverrideMan) > 0 ? Math.round(Number(specialCashOverrideMan)) : 0;
+    const specialNet = manualSpecialNet || currentSavedSpNet || currentAutoSpNet || spBaseNet;
+    const prevOneSpNet = prevOneSavedSpNet || prevOneAutoSpNet || Math.round(Number(recentSpOneYearMan) || 0);
+    const prevTwoSpNet = prevTwoSavedSpNet || prevTwoAutoSpNet || Math.round(Number(recentSpTwoYearMan) || 0);
     const spYearRefs = [
-      { year: targetSpYear, amount: specialNet, saved: currentSavedSpNet, fallback: spBaseNet, status: getSpecialSpStatusForYear(targetSpYear) },
-      { year: targetSpYear - 1, amount: prevOneSpNet, saved: prevOneSavedSpNet, fallback: Math.round(Number(recentSpOneYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 1) },
-      { year: targetSpYear - 2, amount: prevTwoSpNet, saved: prevTwoSavedSpNet, fallback: Math.round(Number(recentSpTwoYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 2) },
+      { year: targetSpYear, amount: specialNet, saved: currentSavedSpNet, auto: currentAutoSpNet, manual: manualSpecialNet, fallback: spBaseNet, status: getSpecialSpStatusForYear(targetSpYear) },
+      { year: targetSpYear - 1, amount: prevOneSpNet, saved: prevOneSavedSpNet, auto: prevOneAutoSpNet, fallback: Math.round(Number(recentSpOneYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 1) },
+      { year: targetSpYear - 2, amount: prevTwoSpNet, saved: prevTwoSavedSpNet, auto: prevTwoAutoSpNet, fallback: Math.round(Number(recentSpTwoYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 2) },
     ];
+    const scenarioSummaryRows = [2026, 2027, 2028].map(year => {
+      const row = spRsuScenarioRows[year] || {};
+      return { year, row, spNet: calcScenarioSpecialNet(year) };
+    });
 
     const splitThirds = (amount) => {
       const first = Math.round(amount / 3);
@@ -1908,6 +1991,59 @@ function App() {
           <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>SP는 연봉저장에 기록된 <b style={{ color:'#FDE68A' }}>연도별 세후 특별경영성과급</b>을 우선 가져오고, 조회 기준일에 따라 확정/예상을 구분합니다. RSU/PSU 예상 기준주가는 현재일 기준 PSU 산식 기준주가를 우선 자동 반영하고, 필요하면 직접 수정할 수 있습니다.</div>
         </div>
 
+        <div style={{ background:'rgba(15,23,42,.76)', border:'1px solid rgba(56,189,248,.22)', borderRadius:18, padding:16, marginBottom:14 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:15, fontWeight:900, color:'#7DD3FC' }}>26~28년 SP 자동 시뮬레이션 입력</div>
+              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>연도별 연봉·직급·사업부·적자여부·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, SP 이월 계산의 보조값으로 사용합니다. 연봉저장값이 있으면 저장값이 우선입니다.</div>
+            </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
+            {scenarioSummaryRows.map(({year, row, spNet}) => {
+              const threshold = (year >= 2026 && year <= 2028) ? 200 : 100;
+              const eligible = Number(row.profit || 0) >= threshold && Number(row.salary || 0) > 0;
+              return (
+                <div key={year} style={{ display:'grid', gridTemplateColumns:'70px 1fr 96px 108px 104px 118px 128px', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
+                  <div style={{ color:'#E0F2FE', fontWeight:900, fontSize:15 }}>{year}년</div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>연봉(만)</label>
+                    <input type="number" value={row.salary || ''} onChange={e=>updateSpRsuScenarioRow(year, { salary:Number(e.target.value)||0 })} placeholder="예: 11000" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                  </div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>직급</label>
+                    <select value={row.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                      {['CL1','CL2','CL3','CL4'].map(x=><option key={x} value={x}>{x}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>사업부</label>
+                    <select value={row.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                      <option value="memory">메모리</option>
+                      <option value="common">공통</option>
+                      <option value="lepan">르팡</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>적자여부</label>
+                    <select value={row.deficit || 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                      <option value="none">해당없음</option>
+                      <option value="lepan">르팡적자</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ color:'#CBD5E1', fontSize:11 }}>DS영업이익(조)</label>
+                    <input type="number" value={row.profit ?? ''} onChange={e=>updateSpRsuScenarioRow(year, { profit:Number(e.target.value)||0 })} placeholder="200" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                  </div>
+                  <div style={{ background:eligible?'rgba(34,197,94,.12)':'rgba(239,68,68,.10)', border:'1px solid rgba(255,255,255,.09)', borderRadius:11, padding:'9px 10px' }}>
+                    <div style={{ color:eligible?'#86EFAC':'#FCA5A5', fontSize:11, fontWeight:900 }}>{eligible ? 'SP 예상' : 'SP 미달/연봉확인'}</div>
+                    <div style={{ color:eligible?'#BBF7D0':'#FECACA', fontSize:16, fontWeight:900 }}>{fmtM(spNet)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:14, marginBottom:14 }} className="two-col-grid">
           <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(255,180,0,.22)', borderRadius:18, padding:16 }}>
             <div style={{ fontSize:15, fontWeight:900, color:'#FACC15', marginBottom:12 }}>SP 특별경영성과급</div>
@@ -1941,7 +2077,7 @@ function App() {
                   <div style={{ color:'#CBD5E1', fontSize:11, fontWeight:900 }}>{item.year}년 SP</div>
                   <div style={{ color:'#FACC15', fontSize:16, fontWeight:900 }}>{fmtM(item.amount)}</div>
                   <div style={{ color:getSpecialSpStatusColor(item.status), fontSize:10, fontWeight:900 }}>{todayLabel} 기준 {item.status}</div>
-                  <div style={{ color:'#64748B', fontSize:10, marginTop:2 }}>{item.saved ? '연봉저장값 사용' : (item.fallback ? '산출/수동값 사용' : '미입력')}</div>
+                  <div style={{ color:'#64748B', fontSize:10, marginTop:2 }}>{item.saved ? '연봉저장값 사용' : item.manual ? '수동 적용값 사용' : item.auto ? '상단 자동 시뮬레이션 사용' : (item.fallback ? '산출/수동값 사용' : '미입력')}</div>
                 </div>
               ))}
             </div>
@@ -3828,10 +3964,6 @@ function App() {
             <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => setTab(4)} />
           </div>
         ) : tab === 7 ? (
-          <div style={{ flex:1, overflowY:'auto', background:'transparent' }}>
-            <LiveChatRoom salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => setTab(4)} />
-          </div>
-        ) : tab === 8 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
             <EquityRewardSimContent />
           </div>
@@ -3851,6 +3983,7 @@ function App() {
           </>
         )}
       </div>
+      <LiveChatPopup salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => { setTab(4); }} />
     </div>
   );
 }
