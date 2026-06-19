@@ -1039,6 +1039,272 @@
     .result-panel-root::before { left:14px; right:14px; }
   }
 
+
+
+  /* PC / Mobile responsive sync patch: PC 기본, 모바일 보정 */
+  @media (min-width: 1181px) {
+    .header {
+      min-height: 64px !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      position: sticky !important;
+      top: 0 !important;
+    }
+    .header-left {
+      flex-direction: row !important;
+      align-items: center !important;
+      min-width: 0 !important;
+    }
+    .nav-tabs {
+      display: flex !important;
+      grid-template-columns: none !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      min-width: 0 !important;
+    }
+    .nav-tabs button {
+      flex: 0 0 auto !important;
+      min-width: 88px !important;
+      width: auto !important;
+      white-space: normal !important;
+    }
+    .header-right {
+      width: auto !important;
+      flex-wrap: nowrap !important;
+      justify-content: flex-end !important;
+    }
+    .main-layout {
+      flex-direction: row !important;
+      height: calc(100vh - 64px) !important;
+      overflow: hidden !important;
+    }
+    .sidebar {
+      flex: 0 0 380px !important;
+      width: 380px !important;
+      min-width: 360px !important;
+      max-width: 400px !important;
+      height: 100% !important;
+      overflow-y: auto !important;
+      border-right: 1px solid rgba(255,255,255,.10) !important;
+      border-bottom: 0 !important;
+    }
+    .content-panel {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      height: 100% !important;
+      overflow-y: auto !important;
+    }
+    .reward-main-card {
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, .95fr) !important;
+    }
+    .reward-main-side { grid-template-columns: 1fr 1fr !important; }
+    .sp-scenario-primary-grid {
+      grid-template-columns: minmax(180px,1.35fr) minmax(110px,.72fr) minmax(110px,.72fr) minmax(120px,.82fr) minmax(130px,.92fr) !important;
+    }
+    .sp-scenario-secondary-grid {
+      grid-template-columns: minmax(130px,.75fr) minmax(170px,1fr) minmax(150px,.85fr) !important;
+      max-width: 560px !important;
+    }
+  }
+
+  @media (max-width: 900px) {
+    html, body, #root { min-width: 0 !important; overflow-x: hidden !important; }
+    body { background:#070B12 !important; }
+    .header {
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 40 !important;
+      min-height: 0 !important;
+      height: auto !important;
+      padding: 12px 12px 10px !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+      overflow: visible !important;
+    }
+    .header-left {
+      width: 100% !important;
+      min-width: 0 !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+    }
+    .header-left > div:first-child {
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+    .nav-tabs {
+      width: 100% !important;
+      display: grid !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 6px !important;
+      padding: 6px !important;
+      border-radius: 16px !important;
+      overflow: visible !important;
+    }
+    .nav-tabs button {
+      width: 100% !important;
+      min-width: 0 !important;
+      min-height: 54px !important;
+      justify-content: center !important;
+      padding: 8px 3px !important;
+      border-radius: 12px !important;
+      gap: 3px !important;
+      white-space: normal !important;
+      word-break: keep-all !important;
+    }
+    .nav-tabs button span:first-child { font-size: 14px !important; }
+    .nav-tabs button span:last-child {
+      font-size: 10px !important;
+      line-height: 1.18 !important;
+      letter-spacing: -0.04em !important;
+    }
+    .header-right {
+      width: 100% !important;
+      max-width: none !important;
+      min-width: 0 !important;
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+      align-items: stretch !important;
+      justify-content: stretch !important;
+      flex-wrap: unset !important;
+      font-size: 10px !important;
+      line-height: 1.35 !important;
+    }
+    .header-right > * {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+    }
+    .market-search-form {
+      grid-column: 1 / -1 !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+    .market-search-form input { min-width: 0 !important; flex: 1 1 auto !important; }
+    .market-search-form button { flex: 0 0 auto !important; }
+    .opi-shortcut-button { display: inline-flex !important; align-items: center !important; justify-content: center !important; }
+
+    .main-layout {
+      flex-direction: column !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    .sidebar {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      height: auto !important;
+      overflow: visible !important;
+      border-right: 0 !important;
+      border-bottom: 1px solid rgba(255,255,255,.08) !important;
+      background:#070B12 !important;
+    }
+    .content-panel {
+      width: 100% !important;
+      min-width: 0 !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    .settings-content,
+    .salary-content {
+      width: 100% !important;
+      max-width: none !important;
+      padding: 14px 12px 24px !important;
+      gap: 12px !important;
+    }
+    .field-box { border-radius: 16px !important; padding: 14px 14px !important; }
+    .field-box > div[style*="grid-template-columns"] {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+    .result-panel-root {
+      width: 100% !important;
+      max-width: none !important;
+      padding: 14px 12px 24px !important;
+      gap: 14px !important;
+    }
+    .result-hero { flex-direction: column !important; gap: 8px !important; }
+    .result-hero-title { font-size: 24px !important; }
+    .result-chip-row { gap: 6px !important; }
+    .result-chip-row > span { font-size: 11px !important; padding: 5px 9px !important; }
+
+    .reward-main-card {
+      grid-template-columns: 1fr !important;
+      gap: 14px !important;
+      padding: 18px 16px 17px !important;
+      border-radius: 20px !important;
+    }
+    .reward-main-title { font-size: 18px !important; }
+    .reward-main-amount {
+      font-size: clamp(31px, 9vw, 38px) !important;
+      line-height: 1.05 !important;
+      word-break: keep-all !important;
+    }
+    .reward-main-caption { font-size: 12px !important; line-height: 1.55 !important; }
+    .reward-main-badges { gap: 7px !important; margin-top: 12px !important; }
+    .reward-status-badge { font-size: 11px !important; min-height: 30px !important; padding: 6px 9px !important; }
+    .reward-main-side { grid-template-columns: 1fr !important; gap: 9px !important; }
+    .reward-side-card { min-height: auto !important; padding: 13px 13px !important; border-radius: 15px !important; }
+    .reward-side-value { font-size: 21px !important; }
+
+    .summary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 9px !important;
+      margin-bottom: 0 !important;
+    }
+    .summary-card {
+      min-height: 88px !important;
+      padding: 14px 12px !important;
+      border-radius: 15px !important;
+    }
+    .summary-card-label { font-size: 10.5px !important; line-height: 1.25 !important; }
+    .summary-card-value { font-size: 20px !important; line-height: 1.08 !important; }
+    .summary-card.reward-total::after { font-size: 9px !important; right: 10px !important; top: 10px !important; }
+
+    .result-card-shell { padding: 17px 15px 16px !important; border-radius: 18px !important; }
+    .result-card-header { flex-direction: column !important; gap: 10px !important; align-items: flex-start !important; }
+    .result-card-value { width: 100% !important; text-align: left !important; min-width: 0 !important; }
+    .result-card-title { font-size: 18px !important; }
+    .result-card-sub { font-size: 11.5px !important; line-height: 1.5 !important; }
+    .result-card-value-text { font-size: 27px !important; }
+    .card-status-grid,
+    .shares-grid,
+    .dc-ratio-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+    .card-status-grid > div,
+    .shares-grid > div,
+    .dc-ratio-grid > div { min-height: 0 !important; }
+
+    .sp-rsu-root { padding: 14px 12px 24px !important; }
+    .sp-rsu-summary-grid,
+    .sp-rsu-panel-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+    .sp-scenario-card { padding: 14px !important; border-radius: 16px !important; }
+    .sp-scenario-card-head { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+    .sp-scenario-result { width: 100% !important; min-width: 0 !important; text-align: left !important; }
+    .sp-scenario-primary-grid,
+    .sp-scenario-secondary-grid {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+      max-width: none !important;
+    }
+    .scenario-field label { font-size: 11px !important; }
+    .scenario-help { font-size: 10px !important; }
+    .yearly-bonus-desktop { display: none !important; }
+    .mobile-bonus-cards { display: grid !important; gap: 10px !important; }
+  }
+
+  @media (max-width: 480px) {
+    .nav-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+    .nav-tabs button { min-height: 58px !important; }
+    .header-right { grid-template-columns: 1fr !important; }
+    .summary-grid { grid-template-columns: 1fr !important; }
+    .reward-main-amount { font-size: clamp(29px, 10vw, 34px) !important; }
+    .result-card-value-text { font-size: 25px !important; }
+  }
+
 </style>
 </head>
 <body>
@@ -4778,12 +5044,12 @@ function App() {
               </div>
             </div>
             <div style={{ marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              <div style={{ className:"input-info-card", ...sBase.inBox, background:"rgba(0,198,255,0.055)", borderColor:"rgba(0,198,255,0.18)" }}>
+              <div className="input-info-card" style={{ ...sBase.inBox, background:"rgba(0,198,255,0.055)", borderColor:"rgba(0,198,255,0.18)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>연차 정보</div>
                 <div style={{ fontSize:18, fontWeight:900, color:"#7DD3FC" }}>{formatCl(myCl)} {currentClYearForMain || '-'}년차</div>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>저장된 진급연도 또는 2026 기준 연차로 자동 추정</div>
               </div>
-              <div style={{ className:"input-info-card", ...sBase.inBox, background: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.075)" : "rgba(255,255,255,0.03)", borderColor: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.28)" : "rgba(255,255,255,0.08)" }}>
+              <div className="input-info-card" style={{ ...sBase.inBox, background: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.075)" : "rgba(255,255,255,0.03)", borderColor: currentEligibilityForMain?.eligible ? "rgba(0,220,130,0.28)" : "rgba(255,255,255,0.08)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>진급 대상 참고</div>
                 {currentEligibilityForMain ? (
                   <>
@@ -4835,7 +5101,7 @@ function App() {
                 <NumInput value={performanceRaise} onChange={handlePerformanceRaiseChange} step={0.1} min={-99.9} max={100}/>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>베이스업과 합산 반영</div>
               </div>
-              <div style={{ className:"input-info-card", ...sBase.inBox, borderColor:"rgba(0,198,255,0.24)", background:"rgba(0,198,255,0.06)" }}>
+              <div className="input-info-card" style={{ ...sBase.inBox, borderColor:"rgba(0,198,255,0.24)", background:"rgba(0,198,255,0.06)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>총 임금인상률(%)</div>
                 <NumInput value={myRaise} onChange={handleTotalRaiseChange} step={0.1} min={-99.9} max={100} color="#38BDF8" size={20}/>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>입력 시 업무성과 = 총 인상률 - 베이스업</div>
@@ -4849,7 +5115,7 @@ function App() {
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>전년도 원천징수(만)</div>
                 <NumInput value={prevWithholding} onChange={setPrevWithholding} step={100} color="#00DC82" min={0}/>
               </div>
-              <div style={{ className:"input-info-card", ...sBase.inBox, borderColor: r.excessCash > 0 ? "rgba(255,107,107,0.35)" : "rgba(255,255,255,0.08)", background: r.excessCash > 0 ? "rgba(255,107,107,0.08)" : "rgba(255,255,255,0.03)" }}>
+              <div className="input-info-card" style={{ ...sBase.inBox, borderColor: r.excessCash > 0 ? "rgba(255,107,107,0.35)" : "rgba(255,255,255,0.08)", background: r.excessCash > 0 ? "rgba(255,107,107,0.08)" : "rgba(255,255,255,0.03)" }}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>연봉상한초과분 지급액(만)</div>
                 <div style={{ fontSize:20, fontWeight:900, color: r.excessCash > 0 ? "#FF6B6B" : "#94A3B8" }}>{comma(r.excessCash || 0)}</div>
                 <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>상한 초과 시 1회성 현금 성과급</div>
