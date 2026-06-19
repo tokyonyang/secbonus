@@ -203,6 +203,22 @@
     .nav-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
 
+
+  /* SP/RSU 모바일 레이아웃 강제 보정 */
+  @media (max-width: 900px) {
+    .two-col-grid { grid-template-columns: 1fr !important; }
+    .sp-rsu-panel-grid { grid-template-columns: 1fr !important; }
+    .sp-year-ref-grid { grid-template-columns: 1fr !important; }
+    .sp-scenario-row { grid-template-columns: 1fr !important; }
+  }
+  @media (max-width: 640px) {
+    .sp-scenario-row { grid-template-columns: 1fr !important; }
+    .sp-rsu-root { padding: 14px 12px 84px !important; max-width: 100% !important; }
+    .sp-rsu-card { padding: 13px !important; border-radius: 16px !important; }
+    .sp-rsu-card input, .sp-rsu-card select { min-height: 48px !important; font-size: 16px !important; }
+    .floating-chat-button { right: 12px !important; bottom: 18px !important; transform: scale(.92); transform-origin: bottom right; }
+  }
+
 </style>
 </head>
 <body>
@@ -1184,6 +1200,36 @@ function App() {
     setSalaryLoading(false);
   };
 
+
+  // 로그인 계정에 저장된 연봉정보를 SP/RSU 예상 시뮬레이션 입력값에 자동 연동합니다.
+  // 저장 연봉정보가 있으면 해당 연도의 연봉·직급·사업부·베업·성과인상률을 기본값으로 사용합니다.
+  useEffect(() => {
+    if (!Array.isArray(salaryRecords) || salaryRecords.length === 0) return;
+    setSpRsuScenarioRows(prev => {
+      const next = { ...prev };
+      let changed = false;
+      salaryRecords.forEach(rec => {
+        const year = Math.round(Number(rec?.year) || 0);
+        if (year < 2025 || year > 2035) return;
+        const before = next[year] || { salary:'', cl:'CL3', division:'memory', deficit:'none', profit:200, rating:'MT', baseUpRaise:3, performanceRaise:3.3 };
+        const savedSalary = Math.round(Number(rec?.contract_salary_man || 0) || 0);
+        const savedBaseUp = Number(rec?.base_up_raise_rate ?? before.baseUpRaise ?? 3);
+        const savedPerf = Number(rec?.performance_raise_rate ?? before.performanceRaise ?? 3.3);
+        const merged = {
+          ...before,
+          salary: savedSalary > 0 ? String(savedSalary) : before.salary,
+          cl: normalizeCl(rec?.cl || before.cl || 'CL3'),
+          division: rec?.division || before.division || 'memory',
+          baseUpRaise: Number.isFinite(savedBaseUp) ? savedBaseUp : (before.baseUpRaise ?? 3),
+          performanceRaise: Number.isFinite(savedPerf) ? savedPerf : (before.performanceRaise ?? 3.3),
+        };
+        next[year] = merged;
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [salaryRecords]);
+
   const salaryLogin = async () => {
     setSalaryLoading(true);
     setSalaryMsg("");
@@ -1927,26 +1973,51 @@ function App() {
       });
     };
     const divisionName = (division) => division === 'memory' ? '메모리' : division === 'common' ? '공통' : '르팡';
+    const getSavedScenarioRecordRow = (year) => {
+      const rec = findRecordByYear(salaryRecords, year);
+      if (!rec) return null;
+      const savedCl = normalizeCl(rec.cl || 'CL3');
+      return {
+        salary: Math.round(Number(rec.contract_salary_man || 0) || 0),
+        cl: savedCl || 'CL3',
+        division: rec.division || 'memory',
+        baseUpRaise: Number(rec.base_up_raise_rate ?? rec.baseUpRaiseRate ?? 3) || 0,
+        performanceRaise: Number(rec.performance_raise_rate ?? rec.performanceRaiseRate ?? getScenarioPerformanceDefault(year, savedCl)) || 0,
+        dsPsRate: Number(rec.ds_ps_rate ?? 0) || 0,
+        specialSpNet: Math.round(Number(rec.special_sp_net_man || 0) || 0),
+        source: 'saved',
+      };
+    };
+    const getEffectiveScenarioRow = (year, row={}) => {
+      const saved = getSavedScenarioRecordRow(year);
+      if (saved && saved.salary > 0) {
+        return { ...row, ...saved, profit: row.profit ?? 200, deficit: row.deficit ?? 'none', rating: row.rating ?? 'MT', source:'saved' };
+      }
+      return row || {};
+    };
     const getScenarioRaiseRates = (year, row={}) => {
-      const cl = normalizeCl(row.cl || 'CL3');
-      const base = normalizeScenarioNumber(row.baseUpRaise, 3);
-      const perf = normalizeScenarioNumber(row.performanceRaise, getScenarioPerformanceDefault(year, cl));
+      const effectiveRow = getEffectiveScenarioRow(year, row);
+      const cl = normalizeCl(effectiveRow.cl || 'CL3');
+      const base = normalizeScenarioNumber(effectiveRow.baseUpRaise, 3);
+      const perf = normalizeScenarioNumber(effectiveRow.performanceRaise, getScenarioPerformanceDefault(year, cl));
       return { base, perf, total: base + perf };
     };
     const getScenarioEstimatedSalary = (year, row={}, visited=new Set()) => {
+      const saved = getSavedScenarioRecordRow(year);
+      if (saved && saved.salary > 0) return saved.salary;
       const direct = normalizeScenarioNumber(row.salary, 0);
       if (direct > 0) return direct;
       if (visited.has(year)) return 0;
       visited.add(year);
-      const prev = spRsuScenarioRows[year - 1];
-      if (!prev) return 0;
+      const prev = spRsuScenarioRows[year - 1] || {};
       const prevSalary = getScenarioEstimatedSalary(year - 1, prev, visited);
       if (prevSalary <= 0) return 0;
       const rates = getScenarioRaiseRates(year, row);
       return Math.round(prevSalary * (1 + rates.total / 100));
     };
     const calcScenarioSpecialNet = (year) => {
-      const row = spRsuScenarioRows[year];
+      const rawRow = spRsuScenarioRows[year] || {};
+      const row = getEffectiveScenarioRow(year, rawRow);
       if (!row) return 0;
       const scenarioProfit = Number(row.profit || 0);
       const scenarioSalary = getScenarioEstimatedSalary(year, row);
@@ -2110,14 +2181,14 @@ function App() {
       { label:'RSU/PSU 지급 주식', desc:rsuEligible ? `${normalizeCl(myCl)} 기준 기초 ${baseShareCount}주 × ${multiplierLabel}` : '25.10.15 재직/약정 조건 미충족', values:`${comma(finalShareCount)}주 · 세전 ${fmtM(rsuGrossFutureMan)} · 세후 ${fmtM(rsuNetFutureMan)}` },
     ];
     return (
-      <div style={{ maxWidth:900, margin:'0 auto', padding:'20px 18px 60px', width:'100%' }}>
+      <div className="sp-rsu-root" style={{ maxWidth:900, margin:'0 auto', padding:'20px 18px 60px', width:'100%' }}>
         <div style={{ marginBottom:18 }}>
           <div style={{ fontSize:11, color:'#FFB400', letterSpacing:'0.12em', fontWeight:900, marginBottom:4 }}>REWARD SIMULATION</div>
           <div style={{ fontSize:20, fontWeight:900, background:'linear-gradient(90deg,#fff,#facc15)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', marginBottom:6 }}>🎁 SP · RSU/PSU 총액 예상</div>
           <div style={{ color:'#94a3b8', fontSize:13, lineHeight:1.6 }}>SP는 연봉저장에 기록된 <b style={{ color:'#FDE68A' }}>연도별 세후 특별경영성과급</b>을 우선 가져오고, 조회 대상연도와 직전 2개년을 누적 반영합니다. 조회 기준일에 따라 확정/예상을 구분합니다. RSU/PSU 예상 기준주가는 현재일 기준 PSU 산식 기준주가를 우선 자동 반영하고, 필요하면 직접 수정할 수 있습니다.</div>
         </div>
 
-        <div style={{ background:'rgba(15,23,42,.76)', border:'1px solid rgba(56,189,248,.22)', borderRadius:18, padding:16, marginBottom:14 }}>
+        <div className="sp-rsu-card" style={{ background:'rgba(15,23,42,.76)', border:'1px solid rgba(56,189,248,.22)', borderRadius:18, padding:16, marginBottom:14 }}>
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:12 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#7DD3FC' }}>조회연도 및 최근 2년 SP 자동 시뮬레이션 입력</div>
@@ -2146,42 +2217,48 @@ function App() {
           </div>
           <div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800, marginBottom:10 }}>
             현재 조회 기준: {targetSpYear}년 SP · 반영 연도: {scenarioYears.join('년 / ')}년
+            {salaryToken && salaryRecords.length > 0 && <span style={{ display:'inline-block', marginLeft:8, color:'#86EFAC' }}>· 개인 연봉정보 {salaryRecords.length}건 연동중</span>}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
             {scenarioSummaryRows.map(({year, row, spNet}) => {
               const threshold = year >= 2026 ? 200 : 100;
-              const scenarioSalaryForRow = getScenarioEstimatedSalary(year, row);
-              const rates = getScenarioRaiseRates(year, row);
-              const salaryAutoApplied = !(normalizeScenarioNumber(row.salary, 0) > 0) && scenarioSalaryForRow > 0;
-              const eligible = Number(row.profit || 0) >= threshold && scenarioSalaryForRow > 0;
-              const deficitEnabled = year >= 2027 && (row.division || 'memory') === 'lepan';
-              const cl4RatingEnabled = normalizeCl(row.cl || 'CL3') === 'CL4';
+              const savedRec = findRecordByYear(salaryRecords, year);
+              const effectiveRow = getEffectiveScenarioRow(year, row);
+              const scenarioSalaryForRow = getScenarioEstimatedSalary(year, effectiveRow);
+              const rates = getScenarioRaiseRates(year, effectiveRow);
+              const salaryAutoApplied = !savedRec && !(normalizeScenarioNumber(row.salary, 0) > 0) && scenarioSalaryForRow > 0;
+              const eligible = Number(effectiveRow.profit || 0) >= threshold && scenarioSalaryForRow > 0;
+              const deficitEnabled = year >= 2027 && (effectiveRow.division || 'memory') === 'lepan';
+              const cl4RatingEnabled = normalizeCl(effectiveRow.cl || 'CL3') === 'CL4';
               return (
-                <div key={year} style={{ display:'grid', gridTemplateColumns:'70px 1fr 88px 88px 88px 104px 104px 96px 116px 128px', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
-                  <div style={{ color:'#E0F2FE', fontWeight:900, fontSize:15 }}>{year}년</div>
+                <div key={year} style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(128px,1fr))', gap:8, alignItems:'end', background:'rgba(255,255,255,.035)', border:'1px solid rgba(255,255,255,.08)', borderRadius:14, padding:10 }} className="sp-scenario-row">
+                  <div style={{ color:'#E0F2FE', fontWeight:900, fontSize:15, alignSelf:'center' }}>
+                    {year}년
+                    {savedRec && <div style={{ display:'inline-block', marginLeft:6, color:'#86EFAC', fontSize:10, background:'rgba(34,197,94,.12)', border:'1px solid rgba(34,197,94,.22)', borderRadius:999, padding:'3px 6px', verticalAlign:'middle' }}>연봉저장 연동</div>}
+                  </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>연봉(만)</label>
-                    <input type="text" inputMode="numeric" value={row.salary ?? ''} onChange={e=>updateSpRsuScenarioRow(year, { salary:e.target.value.replace(/[^0-9]/g,'') })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : '예: 11000'} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
-                    {salaryAutoApplied && <div style={{ color:'#7DD3FC', fontSize:10, marginTop:3, fontWeight:800 }}>전년 연봉×총 {rates.total.toFixed(1)}% 자동</div>}
+                    <input type="text" inputMode="numeric" disabled={!!savedRec} value={savedRec ? String(scenarioSalaryForRow || '') : (row.salary ?? '')} onChange={e=>updateSpRsuScenarioRow(year, { salary:e.target.value.replace(/[^0-9]/g,'') })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : (savedRec?.contract_salary_man ? `저장값 ${comma(savedRec.contract_salary_man)}` : '예: 11000')} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    {savedRec ? <div style={{ color:'#86EFAC', fontSize:10, marginTop:3, fontWeight:800 }}>개인 연봉저장값 우선 반영</div> : (salaryAutoApplied && <div style={{ color:'#7DD3FC', fontSize:10, marginTop:3, fontWeight:800 }}>전년 연봉×총 {rates.total.toFixed(1)}% 자동</div>)}
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>베업%</label>
-                    <input type="text" inputMode="decimal" value={row.baseUpRaise ?? 3} onChange={e=>updateSpRsuScenarioRow(year, { baseUpRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <input type="text" inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.baseUpRaise ?? 0) : (row.baseUpRaise ?? 3)} onChange={e=>updateSpRsuScenarioRow(year, { baseUpRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>성과%</label>
-                    <input type="text" inputMode="decimal" value={row.performanceRaise ?? getScenarioPerformanceDefault(year, row.cl)} onChange={e=>updateSpRsuScenarioRow(year, { performanceRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder={String(getScenarioPerformanceDefault(year, row.cl))} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
+                    <input type="text" inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.performanceRaise ?? 0) : (row.performanceRaise ?? getScenarioPerformanceDefault(year, effectiveRow.cl))} onChange={e=>updateSpRsuScenarioRow(year, { performanceRaise:e.target.value.replace(/[^0-9.\-]/g,'') })} placeholder={String(getScenarioPerformanceDefault(year, effectiveRow.cl))} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 10px', fontWeight:900 }} />
                     <div style={{ color:'#94A3B8', fontSize:10, marginTop:3 }}>총 {rates.total.toFixed(1)}%</div>
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>직급</label>
-                    <select value={row.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value, performanceRaise:getScenarioPerformanceDefault(year, e.target.value) })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select disabled={!!savedRec} value={effectiveRow.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value, performanceRaise:getScenarioPerformanceDefault(year, e.target.value) })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       {['CL1','CL2','CL3','CL4'].map(x=><option key={x} value={x}>{x}</option>)}
                     </select>
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>사업부</label>
-                    <select value={row.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select disabled={!!savedRec} value={effectiveRow.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       <option value="memory">메모리</option>
                       <option value="common">공통</option>
                       <option value="lepan">르팡</option>
@@ -2189,14 +2266,14 @@ function App() {
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>적자여부</label>
-                    <select disabled={!deficitEnabled} value={deficitEnabled ? (row.deficit || 'none') : 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:deficitEnabled?'#0b1220':'rgba(15,23,42,.45)', color:deficitEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select disabled={!deficitEnabled} value={deficitEnabled ? (effectiveRow.deficit || 'none') : 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:deficitEnabled?'#0b1220':'rgba(15,23,42,.45)', color:deficitEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       <option value="none">해당없음</option>
                       <option value="lepan">르팡적자</option>
                     </select>
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>CL4 고과</label>
-                    <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (row.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(15,23,42,.45)', color:cl4RatingEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (effectiveRow.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(15,23,42,.45)', color:cl4RatingEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       <option value="MT">MT</option>
                       <option value="ES">ES +10%</option>
                       <option value="EM">EM +20%</option>
@@ -2216,8 +2293,8 @@ function App() {
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:14, marginBottom:14 }} className="two-col-grid">
-          <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(255,180,0,.22)', borderRadius:18, padding:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:14, marginBottom:14 }} className="two-col-grid sp-rsu-panel-grid">
+          <div className="sp-rsu-card" style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(255,180,0,.22)', borderRadius:18, padding:16 }}>
             <div style={{ fontSize:15, fontWeight:900, color:'#FACC15', marginBottom:12 }}>SP 특별경영성과급</div>
             <label style={{ display:'block', color:'#CBD5E1', fontSize:12, marginBottom:6 }}>{targetSpYear}년 세후 SP 수동 지급액(만) · 비워두면 연봉저장값 또는 산출결과 사용</label>
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
@@ -2243,7 +2320,7 @@ function App() {
               최근 이월/저장: {targetSpYear-1}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevOneSpNet)}</b>, {targetSpYear-2}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevTwoSpNet)}</b><br/>
               조회 기준일: <b style={{ color:'#BAE6FD' }}>{todayLabel}</b> · 연봉저장값이 있으면 저장값 우선, 없으면 수동입력/현재 산출값을 사용합니다.
             </div>
-            <div style={{ marginTop:10, display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
+            <div className="sp-year-ref-grid" style={{ marginTop:10, display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:8 }}>
               {spYearRefs.map(item => (
                 <div key={item.year} style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)', borderRadius:10, padding:9 }}>
                   <div style={{ color:'#CBD5E1', fontSize:11, fontWeight:900 }}>{item.year}년 SP</div>
@@ -2258,7 +2335,7 @@ function App() {
             </div>
           </div>
 
-          <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(167,139,250,.22)', borderRadius:18, padding:16 }}>
+          <div className="sp-rsu-card" style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(167,139,250,.22)', borderRadius:18, padding:16 }}>
             <div style={{ fontSize:15, fontWeight:900, color:'#C4B5FD', marginBottom:12 }}>RSU/PSU 지급 조건</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:10 }}>
               <button onClick={()=>setRsuEligibleOnGrantDate(!rsuEligibleOnGrantDate)} style={{ background:rsuEligibleOnGrantDate?'rgba(34,197,94,.18)':'rgba(239,68,68,.12)', color:rsuEligibleOnGrantDate?'#86EFAC':'#FCA5A5', border:'1px solid rgba(255,255,255,.12)', borderRadius:12, padding:'11px', fontWeight:900 }}>25.10.15 재직 {rsuEligibleOnGrantDate?'ON':'OFF'}</button>
