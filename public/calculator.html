@@ -267,6 +267,147 @@
     .reward-table.compact-mobile { min-width: 500px !important; }
   }
 
+
+
+  /* 결과 영역 카드/간격/폰트 최적화 */
+  .result-panel-root {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px 26px 36px;
+    width: 100%;
+    max-width: 1320px;
+    margin: 0 auto;
+  }
+  .result-hero { margin-bottom: 2px; }
+  .result-chip-row { margin-top: 10px !important; gap: 8px !important; }
+  .summary-grid {
+    gap: 10px;
+    margin-bottom: 8px;
+    align-items: stretch;
+  }
+  .summary-card {
+    background: linear-gradient(180deg, rgba(15,24,40,.98), rgba(11,18,32,.94));
+    border-radius: 14px;
+    padding: 14px 12px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.09);
+    min-height: 88px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-shadow: 0 10px 24px rgba(0,0,0,.18);
+  }
+  .summary-card-label {
+    font-size: 11px;
+    color: #CBD5E1;
+    margin-bottom: 7px;
+    line-height: 1.25;
+    white-space: normal;
+    word-break: keep-all;
+  }
+  .summary-card-value {
+    font-size: 21px;
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+  }
+  .result-card-shell {
+    background: linear-gradient(135deg, rgba(12,22,38,.98), rgba(9,15,27,.94));
+    border-radius: 18px;
+    padding: 18px 20px;
+    margin-bottom: 0;
+    box-shadow: 0 16px 34px rgba(0,0,0,.24);
+  }
+  .result-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .result-card-title {
+    font-size: 18px !important;
+    font-weight: 900 !important;
+    margin-bottom: 6px !important;
+    line-height: 1.2;
+  }
+  .result-card-sub {
+    font-size: 12px;
+    color: #CBD5E1;
+    line-height: 1.5;
+  }
+  .result-card-value {
+    text-align: right;
+    min-width: 140px;
+  }
+  .result-card-value-text {
+    font-size: 26px !important;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+  .result-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card-status-grid {
+    gap: 10px;
+    margin-bottom: 2px;
+  }
+  .card-status-grid > div {
+    background: rgba(255,255,255,0.045) !important;
+    border-radius: 12px !important;
+    padding: 12px 10px !important;
+    min-height: 72px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .card-status-grid > div > div:first-child {
+    font-size: 11px !important;
+    margin-bottom: 5px !important;
+  }
+  .card-status-grid > div > div:last-child {
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    line-height: 1.2;
+  }
+  .result-card-shell .shares-grid > div,
+  .result-card-shell .dc-ratio-grid > div {
+    border-radius: 12px !important;
+    padding: 12px 10px !important;
+  }
+  @media (max-width: 1180px) {
+    .result-panel-root { padding: 20px 18px 30px; }
+    .summary-card-value { font-size: 18px; }
+    .result-card-value-text { font-size: 23px !important; }
+  }
+  @media (max-width: 768px) {
+    .result-panel-root { padding: 16px 14px 24px; gap: 14px; }
+    .result-hero > div:first-child { font-size: 18px !important; }
+    .summary-grid { gap: 8px; }
+    .summary-card { min-height: 78px; padding: 12px 10px; }
+    .summary-card-label { font-size: 10px; margin-bottom: 5px; }
+    .summary-card-value { font-size: 17px; }
+    .result-card-shell { padding: 15px 14px; border-radius: 16px; }
+    .result-card-title { font-size: 16px !important; }
+    .result-card-sub { font-size: 11px; }
+    .result-card-value { text-align: left; min-width: 0; width: 100%; }
+    .result-card-value-text { font-size: 21px !important; }
+    .result-card-header { margin-bottom: 12px; }
+    .card-status-grid { gap: 8px; }
+    .card-status-grid > div { min-height: 0; padding: 10px 9px !important; }
+    .card-status-grid > div > div:last-child { font-size: 14px !important; }
+  }
+  @media (max-width: 480px) {
+    .result-panel-root { padding: 14px 10px 22px; }
+    .summary-card-value { font-size: 16px; }
+    .result-card-value-text { font-size: 19px !important; }
+  }
+
 </style>
 </head>
 <body>
@@ -548,18 +689,17 @@ function DraftNumberInput({ value, onCommit, inputMode="numeric", disabled=false
 
 function ResultCard({ icon, title, valueColor, sub, value, accent, children }) {
   return (
-    <div style={{
+    <div className="result-card-shell" style={{
       background:`linear-gradient(135deg,${accent||"rgba(0,198,255,0.06)"},transparent)`,
-      border:`1px solid ${accent?accent+"55":"rgba(0,198,255,0.18)"}`,
-      borderRadius:16, padding:"16px 18px", marginBottom:10
+      border:`1px solid ${accent?accent+"55":"rgba(0,198,255,0.18)"}`
     }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12, flexWrap:"wrap", gap:8 }}>
+      <div className="result-card-header">
         <div>
-          <div style={{ fontSize:15, fontWeight:800, color:valueColor||"#00C6FF", marginBottom:5 }}>{icon} {title}</div>
-          {sub && <div style={{ fontSize:11, color:"#CBD5E1" }}>{sub}</div>}
+          <div className="result-card-title" style={{ color:valueColor||"#00C6FF" }}>{icon} {title}</div>
+          {sub && <div className="result-card-sub">{sub}</div>}
         </div>
-        <div style={{ textAlign:"right" }}>
-          <div style={{ fontSize:24, fontWeight:900, color:valueColor||"#00C6FF", lineHeight:1.1 }}>{value}</div>
+        <div className="result-card-value">
+          <div className="result-card-value-text" style={{ color:valueColor||"#00C6FF" }}>{value}</div>
         </div>
       </div>
       {children}
@@ -2964,11 +3104,11 @@ function App() {
 
   /* ── 결과 패널 ── */
   const ResultPanel = () => (
-    <div style={{ display:"flex", flexDirection:"column", gap:0, padding:"20px 22px 30px" }}>
-      <div style={{ marginBottom:16 }}>
+    <div className="result-panel-root">
+      <div className="result-hero">
         <div style={{ fontSize:11, color:"#1E90FF", letterSpacing:"0.12em", fontWeight:800, marginBottom:4 }}>결과 요약</div>
         <div style={{ fontSize:20, fontWeight:900, background:"linear-gradient(90deg,#fff,#7ec8ff)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>성과급 계산 결과</div>
-        <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+        <div className="result-chip-row" style={{ display:"flex", flexWrap:"wrap", alignItems:"center" }}>
           <span style={{ fontSize:11, background:"rgba(0,198,255,0.1)", border:"1px solid rgba(0,198,255,0.25)", color:"#00C6FF", borderRadius:7, padding:"3px 10px", fontWeight:700 }}>
             DS 영업이익: {profit}조
           </span>
@@ -2993,9 +3133,9 @@ function App() {
           ...(r.excessCash>0?[{label:"상한초과 1회성",val:fmtM(r.excessCash),color:"#FF6B6B"}]:[]),
           {label:"총 영끌(세전)", val:fmtM(r.totalBonus), color:"#fff"},
         ].map(item=>(
-          <div key={item.label} style={{ background:"#0e1828", borderRadius:12, padding:"12px 8px", textAlign:"center", border:"1px solid rgba(255,255,255,0.1)" }}>
-            <div style={{ fontSize:10, color:"#CBD5E1", marginBottom:5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{item.label}</div>
-            <div style={{ fontSize:12, fontWeight:800, color:item.color, lineHeight:1.3 }}>{item.val}</div>
+          <div key={item.label} className="summary-card">
+            <div className="summary-card-label">{item.label}</div>
+            <div className="summary-card-value" style={{ color:item.color }}>{item.val}</div>
           </div>
         ))}
       </div>
@@ -3094,7 +3234,7 @@ function App() {
                       {div.label} {isMe && <span style={{fontSize:11, color:"#FFB400"}}>← 내 사업부</span>}
                       <span style={{fontSize:10, color:"#64748B", fontWeight:400, marginLeft:6}}>({div.cnt.toLocaleString()}명)</span>
                     </span>
-                    <div style={{ textAlign:"right" }}>
+                    <div className="result-card-value">
                       <div style={{ fontSize:14, fontWeight:900, color:div.color }}>{fmtM(div.total)}<span style={{fontSize:10, color:"#94A3B8", fontWeight:400, marginLeft:3}}>1인당</span></div>
                       <div style={{ fontSize:11, fontWeight:700, color:div.color, opacity:0.75 }}>사업부 합계 {divTotalJo}조원</div>
                     </div>
@@ -3377,7 +3517,7 @@ function App() {
           <span style={{ fontSize:14, fontWeight:700, color:r.healthTotal > 0 ? "#00DC82" : "#FF6B6B" }}>
             차년도 {r.healthTotal > 0 ? "추가징수" : "환급"} 총액
           </span>
-          <div style={{ textAlign:"right" }}>
+          <div className="result-card-value">
             <div style={{ fontSize:20, fontWeight:900, color:r.healthTotal > 0 ? "#00DC82" : "#FF6B6B" }}>
               {r.healthTotal > 0 ? `+ ${fmtM(r.healthTotal)}` : fmtM(r.healthTotal)}
             </div>
