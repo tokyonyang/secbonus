@@ -1997,11 +1997,24 @@ function App() {
   };
   const tabHashes = ['#info', '#simulation', '#result', '#logic', '#salary-save', '#salary-trend', '#board', '#sp-rsu'];
 
+  const scrollMainToTop = () => {
+    if (typeof window === 'undefined') return;
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const main = document.querySelector('.main-layout');
+      if (main) main.scrollTop = 0;
+    });
+  };
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const applyHashTab = () => {
-      const nextTab = tabHashMap[window.location.hash];
-      if (Number.isInteger(nextTab)) setTab(nextTab);
+      const normalizedHash = String(window.location.hash || '').toLowerCase();
+      const nextTab = tabHashMap[normalizedHash];
+      if (Number.isInteger(nextTab)) {
+        setTab(nextTab);
+        scrollMainToTop();
+      }
     };
     applyHashTab();
     window.addEventListener('hashchange', applyHashTab);
@@ -2015,8 +2028,11 @@ function App() {
       if (hash && window.location.hash !== hash) {
         window.history.replaceState(null, '', hash);
       }
+      scrollMainToTop();
     }
   };
+
+  const openSpRsu = () => moveTab(7);
 
 
 
@@ -3666,7 +3682,7 @@ function App() {
             <button onClick={()=>moveTab(1)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#1E90FF,#0070CC)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(30,144,255,0.4)", transition:"all .2s" }}>
               시뮬레이션 설정으로 →
             </button>
-            <button onClick={()=>moveTab(7)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
+            <button onClick={openSpRsu} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
               SP/RSU 예상보기 →
             </button>
           </div>
@@ -3946,7 +3962,7 @@ function App() {
             <button onClick={()=>moveTab(2)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#FFB400,#F59E0B)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(255,180,0,0.3)", transition:"all .2s" }}>
               산출결과 확인하기 →
             </button>
-            <button onClick={()=>moveTab(7)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
+            <button onClick={openSpRsu} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
               SP/RSU 예상보기 →
             </button>
           </div>
@@ -4295,6 +4311,19 @@ function App() {
           }}
         >
           <button
+            type="button"
+            onClick={openSpRsu}
+            title="SP/RSU 예상보기"
+            style={{
+              border:"1px solid rgba(168,85,247,.35)", borderRadius:12,
+              background: tab === 7 ? "linear-gradient(135deg,#A855F7,#7C3AED)" : "rgba(168,85,247,.14)",
+              color:"#F5F3FF", padding:"9px 12px", fontWeight:900, fontSize:12,
+              cursor:"pointer", whiteSpace:"nowrap", boxShadow: tab === 7 ? "0 4px 18px rgba(168,85,247,.25)" : "none"
+            }}
+          >
+            SP/RSU
+          </button>
+          <button
             onClick={marketInfo?.type === 'stock' ? () => fetchStockQuote(marketInfo.symbol, { save:false }) : fetchKospiIndex}
             title="시장정보 새로고침"
             style={{
@@ -4347,7 +4376,7 @@ function App() {
             <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(4)} />
           </div>
         ) : tab === 7 ? (
-          <div style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
+          <div id="sp-rsu-section" style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
             {EquityRewardSimContent()}
           </div>
         ) : (
