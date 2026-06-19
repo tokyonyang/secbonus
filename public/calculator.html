@@ -2341,11 +2341,6 @@ function App() {
     const rsuCashableNet = rsuSchedule.filter(x => isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.netAmount, 0);
     const rsuRestrictedNet = rsuSchedule.filter(x => !isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.netAmount, 0);
     const totalCashableNet = spCashableNet + rsuCashableNet;
-    // 지급 예상일 기준 현금화 가능액: 오늘 기준 매도 가능분이 아니라,
-    // 각 SP/RSU 지급 예정일에 실제 현금화 가능한 세후 금액으로 산출합니다.
-    const spExpectedPayoutCashableNet = spSchedule.reduce((sum, x) => sum + x.amount, 0);
-    const rsuExpectedPayoutCashableNet = rsuSchedule.reduce((sum, x) => sum + x.netAmount, 0);
-    const totalExpectedPayoutCashableNet = spExpectedPayoutCashableNet + rsuExpectedPayoutCashableNet;
     const totalRestrictedNet = spRestrictedNet + rsuRestrictedNet;
     const totalRestrictedGross = spRestrictedNet + rsuRestrictedGross;
     const totalNet = spFuturePayoutTotal + rsuNetFutureMan;
@@ -2391,7 +2386,7 @@ function App() {
       { label:'SP 향후 매도 가능 합계', desc:`${targetSpYear}년 SP + 최근 2년 이월 잔여분`, values:fmtM(spFuturePayoutTotal) },
       { label:'기준년도 이전 2년 SP', desc:`${targetSpYear-1}년·${targetSpYear-2}년 이월 반영분`, values:`${targetSpYear-1}년 ${fmtM(prevOneSp2 + prevOneSp3)} · ${targetSpYear-2}년 ${fmtM(prevTwoSp3)} · 합계 ${fmtM(priorTwoSpCarryoverTotal)}` },
       { label:'RSU/PSU 지급 주식', desc:rsuEligible ? `${normalizeCl(myCl)} 기준 기초 ${baseShareCount}주 × ${multiplierLabel}` : '25.10.15 재직/약정 조건 미충족', values:`${comma(finalShareCount)}주 · 세전 ${fmtM(rsuGrossFutureMan)} · 세후 ${fmtM(rsuNetFutureMan)}` },
-      { label:'지급 예상일 기준 현금화 가능액', desc:'각 지급 예정일 도래 시 현금화 가능한 세후 금액', values:`SP ${fmtM(spExpectedPayoutCashableNet)} + RSU/PSU 세후 ${fmtM(rsuExpectedPayoutCashableNet)} = ${fmtM(totalExpectedPayoutCashableNet)}` },
+      { label:'현재 현금화 가능액', desc:`${todayLabel} 기준 매도 가능분`, values:`SP ${fmtM(spCashableNet)} + RSU/PSU 세후 ${fmtM(rsuCashableNet)} = ${fmtM(totalCashableNet)}` },
       { label:'자사주 매도 제한 규모', desc:'아직 매도 가능일이 오지 않은 제한분', values:`세후 ${fmtM(totalRestrictedNet)} · 세전 참고 ${fmtM(totalRestrictedGross)}` },
     ];
     return (
@@ -2573,7 +2568,7 @@ function App() {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:14 }} className="summary-grid">
           <div style={{ background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.22)', borderRadius:15, padding:14 }}><div style={{ color:'#A7F3D0', fontSize:12, fontWeight:800 }}>총 지급 예상 세전</div><div style={{ color:'#34D399', fontSize:24, fontWeight:900 }}>{fmtM(totalGross)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>기준년도 SP {fmtM(currentSpTotalInSchedule)} + 이전 2년 이월 {fmtM(priorTwoSpCarryoverTotal)} + RSU {fmtM(rsuGrossFutureMan)}</div></div>
           <div style={{ background:'rgba(0,198,255,.08)', border:'1px solid rgba(0,198,255,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800 }}>총 지급 예상 세후</div><div style={{ color:'#38BDF8', fontSize:24, fontWeight:900 }}>{fmtM(totalNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>SP 합계 {fmtM(spFuturePayoutTotal)} 안에 이전 2년치 이월분 포함</div></div>
-          <div style={{ background:'rgba(34,197,94,.08)', border:'1px solid rgba(34,197,94,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BBF7D0', fontSize:12, fontWeight:800 }}>지급 예상일 기준 현금화 가능액</div><div style={{ color:'#86EFAC', fontSize:18, fontWeight:900 }}>{fmtM(totalExpectedPayoutCashableNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>지급 예정일 도래 기준 · SP {fmtM(spExpectedPayoutCashableNet)} + RSU/PSU 세후 {fmtM(rsuExpectedPayoutCashableNet)}</div></div>
+          <div style={{ background:'rgba(34,197,94,.08)', border:'1px solid rgba(34,197,94,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BBF7D0', fontSize:12, fontWeight:800 }}>현재 현금화 가능액</div><div style={{ color:'#86EFAC', fontSize:18, fontWeight:900 }}>{fmtM(totalCashableNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>{todayLabel} 기준 · SP {fmtM(spCashableNet)} + RSU/PSU 세후 {fmtM(rsuCashableNet)}</div></div>
           <div style={{ background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FECACA', fontSize:12, fontWeight:800 }}>자사주 매도 제한액</div><div style={{ color:'#FCA5A5', fontSize:18, fontWeight:900 }}>{fmtM(totalRestrictedNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>세후 기준 · 세전 참고 {fmtM(totalRestrictedGross)}</div></div>
           <div style={{ background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FDE68A', fontSize:12, fontWeight:800 }}>{spSaleBaseYear}년 SP 예정</div><div style={{ color:'#FACC15', fontSize:18, fontWeight:900 }}>{fmtM(spNextYearPayout)}</div></div>
           <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#DDD6FE', fontSize:12, fontWeight:800 }}>RSU/PSU 세전/세후</div><div style={{ color:'#C4B5FD', fontSize:18, fontWeight:900 }}>{fmtM(rsuGrossFutureMan)} / {fmtM(rsuNetFutureMan)}</div></div>
