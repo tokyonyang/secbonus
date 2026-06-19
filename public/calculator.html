@@ -90,11 +90,11 @@
       font-size: 9px !important; margin-top: 0;
     }
     .nav-tabs {
-      margin-left: 0; width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-left: 0; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px; padding: 6px; justify-content: initial; border-radius: 16px;
     }
     .nav-tabs button {
-      width: 100%; min-width: 0; justify-content: center; padding: 9px 4px !important;
+      width: 100%; min-width: 0; justify-content: center; padding: 9px 3px !important;
       font-size: 11px !important; white-space: nowrap; border-radius: 12px !important; gap: 4px !important;
     }
     .nav-tabs button span:first-child { font-size: 13px !important; }
@@ -200,7 +200,7 @@
       overflow: visible;
     }
     .header { position: relative; }
-    .nav-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .nav-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
 
 
@@ -1983,6 +1983,41 @@ function App() {
     { icon:"🎁", label:"SP/RSU" },
   ];
 
+  const tabHashMap = {
+    '#info': 0,
+    '#simulation': 1,
+    '#result': 2,
+    '#logic': 3,
+    '#salary-save': 4,
+    '#salary-trend': 5,
+    '#board': 6,
+    '#sp-rsu': 7,
+    '#rsu': 7,
+    '#sp': 7,
+  };
+  const tabHashes = ['#info', '#simulation', '#result', '#logic', '#salary-save', '#salary-trend', '#board', '#sp-rsu'];
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const applyHashTab = () => {
+      const nextTab = tabHashMap[window.location.hash];
+      if (Number.isInteger(nextTab)) setTab(nextTab);
+    };
+    applyHashTab();
+    window.addEventListener('hashchange', applyHashTab);
+    return () => window.removeEventListener('hashchange', applyHashTab);
+  }, []);
+
+  const moveTab = (nextTab) => {
+    setTab(nextTab);
+    if (typeof window !== 'undefined') {
+      const hash = tabHashes[nextTab];
+      if (hash && window.location.hash !== hash) {
+        window.history.replaceState(null, '', hash);
+      }
+    }
+  };
+
 
 
   const EquityRewardSimContent = () => {
@@ -3627,9 +3662,14 @@ function App() {
             </div>
           </FieldBox>
 
-          <button onClick={()=>setTab(1)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#1E90FF,#0070CC)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(30,144,255,0.4)", transition:"all .2s" }}>
-            시뮬레이션 설정으로 →
-          </button>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:10 }} className="two-col-grid">
+            <button onClick={()=>moveTab(1)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#1E90FF,#0070CC)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(30,144,255,0.4)", transition:"all .2s" }}>
+              시뮬레이션 설정으로 →
+            </button>
+            <button onClick={()=>moveTab(7)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
+              SP/RSU 예상보기 →
+            </button>
+          </div>
         </>
       )}
 
@@ -3902,9 +3942,14 @@ function App() {
           </FieldBox>
           
           {/* 시뮬레이션 하단에서 결과 탭으로 바로 이동하는 편의 기능 추가 */}
-          <button onClick={()=>setTab(2)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#FFB400,#F59E0B)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(255,180,0,0.3)", transition:"all .2s", marginTop: 10 }}>
-            산출결과 확인하기 →
-          </button>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:10, marginTop:10 }} className="two-col-grid">
+            <button onClick={()=>moveTab(2)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#FFB400,#F59E0B)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(255,180,0,0.3)", transition:"all .2s" }}>
+              산출결과 확인하기 →
+            </button>
+            <button onClick={()=>moveTab(7)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
+              SP/RSU 예상보기 →
+            </button>
+          </div>
         </>
       )}
 
@@ -4230,7 +4275,7 @@ function App() {
           </div>
           <div className="nav-tabs">
             {tabs.map((t,i) => (
-              <button key={i} onClick={() => setTab(i)} style={{
+              <button key={i} onClick={() => moveTab(i)} aria-current={tab===i ? "page" : undefined} style={{
                 padding:"7px 18px", border:"none", cursor:"pointer", fontFamily:"inherit",
                 borderRadius:9, display:"flex", alignItems:"center", gap:6,
                 background: tab===i ? "rgba(30,144,255,0.18)" : "none",
@@ -4299,7 +4344,7 @@ function App() {
           </div>
         ) : tab === 6 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent' }}>
-            <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => setTab(4)} />
+            <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(4)} />
           </div>
         ) : tab === 7 ? (
           <div style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
@@ -4321,7 +4366,7 @@ function App() {
           </>
         )}
       </div>
-      <LiveChatPopup salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => setTab(4)} />
+      <LiveChatPopup salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(4)} />
     </div>
   );
 }
