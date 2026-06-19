@@ -992,7 +992,11 @@ function App() {
   const getSpecialSpStatusForYear = (year, asOf = todayDate) => asOf >= getSpConfirmDate(year) ? '확정' : '예상';
   const getSpecialSpStatusColor = (status) => status === '확정' ? '#86EFAC' : '#FDE68A';
   const getRecordSpecialSpNet = (year, records = salaryRecords) => {
-    const rec = findRecordByYear(records, Number(year));
+    const y = Number(year);
+    // 특별경영성과급은 2026년도 성과부터 지급되는 것으로 반영합니다.
+    // 따라서 2025년까지는 저장값이 있더라도 SP 금액은 0원으로 처리합니다.
+    if (y <= 2025) return 0;
+    const rec = findRecordByYear(records, y);
     const value = Math.round(Number(rec?.special_sp_net_man ?? 0) || 0);
     return value > 0 ? value : 0;
   };
@@ -1988,12 +1992,21 @@ function App() {
         source: 'saved',
       };
     };
+    const getLatestSavedScenarioDivision = () => {
+      const latest = getHighestYearSalaryRecord(salaryRecords || []);
+      return latest?.division || myDiv || 'memory';
+    };
     const getEffectiveScenarioRow = (year, row={}) => {
       const saved = getSavedScenarioRecordRow(year);
       if (saved && saved.salary > 0) {
         return { ...row, ...saved, profit: row.profit ?? 200, deficit: row.deficit ?? 'none', rating: row.rating ?? 'MT', source:'saved' };
       }
-      return row || {};
+      // 사업부는 변경되는 경우가 드물기 때문에, 저장값이 없는 예상연도는
+      // 가장 최근 연봉정보의 사업부를 기본값으로 사용합니다. 단, 사용자가 해당 연도에서
+      // 사업부를 직접 바꾼 경우에는 그 값을 우선합니다.
+      const latestDivision = getLatestSavedScenarioDivision();
+      const division = row?.divisionManual ? (row.division || latestDivision) : latestDivision;
+      return { ...(row || {}), division };
     };
     const getScenarioRaiseRates = (year, row={}) => {
       const effectiveRow = getEffectiveScenarioRow(year, row);
@@ -2016,6 +2029,8 @@ function App() {
       return Math.round(prevSalary * (1 + rates.total / 100));
     };
     const calcScenarioSpecialNet = (year) => {
+      // 특별경영성과급은 2026년도 성과부터 지급합니다. 2025년까지는 모두 0원입니다.
+      if (Number(year) <= 2025) return 0;
       const rawRow = spRsuScenarioRows[year] || {};
       const row = getEffectiveScenarioRow(year, rawRow);
       if (!row) return 0;
@@ -2112,6 +2127,8 @@ function App() {
     ];
     const spNextYearPayout = spSchedule[0]?.amount || 0;
     const spFuturePayoutTotal = spSchedule.reduce((sum, x) => sum + x.amount, 0);
+    const priorTwoSpCarryoverTotal = prevOneSp2 + prevOneSp3 + prevTwoSp3;
+    const currentSpTotalInSchedule = currentSp1 + currentSp2 + currentSp3;
 
     const psuInitialBasePrice = 85385;
     const futureBasePrice = Math.max(0, Number(rsuFutureBasePrice) || 0);
@@ -2178,6 +2195,7 @@ function App() {
     const rows = [
       { label:'다음 지급연도 SP', desc:`${spSaleBaseYear}년 수령/매도 가능액 · 전년도 이월분 포함`, values:fmtM(spNextYearPayout) },
       { label:'SP 향후 매도 가능 합계', desc:`${targetSpYear}년 SP + 최근 2년 이월 잔여분`, values:fmtM(spFuturePayoutTotal) },
+      { label:'기준년도 이전 2년 SP', desc:`${targetSpYear-1}년·${targetSpYear-2}년 이월 반영분`, values:`${targetSpYear-1}년 ${fmtM(prevOneSp2 + prevOneSp3)} · ${targetSpYear-2}년 ${fmtM(prevTwoSp3)} · 합계 ${fmtM(priorTwoSpCarryoverTotal)}` },
       { label:'RSU/PSU 지급 주식', desc:rsuEligible ? `${normalizeCl(myCl)} 기준 기초 ${baseShareCount}주 × ${multiplierLabel}` : '25.10.15 재직/약정 조건 미충족', values:`${comma(finalShareCount)}주 · 세전 ${fmtM(rsuGrossFutureMan)} · 세후 ${fmtM(rsuNetFutureMan)}` },
     ];
     return (
@@ -2258,7 +2276,7 @@ function App() {
                   </div>
                   <div>
                     <label style={{ color:'#CBD5E1', fontSize:11 }}>사업부</label>
-                    <select disabled={!!savedRec} value={effectiveRow.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
+                    <select disabled={!!savedRec} value={effectiveRow.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, divisionManual:true, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(15,23,42,.55)':'#0b1220', color:savedRec?'#86EFAC':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
                       <option value="memory">메모리</option>
                       <option value="common">공통</option>
                       <option value="lepan">르팡</option>
@@ -2357,8 +2375,8 @@ function App() {
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:14 }} className="summary-grid">
-          <div style={{ background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.22)', borderRadius:15, padding:14 }}><div style={{ color:'#A7F3D0', fontSize:12, fontWeight:800 }}>총 지급 예상 세전</div><div style={{ color:'#34D399', fontSize:24, fontWeight:900 }}>{fmtM(totalGross)}</div></div>
-          <div style={{ background:'rgba(0,198,255,.08)', border:'1px solid rgba(0,198,255,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800 }}>총 지급 예상 세후</div><div style={{ color:'#38BDF8', fontSize:24, fontWeight:900 }}>{fmtM(totalNet)}</div></div>
+          <div style={{ background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.22)', borderRadius:15, padding:14 }}><div style={{ color:'#A7F3D0', fontSize:12, fontWeight:800 }}>총 지급 예상 세전</div><div style={{ color:'#34D399', fontSize:24, fontWeight:900 }}>{fmtM(totalGross)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>기준년도 SP {fmtM(currentSpTotalInSchedule)} + 이전 2년 이월 {fmtM(priorTwoSpCarryoverTotal)} + RSU {fmtM(rsuGrossFutureMan)}</div></div>
+          <div style={{ background:'rgba(0,198,255,.08)', border:'1px solid rgba(0,198,255,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800 }}>총 지급 예상 세후</div><div style={{ color:'#38BDF8', fontSize:24, fontWeight:900 }}>{fmtM(totalNet)}</div><div style={{ color:'#94A3B8', fontSize:10, lineHeight:1.45, marginTop:5 }}>SP 합계 {fmtM(spFuturePayoutTotal)} 안에 이전 2년치 이월분 포함</div></div>
           <div style={{ background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FDE68A', fontSize:12, fontWeight:800 }}>{spSaleBaseYear}년 SP 예정</div><div style={{ color:'#FACC15', fontSize:18, fontWeight:900 }}>{fmtM(spNextYearPayout)}</div></div>
           <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#DDD6FE', fontSize:12, fontWeight:800 }}>RSU/PSU 세전/세후</div><div style={{ color:'#C4B5FD', fontSize:18, fontWeight:900 }}>{fmtM(rsuGrossFutureMan)} / {fmtM(rsuNetFutureMan)}</div></div>
         </div>
