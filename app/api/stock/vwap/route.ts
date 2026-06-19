@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export const revalidate = 300;
+export const revalidate = 3600;
 
 type Bar = { date: number; close: number; volume: number };
 
@@ -47,7 +47,7 @@ export async function GET() {
     // PSU 기준주가 산식과 동일하게 Yahoo Finance 일봉 데이터만 사용합니다.
     // 기준주가 = (1주 VWAP + 1개월 VWAP + 2개월 VWAP) / 3
     const yahoo = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/005930.KS?interval=1d&range=3mo', {
-      next: { revalidate: 300 },
+      next: { revalidate: 3600 },
       headers: {
         'User-Agent': 'Mozilla/5.0',
         'Accept': 'application/json',
