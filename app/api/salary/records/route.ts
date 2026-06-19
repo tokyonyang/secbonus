@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('salary_records')
-      .select('id,year,cl,cl_year,job_family,division,contract_salary_man,base_up_raise_rate,performance_raise_rate,raise_rate,promotion_yn,promotion_from_cl,promotion_to_cl,promotion_raise_rate,ds_ps_rate,business_performance_bonus_man,withholding_income_man,withholding_pi_rate,withholding_ps_man,withholding_pi_man,memo,created_at,updated_at')
+      .select('id,year,cl,cl_year,job_family,division,contract_salary_man,base_up_raise_rate,performance_raise_rate,raise_rate,promotion_yn,promotion_from_cl,promotion_to_cl,promotion_raise_rate,ds_ps_rate,business_performance_bonus_man,special_sp_net_man,special_sp_status,special_sp_reference_date,withholding_income_man,withholding_pi_rate,withholding_ps_man,withholding_pi_man,memo,created_at,updated_at')
       .eq('user_id', auth.userId)
       .order('year', { ascending: false });
     if (error) throw error;
@@ -51,6 +51,9 @@ export async function POST(request: Request) {
       promotion_raise_rate: num(body.promotionRaiseRate, 0, 30),
       ds_ps_rate: num(body.dsPsRate, 0, 100),
       business_performance_bonus_man: Math.round(num(body.businessPerformanceBonusMan, 0, 200000)),
+      special_sp_net_man: Math.round(num(body.specialSpNetMan, 0, 300000)),
+      special_sp_status: clean(body.specialSpStatus, 20) || '예상',
+      special_sp_reference_date: clean(body.specialSpReferenceDate, 20) || new Date().toISOString().slice(0, 10),
       withholding_income_man: Math.round(num(body.withholdingIncomeMan, 0, 300000)),
       withholding_pi_rate: num(body.withholdingPiRate, 0, 100),
       withholding_ps_man: Math.round(num(body.withholdingPsMan, 0, 200000)),
@@ -65,7 +68,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase
       .from('salary_records')
       .upsert(payload, { onConflict: 'user_id,year' })
-      .select('id,year,cl,cl_year,job_family,division,contract_salary_man,base_up_raise_rate,performance_raise_rate,raise_rate,promotion_yn,promotion_from_cl,promotion_to_cl,promotion_raise_rate,ds_ps_rate,business_performance_bonus_man,withholding_income_man,withholding_pi_rate,withholding_ps_man,withholding_pi_man,memo,created_at,updated_at')
+      .select('id,year,cl,cl_year,job_family,division,contract_salary_man,base_up_raise_rate,performance_raise_rate,raise_rate,promotion_yn,promotion_from_cl,promotion_to_cl,promotion_raise_rate,ds_ps_rate,business_performance_bonus_man,special_sp_net_man,special_sp_status,special_sp_reference_date,withholding_income_man,withholding_pi_rate,withholding_ps_man,withholding_pi_man,memo,created_at,updated_at')
       .single();
     if (error) throw error;
     return NextResponse.json({ record: data });
