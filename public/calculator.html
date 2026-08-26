@@ -2974,6 +2974,40 @@ function App() {
     return () => clearTimeout(timer);
   }, [salaryToken]);
 
+  // ── 영업이익(DS) 공유 설정값 로드/저장 ──────────────────────────────────
+  // 누군가 입력하면 전역 공유값이 갱신되어 비로그인 사용자에게도 유지되고,
+  // 로그인 사용자는 본인이 마지막으로 저장한 값을 우선 반영합니다.
+  const sharedProfitLoaded = React.useRef(false);
+
+  useEffect(() => {
+    sharedProfitLoaded.current = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/settings/profit', { headers: salaryHeaders(), cache:'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.value !== null && data.value !== undefined) {
+          setDsAutoMode(false);
+          setProfit(Number(data.value));
+        }
+      } catch (e) {
+        console.warn('영업이익 공유 설정 조회 실패', e);
+      }
+      sharedProfitLoaded.current = true;
+    })();
+  }, [salaryToken]);
+
+  useEffect(() => {
+    if (!sharedProfitLoaded.current) return;
+    const timer = setTimeout(() => {
+      fetch('/api/settings/profit', {
+        method: 'POST',
+        headers: salaryHeaders(),
+        body: JSON.stringify({ value: profit }),
+      }).catch(e => console.warn('영업이익 공유 설정 저장 실패', e));
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [profit]);
+
   const calc = useCallback(() => {
     const buPct = burate * 10, saPct = 100 - buPct;
     const spThreshold = (simYear >= 2026 && simYear <= 2028) ? 200 : 100;
