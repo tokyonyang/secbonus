@@ -3071,17 +3071,20 @@ function App() {
     const taiW = samsungTaiAnnual * MAN;
 
     // ── 세금 계산: 누적 방식으로 각 항목의 한계세율 적용 ──────────────────
-    // 과세표준 순서: 연봉(+업무성과급) → OPI → 특별성과급 → TAI
+    // [실측] 과세표준 순서: 연봉(+업무성과급) → TAI → 특별성과급 → OPI
+    // TAI는 항상 원천징수 단계의 잠정금액으로 지급되므로 연봉 바로 다음(가장 낮은 누적소득
+    // 구간)에서 계산하고, OPI는 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이므로
+    // 누적 마지막 순서에 둡니다.
     // 각 항목의 세금 = 해당 항목까지 합산한 총세금 - 직전 합산 총세금
     const totalIncW = curW + opiW + spW + taiW;
     const taxBaseOnly  = totalTax(curW);
-    const taxWithOpi   = totalTax(curW + opiW);
-    const taxWithSp    = totalTax(curW + opiW + spW);
+    const taxWithTai   = totalTax(curW + taiW);
+    const taxWithSp    = totalTax(curW + taiW + spW);
     const taxWithAll   = totalTax(totalIncW);
 
-    const opiTaxWon  = Math.max(0, taxWithOpi  - taxBaseOnly);
-    const spTaxWon   = Math.max(0, taxWithSp   - taxWithOpi);
-    const taiTaxWon  = Math.max(0, taxWithAll  - taxWithSp);
+    const taiTaxWon  = Math.max(0, taxWithTai  - taxBaseOnly);
+    const spTaxWon   = Math.max(0, taxWithSp   - taxWithTai);
+    const opiTaxWon  = Math.max(0, taxWithAll  - taxWithSp);
 
     const opiTax = opiTaxWon / MAN;
     const opiNet = Math.max(0, opi - opiTax);
@@ -4575,33 +4578,37 @@ function App() {
             onChange={setInsuranceBasePercent}
           />
         </div>
-        <div className="reward-table-wrap">
-          <table className="reward-table compact-mobile" style={{ minWidth:640, width:"100%" }}>
-            <thead>
-              <tr style={{ borderBottom:"1px solid rgba(255,255,255,.12)" }}>
-                {["월","세전 월급","소득세","국민연금","건강보험","장기요양","고용보험","정산","실수령"].map(h => (
-                  <th key={h} style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"right", fontSize:11 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {getMonthlyTakeHomeRows().map(row => (
-                <tr key={row.month} style={{ borderBottom:"1px solid rgba(255,255,255,.06)", background: row.isSettlementMonth ? "rgba(255,180,0,0.06)" : "transparent" }}>
-                  <td style={{ padding:"8px 6px", color:"#fff", fontWeight:800, textAlign:"left" }}>{row.month}월{row.isSettlementMonth ? " 🏥" : ""}</td>
-                  <td style={{ padding:"8px 6px", color:"#E2E8F0", textAlign:"right" }}>{comma(row.grossWon/MAN)}만</td>
-                  <td style={{ padding:"8px 6px", color:"#FF6B6B", textAlign:"right" }}>−{comma(row.incomeTaxWon/MAN)}만</td>
-                  <td style={{ padding:"8px 6px", color:"#FF6B6B", textAlign:"right" }}>−{comma(row.npsWon/MAN)}만</td>
-                  <td style={{ padding:"8px 6px", color:"#FF6B6B", textAlign:"right" }}>−{comma(row.healthWon/MAN)}만</td>
-                  <td style={{ padding:"8px 6px", color:"#FF6B6B", textAlign:"right" }}>−{comma(row.ltcWon/MAN)}만</td>
-                  <td style={{ padding:"8px 6px", color:"#FF6B6B", textAlign:"right" }}>−{comma(row.employmentWon/MAN)}만</td>
-                  <td style={{ padding:"8px 6px", textAlign:"right", color: row.refundWon>0 ? "#00DC82" : row.settlementWon>0 ? "#FF6B6B" : "#64748B" }}>
-                    {row.refundWon>0 ? `+${comma(row.refundWon/MAN)}만` : row.settlementWon>0 ? `−${comma(row.settlementWon/MAN)}만` : "—"}
-                  </td>
-                  <td style={{ padding:"8px 6px", color:"#00C6FF", fontWeight:900, textAlign:"right" }}>{comma(row.netWon/MAN)}만</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {getMonthlyTakeHomeRows().map(row => (
+            <div key={row.month} style={{
+              background: row.isSettlementMonth ? "rgba(255,180,0,0.08)" : "rgba(255,255,255,0.03)",
+              border: row.isSettlementMonth ? "1px solid rgba(255,180,0,0.28)" : "1px solid rgba(255,255,255,0.08)",
+              borderRadius:12, padding:"10px 12px",
+            }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <div style={{ fontSize:14, fontWeight:900, color:"#fff" }}>
+                  {row.month}월{row.isSettlementMonth ? " 🏥 건보 정산" : ""}
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:10, color:"#64748B" }}>세전 {comma(row.grossWon/MAN)}만 → 실수령</div>
+                  <div style={{ fontSize:17, fontWeight:900, color:"#00C6FF" }}>{comma(row.netWon/MAN)}만원</div>
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"4px 8px", fontSize:11 }}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>소득세</span><span style={{color:"#FF6B6B"}}>−{comma(row.incomeTaxWon/MAN)}</span></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>국민연금</span><span style={{color:"#FF6B6B"}}>−{comma(row.npsWon/MAN)}</span></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>건강보험</span><span style={{color:"#FF6B6B"}}>−{comma(row.healthWon/MAN)}</span></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>장기요양</span><span style={{color:"#FF6B6B"}}>−{comma(row.ltcWon/MAN)}</span></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>고용보험</span><span style={{color:"#FF6B6B"}}>−{comma(row.employmentWon/MAN)}</span></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <span style={{color:"#64748B"}}>정산</span>
+                  <span style={{color: row.refundWon>0 ? "#00DC82" : row.settlementWon>0 ? "#FF6B6B" : "#64748B"}}>
+                    {row.refundWon>0 ? `+${comma(row.refundWon/MAN)}` : row.settlementWon>0 ? `−${comma(row.settlementWon/MAN)}` : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -5943,7 +5950,8 @@ function App() {
               <ul className="logic-ul">
                 <li>기준: <b>당해 총소득 (기준연봉 + 업무성과급 + OPI-1 + 특별성과급 + TAI 전부 합산)</b></li>
                 <li>TAI와 업무성과급도 근로소득으로서 동일하게 누진세율 과세 대상입니다.</li>
-                <li>각 항목의 세금은 <b>누적 방식</b>으로 계산됩니다: 연봉 → OPI-1 → OPI-2 → TAI 순서로 이전 합산 세액과의 차이로 산출.</li>
+                <li>각 항목의 세금은 <b>누적 방식</b>으로 계산됩니다: 연봉 → TAI → 특별성과급(OPI-2) → OPI-1 순서로 이전 합산 세액과의 차이로 산출.</li>
+                <li>TAI는 항상 <b>원천징수 단계의 잠정금액</b>으로 지급되므로 연봉 바로 다음(가장 낮은 누적소득 구간)에서 계산합니다. OPI-1은 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이라 누적 마지막 순서에 둡니다.</li>
                 <li>근로소득공제 한도: 총급여 1억 원 초과 시 <b>최대 1,475만 원</b>으로 고정됩니다.</li>
               </ul>
 
