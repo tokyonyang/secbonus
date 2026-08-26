@@ -1896,6 +1896,7 @@ function App() {
   const [prevWithholding, setPrevWithholding] = useState(8000);
   const [myRating, setMyRating] = useState("MT");
   const [insuranceBasePercent, setInsuranceBasePercent] = useState(100); // 4대보험 신고기준액 = 기준급 × 80/100/120% 중 선택
+  const [healthSettlementMonths, setHealthSettlementMonths] = useState(9); // 건보료 정산 분할납부 개월수 (법정 최대 12회, 회사 신청에 따라 다름)
 
   // ── 회사 실적 / 시뮬레이션 기준값 (ResultPanel, SettingsContent) ──────
   const [manualBasePrice, setManualBasePrice] = useState(260117);
@@ -3242,8 +3243,10 @@ function App() {
   // ── 월별 실수령액 시뮬레이션 (예측/추정) ────────────────────────────────
   // [예측] 소득세는 정확한 간이세액표가 아니라 연간 누진세율을 12개월 균등분할한
   // 근사치이며, 국민연금 기준소득월액 상한액은 매년 변경되는 공개값의 추정치입니다.
-  // [실측] 건강보험료 정산(추가징수/환급)은 4월부터 다음해 3월까지 12개월
-  // 균등 분할 납부로 반영합니다 (실제 정산·반영 시점 기준).
+  // [실측] 건강보험료 정산(추가징수/환급)은 4월부터 시작해 healthSettlementMonths
+  // (설정 탭에서 조정, 법정 최대 12회) 개월 동안 균등 분할 납부로 반영합니다.
+  // 국민건강보험법 시행령 제39조: "12회 이내의 범위에서 분할 납부" — 정확한 횟수는
+  // 회사가 공단에 신청하는 방식에 따라 다릅니다.
   // [실측] 퇴직연금저축은 월급의 3%가 공제되는 것으로 반영합니다.
   const NPS_RATE = 0.045; // 국민연금 근로자 부담률 4.5% (공개 요율)
   const NPS_MONTHLY_CAP_WON = 6370000; // 기준소득월액 상한 추정치 — 매년 7월 변경, 확인 필요
@@ -3267,14 +3270,16 @@ function App() {
     const monthlyIncomeTaxWon = Math.round(annualIncomeTaxWon / 12);
     const baseDeductionWon = npsWon + healthWon + ltcWon + employmentWon + monthlyIncomeTaxWon + retirementSavingWon;
     const isRefund = r.healthTotal < 0;
-    // 건강보험료 정산(추가징수/환급)은 4월~다음해 3월, 12개월 균등 분할 납부
-    const settlementMonthlyWon = Math.round(Math.abs(r.healthTotal) * MAN / 12);
+    // 건강보험료 정산(추가징수/환급)은 4월부터 healthSettlementMonths 개월 균등 분할 납부
+    const installments = Math.max(1, Math.min(12, healthSettlementMonths));
+    const settlementMonthlyWon = Math.round(Math.abs(r.healthTotal) * MAN / installments);
 
     return Array.from({ length: 12 }, (_, i) => {
       const month = ((i + 3) % 12) + 1; // 4,5,...,12,1,2,3 순서
       const isNextYear = month <= 3;
-      const settlementWon = !isRefund ? settlementMonthlyWon : 0;
-      const refundWon = isRefund ? settlementMonthlyWon : 0;
+      const isSettlementActive = i < installments; // 4월부터 installments개월 동안만 반영
+      const settlementWon = (isSettlementActive && !isRefund) ? settlementMonthlyWon : 0;
+      const refundWon = (isSettlementActive && isRefund) ? settlementMonthlyWon : 0;
       const totalDeductionWon = baseDeductionWon + settlementWon - refundWon;
       return {
         month, isNextYear, grossWon: monthlyGrossWon, incomeTaxWon: monthlyIncomeTaxWon, npsWon,
@@ -4638,10 +4643,10 @@ function App() {
         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
           <div style={{ fontSize:15, fontWeight:800, color:"#00C6FF" }}>📅 월급날 통장엔?</div>
           <span style={{ fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
-          <span style={{ fontSize:10, fontWeight:900, color:"#7DD3FC", background:"rgba(125,211,252,.14)", border:"1px solid rgba(125,211,252,.3)", borderRadius:6, padding:"2px 6px" }}>4월~다음해 3월</span>
+          <span style={{ fontSize:10, fontWeight:900, color:"#7DD3FC", background:"rgba(125,211,252,.14)", border:"1px solid rgba(125,211,252,.3)", borderRadius:6, padding:"2px 6px" }}>4월부터 {healthSettlementMonths}개월 분할</span>
         </div>
         <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginBottom:14 }}>
-          월급(연봉÷12) 기준 4대보험·소득세·퇴직연금저축(3%) 공제 반영. 건강보험료 정산({r.healthTotal > 0 ? "추가징수" : "환급"})은 실제 반영 시점인 <b style={{color:"#7DD3FC"}}>이번 4월부터 다음해 3월까지 12개월 균등 분할</b>로 계산합니다. 성과급(OPI·특별성과급·TAI)은 별도 지급이라 포함하지 않으며, 소득세는 간이세액표가 아닌 근사치입니다.
+          월급(연봉÷12) 기준 4대보험·소득세·퇴직연금저축(3%) 공제 반영. 건강보험료 정산({r.healthTotal > 0 ? "추가징수" : "환급"})은 <b style={{color:"#7DD3FC"}}>이번 4월부터 {healthSettlementMonths}개월간 균등 분할</b>로 계산합니다 (국민건강보험법 시행령 제39조 — 법정 최대 12회, 실제 횟수는 회사 신청에 따라 다름). 성과급(OPI·특별성과급·TAI)은 별도 지급이라 포함하지 않으며, 소득세는 간이세액표가 아닌 근사치입니다.
         </div>
 
         <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px", marginBottom:14 }}>
@@ -4654,6 +4659,18 @@ function App() {
             ]}
             value={insuranceBasePercent}
             onChange={setInsuranceBasePercent}
+          />
+        </div>
+
+        <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px", marginBottom:14 }}>
+          <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:8, fontWeight:700 }}>⚙️ 건강보험료 정산 분할납부 개월수 (법정 최대 12회, 4월 시작)</div>
+          <ChipGroup
+            options={[
+              { value:9, label:"9회(4~12월)" },
+              { value:12, label:"12회(4월~익년3월)" },
+            ]}
+            value={healthSettlementMonths}
+            onChange={setHealthSettlementMonths}
           />
         </div>
 
