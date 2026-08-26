@@ -1915,7 +1915,7 @@ function App() {
   // ── 부문별 배분비율 (ResultPanel, SettingsContent) ─────────────────────
   const [ratMemory, setRatMemory] = useState(1.0);
   const [ratCommon, setRatCommon] = useState(0.7);
-  const [spDistribMode, setSpDistribMode] = useState("tiered"); // "tiered": 부문40%균등+사업부60%차등(언론보도) | "flat": 공통=메모리×70% 그대로(회사공지 문구 그대로)
+  const [spDistribMode, setSpDistribMode] = useState("flat"); // "flat": 공통=메모리 최종×70% (노조 확인, 기본값) | "tiered": 부문40%균등+사업부60%차등 (미확인 대안)
   const [ratLepan, setRatLepan] = useState(0.0);
   const [lepanDeficit, setLepanDeficit] = useState("none");
 
@@ -5596,16 +5596,16 @@ function App() {
             <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:10 }}>공통 조직 배분 방식</div>
             <ChipGroup
               options={[
-                { value:"tiered", label:"언론기준", color:"#FFD700" },
-                { value:"flat", label:"사내공지 기준", color:"#FFD700" },
+                { value:"flat", label:"공통=메모리×70% (노조 확인)", color:"#FFD700" },
+                { value:"tiered", label:"부문40%+사업부60% (미확인)", color:"#FFD700" },
               ]}
               value={spDistribMode}
               onChange={setSpDistribMode}
             />
             <div style={{ fontSize:10, color:"#64748B", marginTop:6, marginBottom:14, lineHeight:1.6 }}>
-              {spDistribMode === "tiered"
-                ? "언론 보도(뉴스핌·대한경제 등) 기준 — 부문 40% 균등분배 + 사업부 60% 차등분배(공통=메모리 70%)"
-                : "회사 공지 문구 그대로 — 차등배분 없이 공통 = 메모리 × 비율 그대로 적용"}
+              {spDistribMode === "flat"
+                ? "✅ 노조 최종 확인 — \"DS특별성과급의 공통조직 70%는 메모리사업부 최종 지급 금액의 70%\" (예시: 메모리 OPI2 6억 → 공통 4.2억, 정확히 70.0%)"
+                : "⚠️ 미확인 대안 — 노사 합의서의 \"부문 40%, 사업부 60%\" 문구를 2단계 구조로 해석한 가정입니다. 노조가 확인해준 실제 예시(6억→4.2억, 정확히 70%)와는 맞지 않아, 현재는 참고용으로만 남겨뒀습니다."}
             </div>
             <div style={{ ...sBase.row, marginBottom:10 }}>
               <span style={{ fontSize:13, color:"#E2E8F0" }}>비율</span>
@@ -5951,42 +5951,38 @@ function App() {
                 허들(2026~2028년 200조, 2029~2035년 100조) 달성 시에만 지급 · 지급 형태는 <b>세후 전액 자사주, 3분할(즉시·1년·2년)</b>
               </div>
 
-              <div className="logic-title" style={{color:"#FFB400"}}>요건 2 — 배분: 부문(균등) 40% + 사업부(차등) 60%, 2단계 (언론기준)</div>
+              <div className="logic-title" style={{color:"#FFB400"}}>요건 2 — 배분: 공통조직 = 메모리사업부 최종 지급액의 70%</div>
+              <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+                <span style={{ fontSize:10, fontWeight:900, color:"#86EFAC", background:"rgba(0,220,130,.14)", border:"1px solid rgba(0,220,130,.3)", borderRadius:6, padding:"2px 6px" }}>노조 최종 확인</span>
+              </div>
               <div style={{background:"rgba(255,180,0,0.12)", border:"1.5px solid rgba(255,180,0,0.4)", borderRadius:10, padding:"10px 12px", marginBottom:10, fontSize:12, color:"#E2E8F0"}}>
-                🔑 <b>핵심 원칙</b><br/>
-                재원의 <b>40%(부문)는 DS부문 전 인원에게 동일 금액</b>으로 지급되고,<br/>
-                나머지 <b>60%(사업부)는 메모리:공통 = 1 : 0.7 비율로 차등</b> 지급됩니다.<br/>
-                르팡(파운드리·S.LSI)은 <b>부문(균등)분만</b> 받습니다 (적자 사업부라 차등분 없음).
+                🔑 <b>노조 Q&A 최종 확인 답변</b><br/>
+                "DS특별성과급의 공통조직 70%는 메모리사업부 최종 지급 금액의 70%입니다."<br/>
+                "OPI는 모두 50%이며, 두 금액 합산 예상으로 보시면 됩니다."<br/><br/>
+                예시) 메모리: OPI 4천 + 특별성과급(OPI2) 6억 · 공통조직: OPI 4천 + 특별성과급(OPI2) <b>4.2억</b><br/>
+                <span style={{color:"#86EFAC"}}>4.2억 ÷ 6억 = 정확히 70.0%</span> — 차등배분 단계 없이 <b>메모리 최종액 × 70%</b>가 공통조직 몫입니다.
               </div>
 
               <div style={{marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 계산 순서</div>
               <div style={{fontSize:11, color:"#94A3B8", marginBottom:8, lineHeight:1.8}}>
-                ① 부문(균등) 재원 = 총재원 × 40%, 이를 DS 전 인원으로 나눔 → 전원 동일 지급액<br/>
-                ② 사업부(차등) 재원 = 총재원 × 60%, 메모리 1 : 공통 0.7 가중치로 나눔<br/>
-                ③ 메모리 1인당 = ① + ②(메모리분) · 공통 1인당 = ① + ②(공통분) · 르팡 1인당 = ① 만
+                ① 메모리 1인당 = 총재원 ÷ [메모리인원 + 0.7×공통인원 + (부문분비율)×르팡인원]<br/>
+                ② 공통 1인당 = 메모리 1인당 × 0.7<br/>
+                ③ 르팡 1인당 = 메모리 1인당 × 부문분비율 (적자 사업부라 차등분 없이 부문분만 수령)
               </div>
 
-              <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 언론기준 예시 (DS 영업이익 300조, 삼성전자 노사 2026년 임단협 잠정합의 기준)</div>
+              <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 노조 확인 예시 검증</div>
               <ul className="logic-ul">
-                <li>부문(균등) 1인당 ≈ <b>1.6억원</b> (재원 12.6조 ÷ DS 전체 약 7.8만명)</li>
-                <li>메모리 1인당 ≈ <b>5.4억원</b> (부문 1.6억 + 사업부 차등 약 3.8억)</li>
-                <li>공통 1인당 ≈ <b>4.3억원</b> (부문 1.6억 + 사업부 차등 약 2.7억, 메모리 차등분의 70%)</li>
-                <li>공통/메모리 최종 비율 ≈ <b>79.6%</b></li>
+                <li>메모리 OPI2(특별성과급) ≈ <b>6억원</b></li>
+                <li>공통 OPI2(특별성과급) ≈ <b>4.2억원</b> (메모리의 정확히 70%)</li>
+                <li>OPI(OPI-1)는 사업부 무관 <b>모두 50%</b> 동일 적용, 총 수령액은 OPI + OPI2 합산</li>
               </ul>
               <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginTop:6, marginBottom:12 }}>
-                출처: 뉴스핌·대한경제·위키트리·미주중앙일보 등(2026-05-21) 「삼성전자 노사 성과급 잠정합의」 보도 — 재원 10.5%, 부문 40%/사업부 60% 배분, 공통=메모리 70% 수준을 여러 매체가 동일하게 교차 확인. 위 예시 금액은 보도된 헤드카운트(DS 전체 약 7.8만명, 메모리 약 2.8만명) 기준이며, 앱의 실제 계산은 사용자가 설정한 인원수를 사용합니다.
+                출처: 노조 Q&A 최종 확인 답변(사용자 제공, 위 예시 포함). 앱 기본값은 이 방식(설정 탭 "공통=메모리×70%")을 사용합니다.
               </div>
 
-              <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 사내공지 기준 예시 (동일 조건 — DS 영업이익 300조, 동일 헤드카운트)</div>
-              <div>사내 공지 게시글에는 <b>차등배분 없이 "공통 지급률 = 메모리 지급률의 70%"</b>로 단순 명시되어 있다는 확인이 있어, 이 방식도 함께 계산할 수 있게 했습니다.</div>
-              <ul className="logic-ul">
-                <li>메모리 1인당 ≈ <b>5.5억원</b></li>
-                <li>공통 1인당 ≈ <b>3.9억원</b> (메모리의 정확히 70%)</li>
-                <li>르팡 1인당 ≈ <b>2.2억원</b></li>
-                <li>공통/메모리 최종 비율 = <b>정확히 70.0%</b></li>
-              </ul>
-              <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginTop:6 }}>
-                언론기준 대비 공통 조직은 약 <b>0.4억원(약 9%) 적게</b> 계산됩니다. 두 기준 중 무엇이 실제와 맞는지는 사내 공지 원문의 정확한 문구(차등배분 단계 명시 여부)에 달려있어, 확실히 확인되기 전까지는 <b>설정 탭 → "부문 : 사업부 배분"에서 언론기준 ↔ 사내공지 기준을 직접 전환</b>해 비교해보실 수 있습니다.
+              <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 참고: "부문40%+사업부60% 2단계" 해석 (미확인 — 노조 답변과 불일치)</div>
+              <div style={{fontSize:11, color:"#94A3B8", lineHeight:1.7, marginBottom:8}}>
+                2026년 노사 합의서에는 "재원의 배분률은 부문 40%, 사업부 60%로 하고, 공통조직의 지급률은 메모리사업부 지급률의 70% 수준"이라는 문구가 있어, 한때 이를 "부문 균등분 40% + 사업부 차등분 60%(공통=메모리의 70%)" 2단계 구조로 해석해봤습니다. 이 해석대로면 공통/메모리 최종 비율이 약 79.6%가 나오는데, 노조가 확인해준 실제 예시(6억→4.2억, 정확히 70%)와는 맞지 않아 현재는 참고용으로만 남겨뒀습니다. "부문 40%/사업부 60%"는 재원 조성 방식(펀드 소스 구분)을 설명한 것이고, 개인 지급액 계산과는 별개일 가능성이 있습니다.
               </div>
 
               <div className="logic-title" style={{color:"#FFB400"}}>개인 최종 수령액</div>
