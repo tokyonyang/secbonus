@@ -1915,6 +1915,7 @@ function App() {
   // ── 부문별 배분비율 (ResultPanel, SettingsContent) ─────────────────────
   const [ratMemory, setRatMemory] = useState(1.0);
   const [ratCommon, setRatCommon] = useState(0.7);
+  const [spDistribMode, setSpDistribMode] = useState("tiered"); // "tiered": 부문40%균등+사업부60%차등(언론보도) | "flat": 공통=메모리×70% 그대로(회사공지 문구 그대로)
   const [ratLepan, setRatLepan] = useState(0.0);
   const [lepanDeficit, setLepanDeficit] = useState("none");
 
@@ -3018,31 +3019,45 @@ function App() {
     const ids = ["memory", "common", "lepan"];
 
     // ── 특별경영성과급 배분 로직 ───────────────────────────────────────────
-    // 핵심 제약: 공통 조직의 (부문분+사업부분) 합산 1인당 = 메모리 1인당 × 공통비율(ratCommon, 기본 0.7)
-    // 르팡은 부문분만 지급 (사업부분 가중치 0)
-    //
-    // 역산 공식:
-    //   총재원 = cntMemory×x + cntCommon×(ratCommon×x) + cntLepan×lepanPer
-    //   le팡 1인당(lepanPer)은 메모리 대비 "부문분 비율"만큼 받음을 가정
-    //   → lepanPer = x × (부문분이 전체에서 차지하는 비중)
-    //
-    //   메모리 기준: 부문분 비중 = (메모리 총액 중 부문분 비율)
-    //   단순화: lepanPer = x × (buPct/100)
-    //   → 총재원 = x × [cntMemory + ratCommon×cntCommon + (buPct/100)×cntLepan]
-    //   → x = 총재원 / [cntMemory + ratCommon×cntCommon + (buPct/100)×cntLepan]
+    // [실측·공개보도 확인] 재원은 부문(균등) buPct%(기본 40%) + 사업부(차등) saPct%
+    // (기본 60%)로 나뉩니다. 부문(균등)분은 전 인원에게 동일하게 분배되고,
+    // 사업부(차등)분만 메모리=1, 공통=ratCommon(기본 0.7), 르팡=0(적자사업부라
+    // 차등분 없음) 가중치로 배분됩니다. 르팡은 부문(균등)분만 수령합니다.
+    // 출처: 뉴스핌·대한경제·위키트리 등(2026-05-21) 삼성전자 노사 잠정합의 보도 —
+    // "재원 배분율은 부문 40%, 사업부 60%이며, 공통 조직의 지급률은 메모리사업부
+    // 지급률의 70%로 정했다"는 내용을 다중 매체가 교차 확인.
     const _calcSpDistrib = (fund) => {
       if (fund <= 0 || totalCount === 0) {
         return { perMemory:0, perCommon:0, perLepan:0, buPerMan:0, saPerMemory:0, saPerCommon:0, saPerLepan:0 };
       }
       const commonRatio = ratCommon; // 공통/메모리 비율 (기본값 0.7)
-      const denom = cntMemory + commonRatio * cntCommon + (buPct / 100) * cntLepan;
-      const perMemory = denom > 0 ? (fund / denom) / MAN : 0;
-      const perCommon = perMemory * commonRatio;
-      const perLepan  = perMemory * (buPct / 100);
-      // 표시용 역산 분해 (부문분/사업부분)
-      const buPerMan    = perLepan;              // 르팡 = 부문분만 → 부문분 단가
-      const saPerMemory = perMemory - buPerMan;
-      const saPerCommon = perCommon - buPerMan;
+      if (spDistribMode === "flat") {
+        // [회사 공지 문구 그대로] 차등배분 없이 공통 = 메모리 × ratCommon(70%) 그대로 적용.
+        // 르팡은 부문분(전체 재원 중 buPct% 몫)만큼만 받는다고 가정.
+        const denom = cntMemory + commonRatio * cntCommon + (buPct / 100) * cntLepan;
+        const perMemory = denom > 0 ? (fund / denom) / MAN : 0;
+        const perCommon = perMemory * commonRatio;
+        const perLepan  = perMemory * (buPct / 100);
+        const buPerMan    = perLepan;
+        const saPerMemory = perMemory - buPerMan;
+        const saPerCommon = perCommon - buPerMan;
+        const saPerLepan  = 0;
+        return { perMemory, perCommon, perLepan, buPerMan, saPerMemory, saPerCommon, saPerLepan };
+      }
+      // [언론보도 기준, 기본값] 부문(균등) buPct% + 사업부(차등) saPct% 2단계 배분.
+      const equalPoolFund = fund * (buPct / 100);   // 부문(균등) 재원
+      const diffPoolFund  = fund * (saPct / 100);   // 사업부(차등) 재원
+      const equalPerPerson = totalCount > 0 ? equalPoolFund / totalCount : 0; // 전원 동일 지급
+      const diffDenom = cntMemory + commonRatio * cntCommon; // 르팡은 차등분 가중치 0
+      const diffPerMemory = diffDenom > 0 ? diffPoolFund / diffDenom : 0;
+      const diffPerCommon = diffPerMemory * commonRatio;
+      const perMemory = (equalPerPerson + diffPerMemory) / MAN;
+      const perCommon = (equalPerPerson + diffPerCommon) / MAN;
+      const perLepan  = equalPerPerson / MAN; // 르팡 = 부문(균등)분만 수령
+      // 표시용 분해 (부문분/사업부분)
+      const buPerMan    = equalPerPerson / MAN;
+      const saPerMemory = diffPerMemory / MAN;
+      const saPerCommon = diffPerCommon / MAN;
       const saPerLepan  = 0;
       return { perMemory, perCommon, perLepan, buPerMan, saPerMemory, saPerCommon, saPerLepan };
     };
@@ -3220,7 +3235,7 @@ function App() {
     };
   }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice,
       prevWithholding, profit, rerate, sprate, burate, cntMemory, cntCommon, cntLepan,
-      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2]);
+      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode]);
 
   const r = calc();
 
@@ -3483,12 +3498,28 @@ function App() {
       if (scenarioProfit < threshold || scenarioSalary <= 0) return 0;
 
       const buPct = burate * 10;
+      const saPct = 100 - buPct;
       const totalCount = cntMemory + cntCommon + cntLepan;
       const fund = scenarioProfit * 1e12 * (sprate / 100);
-      const denom = cntMemory + ratCommon * cntCommon + (buPct / 100) * cntLepan;
-      const perMemory = denom > 0 ? (fund / denom) / MAN : 0;
-      const perCommon = perMemory * ratCommon;
-      const perLepan = perMemory * (buPct / 100);
+      let perMemory, perCommon, perLepan;
+      if (spDistribMode === "flat") {
+        // [회사 공지 문구 그대로] 차등배분 없이 공통 = 메모리 × ratCommon 그대로
+        const denom = cntMemory + ratCommon * cntCommon + (buPct / 100) * cntLepan;
+        perMemory = denom > 0 ? (fund / denom) / MAN : 0;
+        perCommon = perMemory * ratCommon;
+        perLepan  = perMemory * (buPct / 100);
+      } else {
+        // [언론보도 기준, 기본값] 부문(균등) buPct% + 사업부(차등) saPct% 2단계 배분 (본문 계산과 동일 로직)
+        const equalPoolFund = fund * (buPct / 100);
+        const diffPoolFund  = fund * (saPct / 100);
+        const equalPerPerson = totalCount > 0 ? equalPoolFund / totalCount : 0;
+        const diffDenom = cntMemory + ratCommon * cntCommon;
+        const diffPerMemory = diffDenom > 0 ? diffPoolFund / diffDenom : 0;
+        const diffPerCommon = diffPerMemory * ratCommon;
+        perMemory = (equalPerPerson + diffPerMemory) / MAN;
+        perCommon = (equalPerPerson + diffPerCommon) / MAN;
+        perLepan = equalPerPerson / MAN;
+      }
       const baseByDiv = scenarioDiv === 'memory' ? perMemory : scenarioDiv === 'common' ? perCommon : perLepan;
       const capInfo = splitSalaryByCap(scenarioCl, scenarioSalary);
       const baseSalary = capInfo.baseSalary || scenarioSalary;
@@ -5562,6 +5593,20 @@ function App() {
           </div>
 
           <FieldBox label="부문 : 사업부 배분" accent="rgba(255,215,0,0.2)">
+            <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:10 }}>공통 조직 배분 방식</div>
+            <ChipGroup
+              options={[
+                { value:"tiered", label:"언론기준", color:"#FFD700" },
+                { value:"flat", label:"사내공지 기준", color:"#FFD700" },
+              ]}
+              value={spDistribMode}
+              onChange={setSpDistribMode}
+            />
+            <div style={{ fontSize:10, color:"#64748B", marginTop:6, marginBottom:14, lineHeight:1.6 }}>
+              {spDistribMode === "tiered"
+                ? "언론 보도(뉴스핌·대한경제 등) 기준 — 부문 40% 균등분배 + 사업부 60% 차등분배(공통=메모리 70%)"
+                : "회사 공지 문구 그대로 — 차등배분 없이 공통 = 메모리 × 비율 그대로 적용"}
+            </div>
             <div style={{ ...sBase.row, marginBottom:10 }}>
               <span style={{ fontSize:13, color:"#E2E8F0" }}>비율</span>
               <span style={{ fontSize:26, fontWeight:900, color:"#FFD700" }}>{burate*10} : {100-burate*10}</span>
@@ -5895,54 +5940,53 @@ function App() {
 
           <FieldBox label="특별경영성과급 (OPI-2) 산출" accent="rgba(255,180,0,0.3)">
             <div className="logic-text">
-              <div className="logic-title" style={{color:"#FFB400"}}>✅ 요건 1 — 총 재원: DS부문 영업이익의 10.5%</div>
-              <div>총 재원 = <b>DS부문 영업이익 × 10.5%</b> (OPI와 완전히 독립된 별도 재원)</div>
+              <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:8 }}>
+                <span style={{ fontSize:10, fontWeight:900, color:"#86EFAC", background:"rgba(0,220,130,.14)", border:"1px solid rgba(0,220,130,.3)", borderRadius:6, padding:"2px 6px" }}>실측</span>
+                <span style={{ fontSize:10, fontWeight:900, color:"#7DD3FC", background:"rgba(125,211,252,.14)", border:"1px solid rgba(125,211,252,.3)", borderRadius:6, padding:"2px 6px" }}>공개보도 확인</span>
+              </div>
+              <div className="logic-title" style={{color:"#FFB400"}}>요건 1 — 총 재원: 사업성과의 10.5%</div>
+              <div>총 재원 = <b>DS부문 영업이익(또는 EVA) × 10.5%</b> (OPI와 완전히 독립된 별도 재원, 지급률 상한 없음)</div>
               <div style={{background:"rgba(255,180,0,0.08)", border:"1px solid rgba(255,180,0,0.2)", borderRadius:8, padding:"8px 10px", marginTop:6, marginBottom:6, fontSize:12, color:"#CBD5E1"}}>
-                예) DS 영업이익 350조 → 특별경영성과급 재원 = <b>350조 × 10.5% = 36.75조원</b><br/>
-                ✅ 허들(조건) 달성 시에만 지급 · 지급 형태는 <b>자사주 3분할(즉시·1년·2년)</b>
+                예) DS 영업이익 300조 → 특별경영성과급 재원 = <b>300조 × 10.5% = 31.5조원</b><br/>
+                허들(2026~2028년 200조, 2029~2035년 100조) 달성 시에만 지급 · 지급 형태는 <b>세후 전액 자사주, 3분할(즉시·1년·2년)</b>
               </div>
 
-              <div className="logic-title" style={{color:"#FFB400"}}>✅ 요건 2 — 배분 핵심 제약: 공통 = 메모리의 70% 고정</div>
-
+              <div className="logic-title" style={{color:"#FFB400"}}>요건 2 — 배분: 부문(균등) 40% + 사업부(차등) 60%, 2단계 (언론기준)</div>
               <div style={{background:"rgba(255,180,0,0.12)", border:"1.5px solid rgba(255,180,0,0.4)", borderRadius:10, padding:"10px 12px", marginBottom:10, fontSize:12, color:"#E2E8F0"}}>
                 🔑 <b>핵심 원칙</b><br/>
-                공통 조직의 <b>(부문분 + 사업부분) 합산 1인당 특별성과급 = 메모리 사업부 1인당의 70% 고정</b><br/>
-                르팡(파운드리·S.LSI)은 <b>부문분만 지급</b> (사업부분 없음)
+                재원의 <b>40%(부문)는 DS부문 전 인원에게 동일 금액</b>으로 지급되고,<br/>
+                나머지 <b>60%(사업부)는 메모리:공통 = 1 : 0.7 비율로 차등</b> 지급됩니다.<br/>
+                르팡(파운드리·S.LSI)은 <b>부문(균등)분만</b> 받습니다 (적자 사업부라 차등분 없음).
               </div>
 
-              <div style={{marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 역산 공식</div>
+              <div style={{marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 계산 순서</div>
               <div style={{fontSize:11, color:"#94A3B8", marginBottom:8, lineHeight:1.8}}>
-                x = 메모리 1인당 특별성과급 (목표 변수)<br/>
-                공통 1인당 = 0.70 × x<br/>
-                르팡 1인당 = x × (부문분 비율%) — 부문분 비중만큼만 지급<br/>
-                <br/>
-                총재원 = x × 메모리인원 + (0.70×x) × 공통인원 + (부문분%) × x × 르팡인원<br/>
-                총재원 = x × [메모리인원 + 0.70 × 공통인원 + 부문분% × 르팡인원]<br/>
-                <b>x = 총재원 ÷ [메모리인원 + 0.70 × 공통인원 + 부문분% × 르팡인원]</b>
+                ① 부문(균등) 재원 = 총재원 × 40%, 이를 DS 전 인원으로 나눔 → 전원 동일 지급액<br/>
+                ② 사업부(차등) 재원 = 총재원 × 60%, 메모리 1 : 공통 0.7 가중치로 나눔<br/>
+                ③ 메모리 1인당 = ① + ②(메모리분) · 공통 1인당 = ① + ②(공통분) · 르팡 1인당 = ① 만
               </div>
 
-              <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 사업부별 지급 결과</div>
+              <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 언론기준 예시 (DS 영업이익 300조, 삼성전자 노사 2026년 임단협 잠정합의 기준)</div>
               <ul className="logic-ul">
-                <li>메모리: <b>x</b> (기준값 — 가장 높음)</li>
-                <li>공통: <b>0.70 × x</b> (메모리의 70% 고정 — 부문분+사업부분 합산 기준)</li>
-                <li>르팡: <b>부문분 단가</b>만 지급 (사업부분 0)</li>
+                <li>부문(균등) 1인당 ≈ <b>1.6억원</b> (재원 12.6조 ÷ DS 전체 약 7.8만명)</li>
+                <li>메모리 1인당 ≈ <b>5.4억원</b> (부문 1.6억 + 사업부 차등 약 3.8억)</li>
+                <li>공통 1인당 ≈ <b>4.3억원</b> (부문 1.6억 + 사업부 차등 약 2.7억, 메모리 차등분의 70%)</li>
+                <li>공통/메모리 최종 비율 ≈ <b>79.6%</b></li>
               </ul>
-
-              <div className="logic-title" style={{color:"#FFB400"}}>✅ 요건 3 — 재원 검증: 각 사업부 합산 = DS영업이익 × 10.5%</div>
-              <div style={{fontSize:11, color:"#CBD5E1", lineHeight:1.7}}>
-                역산 공식에 의해 x가 결정되면:<br/>
-                • 메모리 배분 합계 = x × 메모리인원<br/>
-                • 공통 배분 합계 = 0.70×x × 공통인원<br/>
-                • 르팡 배분 합계 = 부문분단가 × 르팡인원<br/>
-                • 합산 = 총재원 = DS영업이익 × 10.5% <b>✅ 완전 소진</b>
+              <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginTop:6, marginBottom:12 }}>
+                출처: 뉴스핌·대한경제·위키트리·미주중앙일보 등(2026-05-21) 「삼성전자 노사 성과급 잠정합의」 보도 — 재원 10.5%, 부문 40%/사업부 60% 배분, 공통=메모리 70% 수준을 여러 매체가 동일하게 교차 확인. 위 예시 금액은 보도된 헤드카운트(DS 전체 약 7.8만명, 메모리 약 2.8만명) 기준이며, 앱의 실제 계산은 사용자가 설정한 인원수를 사용합니다.
               </div>
-              <div style={{background:"rgba(0,220,130,0.08)", border:"1px solid rgba(0,220,130,0.2)", borderRadius:8, padding:"8px 10px", marginTop:8, fontSize:12, color:"#CBD5E1"}}>
-                수치 예시 (DS영업이익 350조, 부문:사업부 = 40:60, 메모리 2.74만명·공통 2.9만명·르팡 2.09만명):<br/>
-                총 재원 = 36.75조<br/>
-                분모 = 27400 + 0.7×29000 + 0.4×20900 = 27400 + 20300 + 8360 = 56,060명<br/>
-                메모리 1인당 x = 36.75조 ÷ 56,060명 ≈ 655만원<br/>
-                공통 1인당 = 655 × 70% ≈ 459만원<br/>
-                메모리 합계 + 공통 합계 + 르팡 합계 = <b>36.75조원 ✅</b>
+
+              <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 사내공지 기준 예시 (동일 조건 — DS 영업이익 300조, 동일 헤드카운트)</div>
+              <div>사내 공지 게시글에는 <b>차등배분 없이 "공통 지급률 = 메모리 지급률의 70%"</b>로 단순 명시되어 있다는 확인이 있어, 이 방식도 함께 계산할 수 있게 했습니다.</div>
+              <ul className="logic-ul">
+                <li>메모리 1인당 ≈ <b>5.5억원</b></li>
+                <li>공통 1인당 ≈ <b>3.9억원</b> (메모리의 정확히 70%)</li>
+                <li>르팡 1인당 ≈ <b>2.2억원</b></li>
+                <li>공통/메모리 최종 비율 = <b>정확히 70.0%</b></li>
+              </ul>
+              <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginTop:6 }}>
+                언론기준 대비 공통 조직은 약 <b>0.4억원(약 9%) 적게</b> 계산됩니다. 두 기준 중 무엇이 실제와 맞는지는 사내 공지 원문의 정확한 문구(차등배분 단계 명시 여부)에 달려있어, 확실히 확인되기 전까지는 <b>설정 탭 → "부문 : 사업부 배분"에서 언론기준 ↔ 사내공지 기준을 직접 전환</b>해 비교해보실 수 있습니다.
               </div>
 
               <div className="logic-title" style={{color:"#FFB400"}}>개인 최종 수령액</div>
