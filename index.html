@@ -1867,8 +1867,18 @@ function LiveChatPopup({ salaryUser, salaryToken, onLoginClick }) {
 }
 
 function App() {
+  // ══════════════════════════════════════════════════════════════════════
+  //  STATE: 화면 하단 화면들(EquityRewardSimContent/ResultPanel/
+  //  SalaryContent/SalaryTrendContent/SettingsContent)이 아래 state를
+  //  전부 공유하는 클로저 구조입니다. 특정 state가 어디서 쓰이는지 찾을 땐
+  //  Ctrl+F로 변수명을 검색하세요.
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── UI 네비게이션 ────────────────────────────────────────────────────
   const [tab, setTab] = useState(0); // 0: 정보, 1: 시뮬레이션, 2: 산출결과, 3: 로직
   const [forceSpRsuOpen, setForceSpRsuOpen] = useState(false);
+
+  // ── 내 정보 / 연봉 / 인상률 입력 (SalaryContent, SettingsContent) ─────
   const [simYear, setSimYear] = useState(2026);
   const [myDiv, setMyDiv] = useState("memory");
   const [myCl, setMyCl] = useState("CL3");
@@ -1882,6 +1892,7 @@ function App() {
   const [prevWithholding, setPrevWithholding] = useState(8000);
   const [myRating, setMyRating] = useState("MT");
 
+  // ── 회사 실적 / 시뮬레이션 기준값 (ResultPanel, SettingsContent) ──────
   const [manualBasePrice, setManualBasePrice] = useState(260117);
   const [profit, setProfit] = useState(47); // DS부문 영업이익 (조)
   const [totalProfit, setTotalProfit] = useState(65); // 전사 영업이익 (조)
@@ -1891,20 +1902,24 @@ function App() {
   const [sprate, setSprate] = useState(10.5);
   const [burate, setBurate] = useState(4);
 
+  // ── 부문별 인원수 (ResultPanel, SettingsContent) ───────────────────────
   const [cntMemory, setCntMemory] = useState(27400);
   const [cntCommon, setCntCommon] = useState(29000);
   const [cntLepan, setCntLepan] = useState(20900);
 
+  // ── 부문별 배분비율 (ResultPanel, SettingsContent) ─────────────────────
   const [ratMemory, setRatMemory] = useState(1.0);
   const [ratCommon, setRatCommon] = useState(0.7);
   const [ratLepan, setRatLepan] = useState(0.0);
   const [lepanDeficit, setLepanDeficit] = useState("none");
 
+  // ── 하이닉스 / 삼성 TAI(PI) 파라미터 (ResultPanel) ─────────────────────
   const [hynixMargin, setHynixMargin] = useState("1.5");
   const [hynixDcRate, setHynixDcRate] = useState(0);
   const [hynixProfitMode, setHynixProfitMode] = useState("same"); // "same" | "70pct"
   const [samsungTaiRate, setSamsungTaiRate] = useState("1.0"); // 삼성 TAI(PI) 비율 (기본값 100%)
 
+  // ── RSU / 특별성과급(SP) 시나리오 (EquityRewardSimContent 전용) ───────
   const [rsuTaxRate, setRsuTaxRate] = useState(35);
   const [specialCashOverrideMan, setSpecialCashOverrideMan] = useState(0);
   const [specialCashDraftMan, setSpecialCashDraftMan] = useState('');
@@ -3266,6 +3281,11 @@ function App() {
 
 
 
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  화면 1/5: EquityRewardSimContent — RSU/특별성과급(SP) 시나리오    ║
+  // ║  주로 사용하는 state: rsuTaxRate, spRsuScenarioRows,               ║
+  // ║  recentSp*, rsuFutureBasePrice 등 (위 "RSU/SP 시나리오" 그룹)      ║
+  // ╚══════════════════════════════════════════════════════════════════╝
   const EquityRewardSimContent = () => {
     const parseManInput = (value) => Math.max(0, Math.round(Number(String(value ?? '').replace(/,/g,'')) || 0));
     const parseTargetYear = (value) => {
@@ -4008,6 +4028,11 @@ function App() {
 
   const numResultCols = 2 + (r.bizPerfBonus>0?1:0) + (r.excessCash>0?1:0) + (r.samsungTaiAnnual>0?1:0) + 1;
 
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  화면 2/5: ResultPanel — 산출 결과 요약                            ║
+  // ║  주로 사용하는 state: profit, totalProfit, dsRatio, cnt*, rat*,    ║
+  // ║  hynix*, samsungTaiRate (위 "회사 실적/부문/파라미터" 그룹들)      ║
+  // ╚══════════════════════════════════════════════════════════════════╝
   /* ── 결과 패널 ── */
   const ResultPanel = () => (
     <div className="result-panel-root">
@@ -4483,6 +4508,11 @@ function App() {
   const currentClYearForMain = inferClYearFromHistory(simYear, myCl, salaryRecords) || calcClYearFromBase2026(simYear, salaryManualBaseClYear2026);
   const currentEligibilityForMain = getPromotionEligibility(myCl, currentClYearForMain, salaryManualJobFamily, simYear);
 
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  화면 3/5: SalaryContent — 급여 기록 관리 (가장 큰 화면, ~370줄)    ║
+  // ║  로그인/저장/CL·인상률 계산 로직이 전부 이 안에 있습니다.           ║
+  // ║  salaryManual* 로 시작하는 state가 대부분 이 화면 전용입니다.      ║
+  // ╚══════════════════════════════════════════════════════════════════╝
   const SalaryContent = () => (
     <div className="salary-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
       <FieldBox label="개인 연봉정보 저장" accent="rgba(167,139,250,0.35)">
@@ -4838,6 +4868,10 @@ function App() {
   );
 
 
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  화면 4/5: SalaryTrendContent — 연도별 급여 추이 그래프/표          ║
+  // ║  SalaryContent가 관리하는 salaryRecords를 읽기만 합니다.           ║
+  // ╚══════════════════════════════════════════════════════════════════╝
   const SalaryTrendContent = () => {
     const trendRecords = [...salaryRecords].sort((a,b) => Number(a.year || 0) - Number(b.year || 0));
     const firstRec = trendRecords[0] || null;
@@ -5020,6 +5054,11 @@ function App() {
     );
   };
 
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  화면 5/5: SettingsContent — 시뮬레이션 파라미터 설정              ║
+  // ║  ResultPanel이 쓰는 값들(profit, dsRatio, cnt*, rat* 등)을         ║
+  // ║  직접 편집하는 입력 폼입니다.                                      ║
+  // ╚══════════════════════════════════════════════════════════════════╝
   /* ── 설정 패널 컨텐츠 ── */
   const SettingsContent = () => (
     <div className="settings-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
