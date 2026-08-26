@@ -1922,7 +1922,8 @@ function App() {
   const [hynixMargin, setHynixMargin] = useState("1.5");
   const [hynixDcRate, setHynixDcRate] = useState(0);
   const [hynixProfitMode, setHynixProfitMode] = useState("same"); // "same" | "70pct"
-  const [samsungTaiRate, setSamsungTaiRate] = useState("1.0"); // 삼성 TAI(PI) 비율 (기본값 100%)
+  const [samsungTaiRateH1, setSamsungTaiRateH1] = useState("1.0"); // 삼성 TAI 상반기 지급률
+  const [samsungTaiRateH2, setSamsungTaiRateH2] = useState("1.0"); // 삼성 TAI 하반기 지급률
 
   // ── RSU / 특별성과급(SP) 시나리오 (EquityRewardSimContent 전용) ───────
   const [rsuTaxRate, setRsuTaxRate] = useState(35);
@@ -3065,9 +3066,11 @@ function App() {
     // [실측·공개보도 확인] 기준급 = 연봉 ÷ 20
     // 출처: 조세금융신문(2024-12-20) — DS 신입 연봉 5,300만원 → 기준급 265만원 보도로 교차 확인
     const samsungBasePay = bonusSalary / 20;
-    const taiRateVal = parseFloat(samsungTaiRate);
-    const samsungTaiHalf = samsungBasePay * taiRateVal;
-    const samsungTaiAnnual = samsungTaiHalf * 2;
+    const taiRateH1Val = parseFloat(samsungTaiRateH1);
+    const taiRateH2Val = parseFloat(samsungTaiRateH2);
+    const samsungTaiHalf1 = samsungBasePay * taiRateH1Val; // 상반기 지급액
+    const samsungTaiHalf2 = samsungBasePay * taiRateH2Val; // 하반기 지급액
+    const samsungTaiAnnual = samsungTaiHalf1 + samsungTaiHalf2;
     const taiW = samsungTaiAnnual * MAN;
 
     // ── 세금 계산: 누적 방식으로 각 항목의 한계세율 적용 ──────────────────
@@ -3175,7 +3178,7 @@ function App() {
       spTotalPerMemory: spPerPerson[0],
       spTotalPerCommon: spPerPerson[1],
       spTotalPerLepan: spPerPerson[2],
-      samsungBasePay, samsungTaiHalf, samsungTaiAnnual, taiTax, taiNet, taiTaxRate, taiRateVal,
+      samsungBasePay, samsungTaiHalf1, samsungTaiHalf2, samsungTaiAnnual, taiTax, taiNet, taiTaxRate, taiRateH1Val, taiRateH2Val,
       hynixBasePay, hynixContractSalary,
       hynixPsAmount, hynixPsThisYear, hynixTaiHalf, hynixTaiAnnual, hynixTotalThisYear, hynixTaiRate,
       hynixDcRate, hynixDcAmount, hynixCashAfterDc, hynixDcTaxSaving, hynixDcMarginalRate,
@@ -3183,19 +3186,20 @@ function App() {
     };
   }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice,
       prevWithholding, profit, rerate, sprate, burate, cntMemory, cntCommon, cntLepan,
-      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRate]);
+      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2]);
 
   const r = calc();
 
   // ── 월별 실수령액 시뮬레이션 (예측/추정) ────────────────────────────────
   // [예측] 소득세는 정확한 간이세액표가 아니라 연간 누진세율을 12개월 균등분할한
   // 근사치이며, 국민연금 기준소득월액 상한액은 매년 변경되는 공개값의 추정치입니다.
-  // 건강보험료 정산(추가징수/환급)은 통상 4월 급여에 일시 반영되는 것으로 가정합니다
-  // (실제로는 분할납부(최대 10회) 신청이 가능합니다).
+  // [실측] 건강보험료 정산(추가징수/환급)은 12개월 균등 분할 납부로 반영합니다.
+  // [실측] 퇴직연금저축은 월급의 3%가 공제되는 것으로 반영합니다.
   const NPS_RATE = 0.045; // 국민연금 근로자 부담률 4.5% (공개 요율)
   const NPS_MONTHLY_CAP_WON = 6370000; // 기준소득월액 상한 추정치 — 매년 7월 변경, 확인 필요
   const NPS_MONTHLY_FLOOR_WON = 400000; // 기준소득월액 하한 추정치
   const EMPLOYMENT_RATE = 0.009; // 고용보험(실업급여) 근로자 부담률 0.9% (공개 요율)
+  const RETIREMENT_SAVING_RATE = 0.03; // [실측] 퇴직연금저축 공제율 (월급의 3%)
 
   const getMonthlyTakeHomeRows = () => {
     const monthlyGrossWon = Math.round((r.curSalary * MAN) / 12);
@@ -3208,22 +3212,23 @@ function App() {
     const healthWon = Math.round(healthBaseWon * 0.03545);
     const ltcWon = Math.round(healthWon * 0.1295);
     const employmentWon = Math.round(monthlyGrossWon * EMPLOYMENT_RATE);
+    const retirementSavingWon = Math.round(monthlyGrossWon * RETIREMENT_SAVING_RATE);
     const annualIncomeTaxWon = totalTax(monthlyGrossWon * 12);
     const monthlyIncomeTaxWon = Math.round(annualIncomeTaxWon / 12);
-    const baseDeductionWon = npsWon + healthWon + ltcWon + employmentWon + monthlyIncomeTaxWon;
+    const baseDeductionWon = npsWon + healthWon + ltcWon + employmentWon + monthlyIncomeTaxWon + retirementSavingWon;
     const isRefund = r.healthTotal < 0;
-    const settlementAbsWon = Math.round(Math.abs(r.healthTotal) * MAN);
+    // 건강보험료 정산(추가징수/환급)은 12개월 균등 분할 납부
+    const settlementMonthlyWon = Math.round(Math.abs(r.healthTotal) * MAN / 12);
 
     return Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
-      const isSettlementMonth = month === 4; // 통상 4월 급여 반영분 (가정)
-      const settlementWon = isSettlementMonth && !isRefund ? settlementAbsWon : 0;
-      const refundWon = isSettlementMonth && isRefund ? settlementAbsWon : 0;
+      const settlementWon = !isRefund ? settlementMonthlyWon : 0;
+      const refundWon = isRefund ? settlementMonthlyWon : 0;
       const totalDeductionWon = baseDeductionWon + settlementWon - refundWon;
       return {
         month, grossWon: monthlyGrossWon, incomeTaxWon: monthlyIncomeTaxWon, npsWon,
-        healthWon, ltcWon, employmentWon, settlementWon, refundWon,
-        totalDeductionWon, netWon: monthlyGrossWon - totalDeductionWon, isSettlementMonth,
+        healthWon, ltcWon, employmentWon, retirementSavingWon, settlementWon, refundWon,
+        totalDeductionWon, netWon: monthlyGrossWon - totalDeductionWon,
       };
     });
   };
@@ -3638,7 +3643,7 @@ function App() {
       const effectiveRow = getEffectiveScenarioRow(y, rawRow);
       const salary = Math.round(Number(saved?.contract_salary_man || 0) || getScenarioEstimatedSalary(y, effectiveRow) || 0);
       if (salary <= 0) return { piAmount:0, psAmount:0, piGross:0, psGross:0, psRate:0, piRate:0 };
-      const piRate = Number(saved?.withholding_pi_rate ?? (parseFloat(samsungTaiRate) * 100) ?? 100) || 0;
+      const piRate = Number(saved?.withholding_pi_rate ?? ((parseFloat(samsungTaiRateH1) + parseFloat(samsungTaiRateH2)) / 2 * 100) ?? 100) || 0;
       const spForYear = getRecordSpecialSpNet(y) || calcScenarioSpecialNet(y);
       const psRate = saved ? getEffectiveDsPsRateForRecord(saved) : (spForYear > 0 ? 50 : Number(getHistoricalDsPs(y) ?? 0));
       const piGross = Math.max(0, calcPiAmountMan(salary, piRate));
@@ -4083,7 +4088,7 @@ function App() {
   // ╔══════════════════════════════════════════════════════════════════╗
   // ║  화면 2/5: ResultPanel — 산출 결과 요약                            ║
   // ║  주로 사용하는 state: profit, totalProfit, dsRatio, cnt*, rat*,    ║
-  // ║  hynix*, samsungTaiRate (위 "회사 실적/부문/파라미터" 그룹들)      ║
+  // ║  hynix*, samsungTaiRateH1/H2 (위 "회사 실적/부문/파라미터" 그룹들)  ║
   // ╚══════════════════════════════════════════════════════════════════╝
   /* ── 결과 패널 ── */
   const ResultPanel = () => (
@@ -4344,7 +4349,7 @@ function App() {
 
       {/* 삼성 TAI(PI) - 목표달성인센티브 */}
       <ResultCard icon="🎯" title="예상 TAI 수령액" valueColor="#8B7CFF"
-        sub={`기준급(연봉÷20) × ${(r.taiRateVal*100).toFixed(1)}% × 연2회 · 세전 기준`}
+        sub={`기준급(연봉÷20) × 상반기 ${(r.taiRateH1Val*100).toFixed(1)}% + 하반기 ${(r.taiRateH2Val*100).toFixed(1)}% · 세전 기준`}
         value={fmtM(r.samsungTaiAnnual)} accent="rgba(167,139,250,0.08)">
         <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:10 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
@@ -4352,8 +4357,12 @@ function App() {
             <span style={{ fontSize:13, fontWeight:700, color:"#E2E8F0" }}>{fmtM(r.samsungBasePay)}</span>
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
-            <span style={{ fontSize:12, color:"#94A3B8" }}>반기 지급액 (기준급 × {(r.taiRateVal*100).toFixed(0)}%)</span>
-            <span style={{ fontSize:13, fontWeight:700, color:"#E2E8F0" }}>{fmtM(r.samsungTaiHalf)}</span>
+            <span style={{ fontSize:12, color:"#94A3B8" }}>상반기 지급액 (기준급 × {(r.taiRateH1Val*100).toFixed(0)}%)</span>
+            <span style={{ fontSize:13, fontWeight:700, color:"#E2E8F0" }}>{fmtM(r.samsungTaiHalf1)}</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
+            <span style={{ fontSize:12, color:"#94A3B8" }}>하반기 지급액 (기준급 × {(r.taiRateH2Val*100).toFixed(0)}%)</span>
+            <span style={{ fontSize:13, fontWeight:700, color:"#E2E8F0" }}>{fmtM(r.samsungTaiHalf2)}</span>
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
             <span style={{ fontSize:12, color:"#94A3B8" }}>연간 합계 (상·하반기 2회, 세전)</span>
@@ -4564,7 +4573,7 @@ function App() {
           <span style={{ fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
         </div>
         <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginBottom:12 }}>
-          월급(연봉÷12) 기준 4대보험·소득세 공제를 반영한 실수령액이며, 4월에는 건강보험료 정산({r.healthTotal > 0 ? "추가징수" : "환급"})이 반영된다고 가정합니다. 성과급(OPI·특별성과급·TAI)은 별도 지급이라 여기 포함하지 않습니다. 소득세는 간이세액표가 아닌 근사치이니 참고용으로만 봐주세요.
+          월급(연봉÷12) 기준 4대보험·소득세·퇴직연금저축(3%) 공제를 반영한 실수령액이며, 건강보험료 정산({r.healthTotal > 0 ? "추가징수" : "환급"})은 12개월 균등 분할로 매달 반영됩니다. 성과급(OPI·특별성과급·TAI)은 별도 지급이라 여기 포함하지 않습니다. 소득세는 간이세액표가 아닌 근사치이니 참고용으로만 봐주세요.
         </div>
         <div style={{ marginBottom:12 }}>
           <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:6 }}>4대보험(국민연금·건강보험·장기요양) 신고기준액 — 기준급 {fmtM(r.samsungBasePay)} × 선택 비율</div>
@@ -4581,13 +4590,13 @@ function App() {
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {getMonthlyTakeHomeRows().map(row => (
             <div key={row.month} style={{
-              background: row.isSettlementMonth ? "rgba(255,180,0,0.08)" : "rgba(255,255,255,0.03)",
-              border: row.isSettlementMonth ? "1px solid rgba(255,180,0,0.28)" : "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.08)",
               borderRadius:12, padding:"10px 12px",
             }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:14, fontWeight:900, color:"#fff" }}>
-                  {row.month}월{row.isSettlementMonth ? " 🏥 건보 정산" : ""}
+                  {row.month}월
                 </div>
                 <div style={{ textAlign:"right" }}>
                   <div style={{ fontSize:10, color:"#64748B" }}>세전 {comma(row.grossWon/MAN)}만 → 실수령</div>
@@ -4600,8 +4609,9 @@ function App() {
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>건강보험</span><span style={{color:"#FF6B6B"}}>−{comma(row.healthWon/MAN)}</span></div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>장기요양</span><span style={{color:"#FF6B6B"}}>−{comma(row.ltcWon/MAN)}</span></div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>고용보험</span><span style={{color:"#FF6B6B"}}>−{comma(row.employmentWon/MAN)}</span></div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}><span style={{color:"#64748B"}}>퇴직연금</span><span style={{color:"#FF6B6B"}}>−{comma(row.retirementSavingWon/MAN)}</span></div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{color:"#64748B"}}>정산</span>
+                  <span style={{color:"#64748B"}}>건보정산</span>
                   <span style={{color: row.refundWon>0 ? "#00DC82" : row.settlementWon>0 ? "#FF6B6B" : "#64748B"}}>
                     {row.refundWon>0 ? `+${comma(row.refundWon/MAN)}` : row.settlementWon>0 ? `−${comma(row.settlementWon/MAN)}` : "—"}
                   </span>
@@ -5545,10 +5555,34 @@ function App() {
 
           <FieldBox label="삼성 TAI (목표달성인센티브) 설정" accent="rgba(167,139,250,0.25)">
             <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:10, lineHeight:1.7 }}>
-              TAI(PI)는 기준급(연봉÷20) 기준으로 상·하반기 2회 지급됩니다.<br/>
+              TAI(PI)는 기준급(연봉÷20) 기준으로 상·하반기 2회 지급되며, <b>반기별 지급률이 다를 수 있습니다.</b><br/>
               일반적 구간: <span style={{color:"#A78BFA", fontWeight:700}}>25% / 37.5% / 50% / 67.5% / 75% / 100%</span>
             </div>
-            <div style={{ fontSize:11, color:"#E2E8F0", marginBottom:8, fontWeight:700 }}>빠른 선택 (반기 1회 기준, 12.5% 단위)</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+              <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:11, color:"#A78BFA", marginBottom:6, fontWeight:700 }}>상반기 (7월 지급)</div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <PercentRateInput
+                    value={(parseFloat(samsungTaiRateH1)*100).toFixed(samsungTaiRateH1.includes(".")?1:0)}
+                    onCommit={v => setSamsungTaiRateH1(String(v/100))}
+                    min={0} max={200} color="#A78BFA" size={18}
+                  />
+                  <span style={{ fontSize:13, color:"#A78BFA", fontWeight:700 }}>%</span>
+                </div>
+              </div>
+              <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:11, color:"#A78BFA", marginBottom:6, fontWeight:700 }}>하반기 (12월 지급)</div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <PercentRateInput
+                    value={(parseFloat(samsungTaiRateH2)*100).toFixed(samsungTaiRateH2.includes(".")?1:0)}
+                    onCommit={v => setSamsungTaiRateH2(String(v/100))}
+                    min={0} max={200} color="#A78BFA" size={18}
+                  />
+                  <span style={{ fontSize:13, color:"#A78BFA", fontWeight:700 }}>%</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize:11, color:"#E2E8F0", marginBottom:8, fontWeight:700 }}>빠른 선택 (양쪽 반기 동시 적용, 12.5% 단위)</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6, marginBottom:12 }}>
               {[
                 {label:"0%",    val:"0",     sub:"미지급"},
@@ -5561,11 +5595,11 @@ function App() {
                 {label:"87.5%", val:"0.875", sub:""},
                 {label:"100%",  val:"1.0",   sub:"목표달성"},
               ].map(o => (
-                <button key={o.val} onClick={()=>setSamsungTaiRate(o.val)} style={{
+                <button key={o.val} onClick={()=>{setSamsungTaiRateH1(o.val); setSamsungTaiRateH2(o.val);}} style={{
                   padding:"10px 4px", borderRadius:10, fontSize:12, fontWeight:700,
-                  border: samsungTaiRate===o.val ? "1.5px solid #A78BFA" : "1.5px solid rgba(255,255,255,0.1)",
-                  background: samsungTaiRate===o.val ? "rgba(167,139,250,0.2)" : "rgba(255,255,255,0.04)",
-                  color: samsungTaiRate===o.val ? "#A78BFA" : "#94A3B8",
+                  border: (samsungTaiRateH1===o.val && samsungTaiRateH2===o.val) ? "1.5px solid #A78BFA" : "1.5px solid rgba(255,255,255,0.1)",
+                  background: (samsungTaiRateH1===o.val && samsungTaiRateH2===o.val) ? "rgba(167,139,250,0.2)" : "rgba(255,255,255,0.04)",
+                  color: (samsungTaiRateH1===o.val && samsungTaiRateH2===o.val) ? "#A78BFA" : "#94A3B8",
                   cursor:"pointer", fontFamily:"inherit", transition:"all .18s", lineHeight:1.3,
                 }}>
                   {o.label}
@@ -5573,32 +5607,22 @@ function App() {
                 </button>
               ))}
             </div>
-            <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(167,139,250,0.25)", borderRadius:10, padding:"10px 13px" }}>
-              <div style={{ fontSize:11, color:"#A78BFA", marginBottom:6, fontWeight:700 }}>✏️ 수기 입력 (% 단위, 0~100)</div>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <PercentRateInput
-                  value={(parseFloat(samsungTaiRate)*100).toFixed(samsungTaiRate.includes(".")?1:0)}
-                  onCommit={v => setSamsungTaiRate(String(v/100))}
-                  min={0}
-                  max={100}
-                  color="#A78BFA"
-                  size={20}
-                />
-                <span style={{ fontSize:14, color:"#A78BFA", fontWeight:700 }}>%</span>
-              </div>
-            </div>
-            {parseFloat(samsungTaiRate) > 0 && (
+            {(parseFloat(samsungTaiRateH1) > 0 || parseFloat(samsungTaiRateH2) > 0) && (
               <div style={{ marginTop:10, background:"rgba(167,139,250,0.1)", border:"1px solid rgba(167,139,250,0.3)", borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
                   <span style={{ fontSize:12, color:"#CBD5E1" }}>월 기준급 (연봉 {comma(r.bonusSalary)}만 ÷ 20)</span>
                   <span style={{ fontSize:13, fontWeight:700, color:"#fff" }}>{fmtM(r.samsungBasePay)}</span>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                  <span style={{ fontSize:12, color:"#CBD5E1" }}>반기 TAI (기준급 × {(r.taiRateVal*100).toFixed(1)}%)</span>
-                  <span style={{ fontSize:13, fontWeight:700, color:"#A78BFA" }}>{fmtM(r.samsungTaiHalf)}</span>
+                  <span style={{ fontSize:12, color:"#CBD5E1" }}>상반기 TAI (× {(r.taiRateH1Val*100).toFixed(1)}%)</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:"#A78BFA" }}>{fmtM(r.samsungTaiHalf1)}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ fontSize:12, color:"#CBD5E1" }}>하반기 TAI (× {(r.taiRateH2Val*100).toFixed(1)}%)</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:"#A78BFA" }}>{fmtM(r.samsungTaiHalf2)}</span>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
-                  <span style={{ fontSize:12, color:"#A78BFA", fontWeight:700 }}>연간 합계 (×2회, 세전)</span>
+                  <span style={{ fontSize:12, color:"#A78BFA", fontWeight:700 }}>연간 합계 (세전)</span>
                   <span style={{ fontSize:15, fontWeight:900, color:"#A78BFA" }}>{fmtM(r.samsungTaiAnnual)}</span>
                 </div>
               </div>
