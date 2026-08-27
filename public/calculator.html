@@ -1895,7 +1895,7 @@ function App() {
   const [bizPerfBonus, setBizPerfBonus] = useState(0);
   const [prevWithholding, setPrevWithholding] = useState(8000);
   const [myRating, setMyRating] = useState("MT");
-  const [insuranceBasePercent, setInsuranceBasePercent] = useState(100); // 4대보험 신고기준액 = 기준급 × 80/100/120% 중 선택
+  const [taxWithholdingPercent, setTaxWithholdingPercent] = useState(100); // 근로소득 조견표 비율 — 산출세액 × 80/100/120% 중 선택 반영
   const [healthSettlementMonths, setHealthSettlementMonths] = useState(9); // 건보료 정산 분할납부 개월수 (법정 최대 12회, 회사 신청에 따라 다름)
 
   // ── 회사 실적 / 시뮬레이션 기준값 (ResultPanel, SettingsContent) ──────
@@ -3123,20 +3123,29 @@ function App() {
     const samsungTaiAnnual = samsungTaiHalf1 + samsungTaiHalf2;
     const taiW = samsungTaiAnnual * MAN;
 
-    // ── 세금 계산: 누적 방식으로 각 항목의 한계세율 적용 ──────────────────
-    // [실측] 과세표준 순서: 연봉(+업무성과급) → TAI → 특별성과급 → OPI
-    // TAI는 항상 원천징수 단계의 잠정금액으로 지급되므로 연봉 바로 다음(가장 낮은 누적소득
-    // 구간)에서 계산하고, OPI는 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이므로
-    // 누적 마지막 순서에 둡니다.
+    // ── TAI 세금: 경력개발단계별(CL) 고정 원천징수율 ────────────────────────
+    // [실측] CL2=15%(2019년 실지급 확인), CL3=20%(2026년 실지급 확인)
+    // [추정] CL1=10%, CL4=25% — 5%p 등차 패턴으로 추정 (미확인)
+    // TAI는 연봉 누적 한계세율이 아니라 CL등급별 고정 세율을 적용하며,
+    // 국민연금·건강보험·장기요양은 공제되지 않고 소득세+지방소득세+고용보험만 공제됩니다.
+    const TAI_TAX_RATE_BY_CL = { CL1: 0.10, CL2: 0.15, CL3: 0.20, CL4: 0.25 };
+    const taiIncomeTaxRate = TAI_TAX_RATE_BY_CL[myCl] ?? 0.20;
+    const taiIncomeTaxWon = taiW * taiIncomeTaxRate;
+    const taiLocalTaxWon = taiIncomeTaxWon * 0.1;
+    const taiEmploymentWon = taiW * 0.009; // 고용보험 0.9% (실측 확인)
+    const taiTaxWon = taiIncomeTaxWon + taiLocalTaxWon + taiEmploymentWon;
+
+    // ── 세금 계산: 누적 방식으로 각 항목의 한계세율 적용 (OPI·특별성과급) ───
+    // [실측] 과세표준 순서: 연봉(+업무성과급) → 특별성과급 → OPI
+    // TAI는 위에서 CL등급별 고정세율로 별도 계산하므로 이 누적 스택에서 제외합니다.
+    // OPI는 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이므로 누적 마지막 순서에 둡니다.
     // 각 항목의 세금 = 해당 항목까지 합산한 총세금 - 직전 합산 총세금
     const totalIncW = curW + opiW + spW + taiW;
     const taxBaseOnly  = totalTax(curW);
-    const taxWithTai   = totalTax(curW + taiW);
-    const taxWithSp    = totalTax(curW + taiW + spW);
-    const taxWithAll   = totalTax(totalIncW);
+    const taxWithSp    = totalTax(curW + spW);
+    const taxWithAll   = totalTax(curW + spW + opiW);
 
-    const taiTaxWon  = Math.max(0, taxWithTai  - taxBaseOnly);
-    const spTaxWon   = Math.max(0, taxWithSp   - taxWithTai);
+    const spTaxWon   = Math.max(0, taxWithSp   - taxBaseOnly);
     const opiTaxWon  = Math.max(0, taxWithAll  - taxWithSp);
 
     const opiTax = opiTaxWon / MAN;
@@ -3229,6 +3238,7 @@ function App() {
       spTotalPerCommon: spPerPerson[1],
       spTotalPerLepan: spPerPerson[2],
       samsungBasePay, samsungTaiHalf1, samsungTaiHalf2, samsungTaiAnnual, taiTax, taiNet, taiTaxRate, taiRateH1Val, taiRateH2Val,
+      taiIncomeTaxWon, taiLocalTaxWon, taiEmploymentWon, taiIncomeTaxRate,
       hynixBasePay, hynixContractSalary,
       hynixPsAmount, hynixPsThisYear, hynixTaiHalf, hynixTaiAnnual, hynixTotalThisYear, hynixTaiRate,
       hynixDcRate, hynixDcAmount, hynixCashAfterDc, hynixDcTaxSaving, hynixDcMarginalRate,
@@ -3256,18 +3266,17 @@ function App() {
 
   const getMonthlyTakeHomeRows = () => {
     const monthlyGrossWon = Math.round((r.curSalary * MAN) / 12);
-    // 4대보험(국민연금·건강보험·장기요양) 신고기준액 = 기준급 × 선택 비율(80/100/120%)
-    // 회사에 따라 실제 지급액과 무관하게 이 신고기준액으로 보험료를 산정할 수 있습니다.
-    const insuranceBaseWon = Math.round(r.samsungBasePay * MAN * (insuranceBasePercent / 100));
-    const npsBaseWon = Math.min(Math.max(insuranceBaseWon, NPS_MONTHLY_FLOOR_WON), NPS_MONTHLY_CAP_WON);
+    // 4대보험(국민연금·건강보험·장기요양)은 실제 월급 기준으로 산정합니다.
+    const npsBaseWon = Math.min(Math.max(monthlyGrossWon, NPS_MONTHLY_FLOOR_WON), NPS_MONTHLY_CAP_WON);
     const npsWon = Math.round(npsBaseWon * NPS_RATE);
-    const healthBaseWon = Math.min(insuranceBaseWon, MAX_ANNUAL_WAGE / 12);
+    const healthBaseWon = Math.min(monthlyGrossWon, MAX_ANNUAL_WAGE / 12);
     const healthWon = Math.round(healthBaseWon * 0.03545);
     const ltcWon = Math.round(healthWon * 0.1295);
     const employmentWon = Math.round(monthlyGrossWon * EMPLOYMENT_RATE);
     const retirementSavingWon = Math.round(monthlyGrossWon * RETIREMENT_SAVING_RATE);
+    // 근로소득 조견표(간이세액표) 비율 — 산출세액 × 80/100/120% 중 선택한 비율로 원천징수
     const annualIncomeTaxWon = totalTax(monthlyGrossWon * 12);
-    const monthlyIncomeTaxWon = Math.round(annualIncomeTaxWon / 12);
+    const monthlyIncomeTaxWon = Math.round((annualIncomeTaxWon / 12) * (taxWithholdingPercent / 100));
     const baseDeductionWon = npsWon + healthWon + ltcWon + employmentWon + monthlyIncomeTaxWon + retirementSavingWon;
     const isRefund = r.healthTotal < 0;
     // 건강보험료 정산(추가징수/환급)은 4월부터 healthSettlementMonths 개월 균등 분할 납부
@@ -4441,8 +4450,21 @@ function App() {
             <span style={{ fontSize:13, fontWeight:700, color:"#A78BFA" }}>{fmtM(r.samsungTaiAnnual)}</span>
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
-            <span style={{ fontSize:12, color:"#94A3B8" }}>소득세+지방세 (한계세율 {(r.taiTaxRate*100).toFixed(1)}%)</span>
-            <span style={{ fontSize:13, fontWeight:600, color:"#FF6B6B" }}>－ {fmtM(r.taiTax)}</span>
+            <span style={{ fontSize:12, color:"#94A3B8" }}>
+              소득세 (CL{myCl?.replace("CL","")||"3"} 경력개발단계별 세율 {(r.taiIncomeTaxRate*100).toFixed(0)}%)
+              <span style={{ marginLeft:6, fontSize:9, fontWeight:900, color: (myCl==="CL2"||myCl==="CL3") ? "#86EFAC" : "#FDE68A", background: (myCl==="CL2"||myCl==="CL3") ? "rgba(0,220,130,.14)" : "rgba(255,180,0,.14)", border: (myCl==="CL2"||myCl==="CL3") ? "1px solid rgba(0,220,130,.3)" : "1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"1px 5px" }}>
+                {(myCl==="CL2"||myCl==="CL3") ? "실측" : "추정"}
+              </span>
+            </span>
+            <span style={{ fontSize:13, fontWeight:600, color:"#FF6B6B" }}>－ {fmtM(r.taiIncomeTaxWon/MAN)}</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
+            <span style={{ fontSize:12, color:"#94A3B8" }}>지방소득세 (소득세의 10%)</span>
+            <span style={{ fontSize:13, fontWeight:600, color:"#FF6B6B" }}>－ {fmtM(r.taiLocalTaxWon/MAN)}</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
+            <span style={{ fontSize:12, color:"#94A3B8" }}>고용보험 (0.9%)</span>
+            <span style={{ fontSize:13, fontWeight:600, color:"#FF6B6B" }}>－ {fmtM(r.taiEmploymentWon/MAN)}</span>
           </div>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(167,139,250,0.12)", border:"1px solid rgba(167,139,250,0.3)", borderRadius:10, padding:"9px 12px" }}>
             <span style={{ fontSize:12, color:"#A78BFA", fontWeight:700 }}>세후 TAI 수령액 (추정)</span>
@@ -4451,7 +4473,8 @@ function App() {
         </div>
         <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, padding:"6px 2px" }}>
           * TAI 비율은 시뮬레이션 탭 → [삼성 TAI 설정]에서 조정하세요.<br/>
-          * [실측] 삼성 기준급 = 연봉 ÷ 20 (실제 지급 기준 확인값)
+          * [실측] 삼성 기준급 = 연봉 ÷ 20 (실제 지급 기준 확인값)<br/>
+          * TAI는 연봉 누적 한계세율이 아닌 <b>CL등급별 고정 원천징수율</b>(CL1 10%·CL2 15%·CL3 20%·CL4 25%)을 적용하며, 국민연금·건강보험은 공제되지 않습니다. CL2·CL3는 실제 지급 명세서로 확인됐고, CL1·CL4는 5%p 등차 패턴 추정치입니다.
         </div>
       </ResultCard>
 
@@ -4646,19 +4669,19 @@ function App() {
           <span style={{ fontSize:10, fontWeight:900, color:"#7DD3FC", background:"rgba(125,211,252,.14)", border:"1px solid rgba(125,211,252,.3)", borderRadius:6, padding:"2px 6px" }}>4월부터 {healthSettlementMonths}개월 분할</span>
         </div>
         <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginBottom:14 }}>
-          월급(연봉÷12) 기준 4대보험·소득세·퇴직연금저축(3%) 공제 반영. 건강보험료 정산({r.healthTotal > 0 ? "추가징수" : "환급"})은 <b style={{color:"#7DD3FC"}}>이번 4월부터 {healthSettlementMonths}개월간 균등 분할</b>로 계산합니다 (국민건강보험법 시행령 제39조 — 법정 최대 12회, 실제 횟수는 회사 신청에 따라 다름). 성과급(OPI·특별성과급·TAI)은 별도 지급이라 포함하지 않으며, 소득세는 간이세액표가 아닌 근사치입니다.
+          월급(연봉÷12) 기준 4대보험·소득세·퇴직연금저축(3%) 공제 반영. 소득세는 <b style={{color:"#7DD3FC"}}>근로소득 조견표 비율(80/100/120% 선택)</b>을 산출세액에 곱해 원천징수하는 방식으로 근사 계산합니다 (정확한 간이세액표 대신 연간 누진세율 균등분할 근사치). 건강보험료 정산({r.healthTotal > 0 ? "추가징수" : "환급"})은 <b style={{color:"#7DD3FC"}}>이번 4월부터 {healthSettlementMonths}개월간 균등 분할</b>로 계산합니다 (국민건강보험법 시행령 제39조 — 법정 최대 12회, 실제 횟수는 회사 신청에 따라 다름). 성과급(OPI·특별성과급·TAI)은 별도 지급이라 포함하지 않습니다.
         </div>
 
         <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px", marginBottom:14 }}>
-          <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:8, fontWeight:700 }}>⚙️ 4대보험 신고기준액 — 기준급 {fmtM(r.samsungBasePay)} × 선택 비율</div>
+          <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:8, fontWeight:700 }}>⚙️ 근로소득 조견표 비율 — 산출세액 × 선택 비율로 원천징수</div>
           <ChipGroup
             options={[
               { value:80, label:"80%" },
               { value:100, label:"100%" },
               { value:120, label:"120%" },
             ]}
-            value={insuranceBasePercent}
-            onChange={setInsuranceBasePercent}
+            value={taxWithholdingPercent}
+            onChange={setTaxWithholdingPercent}
           />
         </div>
 
@@ -6077,10 +6100,14 @@ function App() {
               <div className="logic-title" style={{color:"#00DC82"}}>1. 근로소득공제 및 과세표준 산출</div>
               <div>총소득에서 <b>근로소득공제</b>를 차감하여 과세표준을 산출합니다.</div>
               <ul className="logic-ul">
-                <li>기준: <b>당해 총소득 (기준연봉 + 업무성과급 + OPI-1 + 특별성과급 + TAI 전부 합산)</b></li>
-                <li>TAI와 업무성과급도 근로소득으로서 동일하게 누진세율 과세 대상입니다.</li>
-                <li>각 항목의 세금은 <b>누적 방식</b>으로 계산됩니다: 연봉 → TAI → 특별성과급(OPI-2) → OPI-1 순서로 이전 합산 세액과의 차이로 산출.</li>
-                <li>TAI는 항상 <b>원천징수 단계의 잠정금액</b>으로 지급되므로 연봉 바로 다음(가장 낮은 누적소득 구간)에서 계산합니다. OPI-1은 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이라 누적 마지막 순서에 둡니다.</li>
+                <li>기준: <b>당해 총소득 (기준연봉 + 업무성과급 + OPI-1 + 특별성과급 합산, TAI 제외)</b></li>
+                <li>
+                  <b>TAI는 연봉 누적 한계세율이 아니라 CL등급별 고정 원천징수율</b>을 적용합니다 (CL1 10%·CL2 15%·CL3 20%·CL4 25% — CL2·CL3는 실제 지급 명세서로 확인, CL1·CL4는 5%p 등차 패턴 추정치). 국민연금·건강보험은 공제되지 않고 소득세+지방소득세+고용보험(0.9%)만 공제됩니다.
+                  <span style={{ marginLeft:6, fontSize:9, fontWeight:900, color:"#86EFAC", background:"rgba(0,220,130,.14)", border:"1px solid rgba(0,220,130,.3)", borderRadius:6, padding:"1px 5px" }}>실측</span>
+                </li>
+                <li>업무성과급·OPI-1·특별성과급은 근로소득으로서 누진세율 과세 대상입니다.</li>
+                <li>각 항목의 세금은 <b>누적 방식</b>으로 계산됩니다: 연봉 → 특별성과급(OPI-2) → OPI-1 순서로 이전 합산 세액과의 차이로 산출.</li>
+                <li>OPI-1은 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이라 누적 마지막 순서에 둡니다.</li>
                 <li>근로소득공제 한도: 총급여 1억 원 초과 시 <b>최대 1,475만 원</b>으로 고정됩니다.</li>
               </ul>
 
