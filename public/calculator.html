@@ -3158,6 +3158,18 @@ function App() {
     const taxRate    = spW  > 0 ? spTaxWon  / spW  : 0;
     const taiTaxRate = taiW > 0 ? taiTaxWon / taiW : 0;
 
+    // ── 소득세 연말정산 예상 정산액 ──────────────────────────────────────
+    // [예측] TAI는 CL등급별 고정세율(예: 20%)로 원천징수되지만, 연말정산에서는
+    // 연봉+OPI+특별성과급+TAI를 모두 합산한 진짜 한계세율로 재계산됩니다.
+    // TAI의 고정세율이 실제 한계세율보다 낮은 경우, 그 차액만큼 추가납부가
+    // 발생할 가능성이 높습니다 (반대로 낮으면 환급).
+    // 연중 원천징수 합계 = 연봉분(조견표 비율 반영) + 특별성과급분 + OPI분 + TAI분
+    const salaryWithheldWon = taxBaseOnly * (taxWithholdingPercent / 100);
+    const alreadyWithheldWon = salaryWithheldWon + spTaxWon + opiTaxWon + taiIncomeTaxWon + taiLocalTaxWon;
+    const trueFinalTaxWon = totalTax(curW + spW + opiW + taiW);
+    const incomeTaxSettlementWon = trueFinalTaxWon - alreadyWithheldWon;
+    const incomeTaxSettlement = incomeTaxSettlementWon / MAN; // 양수: 추가납부 예상 / 음수: 환급 예상
+
     const taxBaseMan = Math.max(0, totalIncW - workIncomeDeduction(totalIncW)) / MAN;
     const mySpBu = spD.buPerMan * perf;
     const mySpSa = (myIdx === 0 ? spD.saPerMemory : myIdx === 1 ? spD.saPerCommon : spD.saPerLepan) * perf;
@@ -3238,7 +3250,7 @@ function App() {
       spTotalPerCommon: spPerPerson[1],
       spTotalPerLepan: spPerPerson[2],
       samsungBasePay, samsungTaiHalf1, samsungTaiHalf2, samsungTaiAnnual, taiTax, taiNet, taiTaxRate, taiRateH1Val, taiRateH2Val,
-      taiIncomeTaxWon, taiLocalTaxWon, taiEmploymentWon, taiIncomeTaxRate,
+      taiIncomeTaxWon, taiLocalTaxWon, taiEmploymentWon, taiIncomeTaxRate, incomeTaxSettlement,
       hynixBasePay, hynixContractSalary,
       hynixPsAmount, hynixPsThisYear, hynixTaiHalf, hynixTaiAnnual, hynixTotalThisYear, hynixTaiRate,
       hynixDcRate, hynixDcAmount, hynixCashAfterDc, hynixDcTaxSaving, hynixDcMarginalRate,
@@ -3246,7 +3258,7 @@ function App() {
     };
   }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice,
       prevWithholding, profit, rerate, sprate, burate, cntMemory, cntCommon, cntLepan,
-      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode]);
+      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode, taxWithholdingPercent]);
 
   const r = calc();
 
@@ -4658,6 +4670,30 @@ function App() {
           <span style={{ fontSize:15, fontWeight:800, color:r.healthTotal > 0 ? "#00DC82" : "#FF6B6B" }}>
             {r.healthTotal > 0 ? `+ ${fmtM(r.healthMonthly)}/월` : `${fmtM(r.healthMonthly)}/월`}
           </span>
+        </div>
+      </div>
+
+      {/* 소득세 연말정산 */}
+      <div style={{ background:"linear-gradient(135deg,rgba(255,107,107,0.06),transparent)", border:"1px solid rgba(255,107,107,0.2)", borderRadius:16, padding:"16px 18px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+          <div style={{ fontSize:15, fontWeight:800, color:"#FF6B6B" }}>🧾 소득세 연말정산 예상</div>
+          <span style={{ fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
+        </div>
+        <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginBottom:12 }}>
+          TAI는 CL등급별 고정세율({(r.taiIncomeTaxRate*100).toFixed(0)}%)로 원천징수되지만, 연말정산에서는 <b style={{color:"#FF6B6B"}}>연봉+업무성과급+OPI-1+특별성과급+TAI를 모두 합산</b>한 진짜 한계세율로 재계산됩니다. TAI의 고정세율이 실제 한계세율보다 낮으면 그 차액만큼 <b>추가납부</b>가 발생합니다.
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginTop:10, padding:"12px 14px", background: r.incomeTaxSettlement > 0 ? "rgba(255,107,107,0.1)" : "rgba(0,220,130,0.1)", borderRadius:12 }}>
+          <span style={{ fontSize:14, fontWeight:700, color:r.incomeTaxSettlement > 0 ? "#FF6B6B" : "#00DC82" }}>
+            연말정산 예상 {r.incomeTaxSettlement > 0 ? "추가납부" : "환급"}
+          </span>
+          <div className="result-card-value">
+            <div style={{ fontSize:20, fontWeight:900, color:r.incomeTaxSettlement > 0 ? "#FF6B6B" : "#00DC82" }}>
+              {r.incomeTaxSettlement > 0 ? `+ ${fmtM(r.incomeTaxSettlement)}` : fmtM(r.incomeTaxSettlement)}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginTop:10 }}>
+          * 근로소득 조견표 비율(설정: {taxWithholdingPercent}%)이 낮을수록 연중 원천징수가 적어져 연말정산 추가납부가 커집니다. 실제 소득세는 정확한 간이세액표가 아닌 근사치로 계산되어 오차가 있을 수 있습니다.
         </div>
       </div>
 
