@@ -3310,6 +3310,36 @@ function App() {
     });
   };
 
+  // ── 다년도 월 실수령액 추이 (예측) ────────────────────────────────────
+  // [예측] 매년 myRaise(연간 인상률)만큼 연봉이 오른다고 가정하고, 대표적인
+  // 평상월(건보료 정산 영향 제외)의 세전/공제/실수령을 연도별로 보여줍니다.
+  // 건보료 정산 효과는 위 "월급날 통장엔?" 당해년도 표에서 별도로 확인하세요.
+  const getMultiYearMonthlyTrend = (years = 5) => {
+    const raiseRate = (parseFloat(myRaise) || 0) / 100;
+    return Array.from({ length: years }, (_, i) => {
+      const yearOffset = i;
+      const projectedAnnualWon = Math.round(r.curSalary * MAN * Math.pow(1 + raiseRate, yearOffset));
+      const monthlyGrossWon = Math.round(projectedAnnualWon / 12);
+      const npsBaseWon = Math.min(Math.max(monthlyGrossWon, NPS_MONTHLY_FLOOR_WON), NPS_MONTHLY_CAP_WON);
+      const npsWon = Math.round(npsBaseWon * NPS_RATE);
+      const healthBaseWon = Math.min(monthlyGrossWon, MAX_ANNUAL_WAGE / 12);
+      const healthWon = Math.round(healthBaseWon * 0.03545);
+      const ltcWon = Math.round(healthWon * 0.1295);
+      const employmentWon = Math.round(monthlyGrossWon * EMPLOYMENT_RATE);
+      const retirementSavingWon = Math.round(monthlyGrossWon * RETIREMENT_SAVING_RATE);
+      const annualIncomeTaxWon = totalTax(monthlyGrossWon * 12);
+      const monthlyIncomeTaxWon = Math.round((annualIncomeTaxWon / 12) * (taxWithholdingPercent / 100));
+      const totalDeductionWon = npsWon + healthWon + ltcWon + employmentWon + retirementSavingWon + monthlyIncomeTaxWon;
+      return {
+        yearOffset,
+        year: new Date().getFullYear() + yearOffset,
+        grossWon: monthlyGrossWon,
+        deductionWon: totalDeductionWon,
+        netWon: monthlyGrossWon - totalDeductionWon,
+      };
+    });
+  };
+
   const sBase = {
     inBox: { background:"linear-gradient(180deg, rgba(14,21,37,.94), rgba(10,16,28,.92))", border:"1px solid rgba(255,255,255,0.10)", borderRadius:14, padding:"13px 14px", boxShadow:"inset 0 1px 0 rgba(255,255,255,.02)" },
     row: { display:"flex", justifyContent:"space-between", alignItems:"center" },
@@ -4080,6 +4110,45 @@ function App() {
           </div>
         </div>
 
+        {/* 누적 총보상 요약 (bonuschip 스타일 헤드라인) */}
+        {(() => {
+          const grandTotal = totalReceiptRows.reduce((s,row)=>s+(row.totalAmount||0),0);
+          const piGrand = totalReceiptRows.reduce((s,row)=>s+(row.piAmount||0),0);
+          const psGrand = totalReceiptRows.reduce((s,row)=>s+(row.psAmount||0),0);
+          const spGrand = totalReceiptRows.reduce((s,row)=>s+(row.spAmount||0),0);
+          const psuGrand = totalReceiptRows.reduce((s,row)=>s+(row.psuAmount||0),0);
+          const maxYearAmount = Math.max(1, ...totalReceiptRows.map(row=>row.totalAmount||0));
+          return (
+            <div style={{ background:'linear-gradient(135deg,rgba(34,197,94,0.1),transparent)', border:'1px solid rgba(34,197,94,.25)', borderRadius:18, padding:18, marginBottom:14 }}>
+              <div style={{ fontSize:13, color:'#94A3B8', marginBottom:4 }}>연도별 예정액 누적 (세후 추정)</div>
+              <div style={{ fontSize:30, fontWeight:900, color:'#86EFAC', marginBottom:12 }}>{fmtM(grandTotal)}</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:16 }}>
+                <div style={{ background:'rgba(167,139,250,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#A78BFA', fontSize:10, fontWeight:900 }}>TAI</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(piGrand)}</div></div>
+                <div style={{ background:'rgba(125,211,252,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#7DD3FC', fontSize:10, fontWeight:900 }}>OPI-1</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(psGrand)}</div></div>
+                <div style={{ background:'rgba(250,204,21,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#FDE68A', fontSize:10, fontWeight:900 }}>OPI-2</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(spGrand)}</div></div>
+                <div style={{ background:'rgba(196,181,253,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#C4B5FD', fontSize:10, fontWeight:900 }}>RSU/PSU</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(psuGrand)}</div></div>
+              </div>
+              <div style={{ fontSize:11, color:'#64748B', marginBottom:8, fontWeight:700 }}>연도별 수령 예정액</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {totalReceiptRows.map(row => (
+                  <div key={`bar-${row.key}`}>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'#CBD5E1', marginBottom:3 }}>
+                      <span>{row.dateLabel}</span>
+                      <span style={{ fontWeight:900, color:'#86EFAC' }}>{fmtM(row.totalAmount)}</span>
+                    </div>
+                    <div style={{ height:8, background:'rgba(255,255,255,0.06)', borderRadius:999, overflow:'hidden' }}>
+                      <div style={{ height:'100%', width:`${Math.max(2,(row.totalAmount||0)/maxYearAmount*100)}%`, background:'linear-gradient(90deg,#22C55E,#86EFAC)', borderRadius:999 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize:10, color:'#64748B', marginTop:10, lineHeight:1.5 }}>
+                * 지급 예정월 기준 세후 추정 합계입니다. 자세한 구성은 아래 표를 확인하세요.
+              </div>
+            </div>
+          );
+        })()}
+
         <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(34,197,94,.18)', borderRadius:18, padding:16, marginBottom:14 }}>
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:8 }}>
             <div>
@@ -4775,6 +4844,39 @@ function App() {
             </React.Fragment>
           ))}
         </div>
+
+        {/* 다년도 월 실수령액 추이 (bonuschip 스타일) */}
+        <div style={{ marginTop:18, paddingTop:16, borderTop:"1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
+            <div style={{ fontSize:14, fontWeight:800, color:"#00C6FF" }}>📈 앞으로 5년, 월급 추이는?</div>
+            <span style={{ fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
+          </div>
+          <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginBottom:12 }}>
+            매년 <b style={{color:"#7DD3FC"}}>{myRaise}%</b> 인상 가정, 평상월(건보료 정산 제외) 기준입니다. 정산 효과가 포함된 당해년도 상세는 위 표를 참고하세요.
+          </div>
+          <div className="reward-table-wrap">
+            <table className="reward-table compact-mobile" style={{ minWidth:420, width:"100%" }}>
+              <thead>
+                <tr style={{ borderBottom:"1px solid rgba(255,255,255,.12)" }}>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"left", fontSize:11 }}>연도</th>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"right", fontSize:11 }}>세전</th>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"right", fontSize:11 }}>공제</th>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"right", fontSize:11 }}>실수령</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getMultiYearMonthlyTrend(5).map(row => (
+                  <tr key={row.year} style={{ borderBottom:"1px solid rgba(255,255,255,.06)" }}>
+                    <td style={{ padding:"8px 6px", color:"#fff", fontWeight:800 }}>{row.year}{row.yearOffset===0?" (올해)":""}</td>
+                    <td style={{ padding:"8px 6px", color:"#E2E8F0", textAlign:"right" }}>{comma(row.grossWon/MAN)}만</td>
+                    <td style={{ padding:"8px 6px", color:"#FF6B6B", textAlign:"right" }}>−{comma(row.deductionWon/MAN)}만</td>
+                    <td style={{ padding:"8px 6px", color:"#00C6FF", fontWeight:900, textAlign:"right" }}>{comma(row.netWon/MAN)}만</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -5348,6 +5450,25 @@ function App() {
     <div className="settings-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
       {tab === 0 && (
         <>
+          <div style={{ background:"linear-gradient(135deg,rgba(0,198,255,0.1),rgba(167,139,250,0.06))", border:"1px solid rgba(0,198,255,0.3)", borderRadius:18, padding:"18px 20px", marginBottom:14 }}>
+            <div style={{ fontSize:12, color:"#94A3B8", marginBottom:4 }}>한눈에 보기 — 올해 예상 총 수령액 (세전)</div>
+            <div style={{ fontSize:28, fontWeight:900, color:"#00C6FF", marginBottom:10 }}>
+              {fmtM(r.curSalary + r.opi + r.sp + r.samsungTaiAnnual)}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:10 }}>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>연봉</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.curSalary)}</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>OPI</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.opi)}</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>TAI</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.samsungTaiAnnual)}</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>특별성과급</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.sp)}</div></div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.06)", borderRadius:10, padding:"8px 12px" }}>
+              <span style={{ fontSize:11, color:"#94A3B8" }}>성과급만 세후 합계 (OPI+TAI+특별성과급)</span>
+              <span style={{ fontSize:14, fontWeight:900, color:"#86EFAC" }}>{fmtM(r.opiNet + r.taiNet + r.spNet)}</span>
+            </div>
+            <div style={{ fontSize:10, color:"#64748B", marginTop:8, lineHeight:1.5 }}>
+              아래에서 직급·연봉·영업이익 등을 조정하면 실시간으로 반영돼요. 자세한 항목별 산출결과는 [산출결과] 탭에서 확인하세요.
+            </div>
+          </div>
           <FieldBox label="기본 정보" accent="rgba(30,144,255,0.3)">
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
               <div>
