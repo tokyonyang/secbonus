@@ -1351,6 +1351,28 @@ const MAX_ANNUAL_WAGE = 1435501440;
 // 원래 내용으로 복원됩니다. 계산 로직 자체는 삭제하지 않았습니다.
 const HYNIX_SECTION_VISIBLE = false;
 
+// ── 특별성과급(OPI-2) 회사 세부 규정안 ('26년 성과분, '27.3월말~4월초 지급) ──
+// [회사 규정안] 지급액 = 개인별 기초금액(CL2~4: '26년 계약연봉 + 업무성과급) × 사업부 지급률 × 고과가급(CL4)
+// [회사 규정안] 소득세 45% + 지방소득세 4.5%(=49.5%), 4대보험(건강·장기요양·고용) 4.967% 징수,
+//              기부금은 세전 총지급액의 0.2~1.0%(0.2%p 단위) 선택, 공제 후 잔액을 자사주로 지급.
+// [회사 규정안] '27년 소득으로 신고 → '26년 연봉 누적세율·건보 정산에는 합산하지 않습니다.
+// 4.967% 구성(2026 요율 기준 역산): 건강 3.595% + 장기요양 0.4724% + 고용 0.9%
+const SP_RULE = { incomeTax: 0.45, localTax: 0.045, insurance: 0.04967 };
+const SP_GRADE_MULT = { EM: 1.4, ES: 1.2, MT: 1.0, MS: 0.9, NM: 0.8 };
+const SP_DONATION_OPTIONS = [0, 0.2, 0.4, 0.6, 0.8, 1.0]; // % (0 = 미약정)
+function getSpGradeMult(cl, rating) {
+  return cl === "CL4" ? (SP_GRADE_MULT[rating] ?? 1.0) : 1.0;
+}
+function calcSpDeductions(gross, donationPct) {
+  const g = Math.max(0, Number(gross) || 0);
+  const incomeTax = g * SP_RULE.incomeTax;
+  const localTax = g * SP_RULE.localTax;
+  const insurance = g * SP_RULE.insurance;
+  const donation = g * (Math.max(0, Number(donationPct) || 0) / 100);
+  const total = incomeTax + localTax + insurance + donation;
+  return { incomeTax, localTax, insurance, donation, total, net: Math.max(0, g - total) };
+}
+
 function comma(n) { return Math.round(n).toLocaleString("ko-KR"); }
 function fmtM(n) { return comma(Math.round(n)) + "만원"; }
 
@@ -1895,6 +1917,11 @@ function App() {
   const [bizPerfBonus, setBizPerfBonus] = useState(0);
   const [prevWithholding, setPrevWithholding] = useState(8000);
   const [myRating, setMyRating] = useState("MT");
+  // ── 특별성과급 규정안 입력값 ──
+  const [spDonationPct, setSpDonationPct] = useState(0.2); // 기부금 (세전 총지급액의 %, 0 = 미약정)
+  const [spAbsentMonths, setSpAbsentMonths] = useState(0); // 비근무(병결·산재·무급 출산전후·보건휴가 등) 월할 차감 개월수
+  const [spPayRateManual, setSpPayRateManual] = useState(0); // 사업부 지급률 직접입력(%) — '27.2월 공시 후 입력, 0 = 재원 기반 자동추정
+  const [spAvgBase, setSpAvgBase] = useState(0); // 사업부 평균 기초금액(만) — 0 = 내 기초금액과 동일 가정
   const [taxWithholdingPercent, setTaxWithholdingPercent] = useState(100); // 근로소득 조견표 비율 — 산출세액 × 80/100/120% 중 선택 반영
   const [healthSettlementMonths, setHealthSettlementMonths] = useState(9); // 건보료 정산 분할납부 개월수 (법정 최대 12회, 회사 신청에 따라 다름)
 
@@ -3092,15 +3119,28 @@ function App() {
     const opi = Math.min(opiPerPersonBase * perf, opiCap);
     const opiPct = opiCap > 0 ? Math.min(opi / opiCap * 100, 100) : 0;
     const t_opi = Math.min(t_opiPerPersonBase * perf, opiCap);
-    let sp = 0, isSpFixed24 = false;
-    let t_sp = 0;
+    // ── [회사 규정안] 특별성과급 = 기초금액 × 사업부 지급률 × 고과가급 × 근무월할 ──
+    // 지급률 자동추정: 사업부 1인당 평균 재원 ÷ 사업부 평균 기초금액
+    // (평균 기초금액 미입력 시 내 기초금액과 같다고 가정 → 기존 1인당 금액과 동일)
+    const spPerf = getSpGradeMult(myCl, myRating);
+    const spWorkRatio = Math.max(0, 12 - Math.min(12, Math.max(0, Number(spAbsentMonths) || 0))) / 12;
+    // CL1은 기초액(월) 체계라 규정안의 연봉 기준 지급률을 적용하지 않고 기존 1인당 금액을 유지합니다.
+    const spRateDenom = (!isCL1 && spAvgBase > 0) ? spAvgBase : bonusSalary;
     const isLepanDeficit = (simYear >= 2027) && (lepanDeficit !== "none");
+    const isSpRateManual = !isCL1 && spPayRateManual > 0;
+    const calcSpPayRate = (perHead) => {
+      if (myDiv === "lepan" && isLepanDeficit) return 0.24;
+      if (isSpRateManual) return spPayRateManual / 100;
+      return spRateDenom > 0 ? perHead / spRateDenom : 0;
+    };
+    const spPayRate = isSpEligible ? calcSpPayRate(spPerPerson[myIdx]) : 0;
+    const t_spPayRate = calcSpPayRate(t_spPerPerson[myIdx]);
+    let sp = 0, isSpFixed24 = false;
     if (isSpEligible) {
-      if (myDiv === "lepan" && isLepanDeficit) { sp = (bonusSalary * 0.24) * perf; isSpFixed24 = true; }
-      else { sp = spPerPerson[myIdx] * perf; }
+      sp = bonusSalary * spPayRate * spPerf * spWorkRatio;
+      isSpFixed24 = myDiv === "lepan" && isLepanDeficit;
     }
-    if (myDiv === "lepan" && isLepanDeficit) { t_sp = (bonusSalary * 0.24) * perf; }
-    else { t_sp = t_spPerPerson[myIdx] * perf; }
+    const t_sp = bonusSalary * t_spPayRate * spPerf * spWorkRatio;
     const lostOpi = isSpEligible ? 0 : Math.max(0, t_opi - opi);
     const lostSp = isSpEligible ? 0 : Math.max(0, t_sp - sp);
     const lostTotal = lostOpi + lostSp;
@@ -3136,31 +3176,50 @@ function App() {
     const taiTaxWon = taiIncomeTaxWon + taiLocalTaxWon + taiEmploymentWon;
 
     // ── 세금 계산: 누적 방식으로 각 항목의 한계세율 적용 (OPI·특별성과급) ───
-    // [실측] 과세표준 순서: 연봉(+업무성과급) → 특별성과급 → OPI
+    // 과세표준 순서: 연봉(+업무성과급) → OPI (특별성과급은 규정안에 따라 별도 단일세율·'27년 귀속)
     // TAI는 위에서 CL등급별 고정세율로 별도 계산하므로 이 누적 스택에서 제외합니다.
     // OPI는 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이므로 누적 마지막 순서에 둡니다.
     // 각 항목의 세금 = 해당 항목까지 합산한 총세금 - 직전 합산 총세금
-    const totalIncW = curW + opiW + spW + taiW;
+    // [회사 규정안] 특별성과급은 '27년 소득으로 신고하고 지급 시 45%(+지방세 4.5%) 단일세율로 원천징수하므로
+    // 당해 연봉 누적 스택·건보 정산 기준소득(totalIncW)에서 제외합니다. spW는 표시용으로만 유지합니다.
+    const totalIncW = curW + opiW + taiW;
     const taxBaseOnly  = totalTax(curW);
-    const taxWithSp    = totalTax(curW + spW);
-    const taxWithAll   = totalTax(curW + spW + opiW);
-
-    const spTaxWon   = Math.max(0, taxWithSp   - taxBaseOnly);
-    const opiTaxWon  = Math.max(0, taxWithAll  - taxWithSp);
+    const taxWithAll   = totalTax(curW + opiW);
+    const opiTaxWon  = Math.max(0, taxWithAll  - taxBaseOnly);
 
     const opiTax = opiTaxWon / MAN;
     const opiNet = Math.max(0, opi - opiTax);
-    const tax    = spTaxWon  / MAN;
-    const spNet  = Math.max(0, sp  - tax);
+    const spDed  = calcSpDeductions(sp, spDonationPct);
+    const tax    = spDed.incomeTax + spDed.localTax; // 소득세+지방소득세 (49.5%)
+    const spInsurance = spDed.insurance;             // 4대보험 4.967%
+    const spDonation  = spDed.donation;              // 기부금
+    const spNet  = spDed.net;                        // 자사주 지급 대상 금액
+    const spTaxWon = tax * MAN;
     const taiTax = taiTaxWon / MAN;
     const taiNet = Math.max(0, samsungTaiAnnual - taiTax);
 
     const taxRate    = spW  > 0 ? spTaxWon  / spW  : 0;
     const taiTaxRate = taiW > 0 ? taiTaxWon / taiW : 0;
 
+    // ── 소득세 연말정산 예상 정산액 ──────────────────────────────────────
+    // [예측] TAI는 CL등급별 고정세율(예: 20%)로 원천징수되지만, 연말정산에서는
+    // 연봉+OPI+TAI를 합산한 진짜 한계세율로 재계산됩니다. (특별성과급은 '27년 귀속이라 제외)
+    // TAI의 고정세율이 실제 한계세율보다 낮은 경우, 그 차액만큼 추가납부가
+    // 발생할 가능성이 높습니다 (반대로 낮으면 환급).
+    // 연중 원천징수 합계 = 연봉분(조견표 비율 반영) + OPI분 + TAI분
+    const salaryWithheldWon = taxBaseOnly * (taxWithholdingPercent / 100);
+    // [회사 규정안] 특별성과급은 '27년 소득으로 신고되므로 당해 연말정산 합산에서 제외합니다.
+    const alreadyWithheldWon = salaryWithheldWon + opiTaxWon + taiIncomeTaxWon + taiLocalTaxWon;
+    const trueFinalTaxWon = totalTax(curW + opiW + taiW);
+    const incomeTaxSettlementWon = trueFinalTaxWon - alreadyWithheldWon;
+    const incomeTaxSettlement = incomeTaxSettlementWon / MAN; // 양수: 추가납부 예상 / 음수: 환급 예상
+
     const taxBaseMan = Math.max(0, totalIncW - workIncomeDeduction(totalIncW)) / MAN;
-    const mySpBu = spD.buPerMan * perf;
-    const mySpSa = (myIdx === 0 ? spD.saPerMemory : myIdx === 1 ? spD.saPerCommon : spD.saPerLepan) * perf;
+    // 부문분/사업부분 표시는 내 실지급액을 재원 구성비대로 나눠 보여줍니다.
+    const _spDivHead = spPerPerson[myIdx] || 0;
+    const _spBuShare = _spDivHead > 0 ? spD.buPerMan / _spDivHead : 0;
+    const mySpBu = isSpFixed24 ? 0 : sp * _spBuShare;
+    const mySpSa = isSpFixed24 ? 0 : sp * (1 - _spBuShare);
     const healthRate = 0.03545, ltcRatio = 0.1295;
     const prevW = prevWithholding * MAN;
     const baseHW = Math.min(prevW, MAX_ANNUAL_WAGE) * healthRate;
@@ -3225,6 +3284,7 @@ function App() {
     return {
       bizPerfBonus, curSalary, bonusSalary, cappedBaseSalary, salaryCap, excessCash, perf, usePrice, isCL1, isCL4,
       opi, opiCap, opiPct, opiTax, opiNet, sp, isSpFixed24, tax, spNet, taxRate,
+      spPerf, spPayRate, isSpRateManual, spWorkRatio, spInsurance, spDonation, spDed, spRateDenom, spDivHead: _spDivHead,
       totalIncW, prevWithholding, taxBaseMan, healthAdd, ltcAdd, healthTotal, healthMonthly, isHealthCapped,
       third, sharesEach, totalBonus: opi + sp + excessCash + bizPerfBonus + samsungTaiAnnual,
       isSpEligible, spThreshold, appliedSprate, appliedRerate, rerate,
@@ -3238,7 +3298,7 @@ function App() {
       spTotalPerCommon: spPerPerson[1],
       spTotalPerLepan: spPerPerson[2],
       samsungBasePay, samsungTaiHalf1, samsungTaiHalf2, samsungTaiAnnual, taiTax, taiNet, taiTaxRate, taiRateH1Val, taiRateH2Val,
-      taiIncomeTaxWon, taiLocalTaxWon, taiEmploymentWon, taiIncomeTaxRate,
+      taiIncomeTaxWon, taiLocalTaxWon, taiEmploymentWon, taiIncomeTaxRate, incomeTaxSettlement,
       hynixBasePay, hynixContractSalary,
       hynixPsAmount, hynixPsThisYear, hynixTaiHalf, hynixTaiAnnual, hynixTotalThisYear, hynixTaiRate,
       hynixDcRate, hynixDcAmount, hynixCashAfterDc, hynixDcTaxSaving, hynixDcMarginalRate,
@@ -3246,7 +3306,8 @@ function App() {
     };
   }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice,
       prevWithholding, profit, rerate, sprate, burate, cntMemory, cntCommon, cntLepan,
-      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode]);
+      spDonationPct, spAbsentMonths, spPayRateManual, spAvgBase,
+      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode, taxWithholdingPercent]);
 
   const r = calc();
 
@@ -3298,6 +3359,36 @@ function App() {
     });
   };
 
+  // ── 다년도 월 실수령액 추이 (예측) ────────────────────────────────────
+  // [예측] 매년 myRaise(연간 인상률)만큼 연봉이 오른다고 가정하고, 대표적인
+  // 평상월(건보료 정산 영향 제외)의 세전/공제/실수령을 연도별로 보여줍니다.
+  // 건보료 정산 효과는 위 "월급날 통장엔?" 당해년도 표에서 별도로 확인하세요.
+  const getMultiYearMonthlyTrend = (years = 5) => {
+    const raiseRate = (parseFloat(myRaise) || 0) / 100;
+    return Array.from({ length: years }, (_, i) => {
+      const yearOffset = i;
+      const projectedAnnualWon = Math.round(r.curSalary * MAN * Math.pow(1 + raiseRate, yearOffset));
+      const monthlyGrossWon = Math.round(projectedAnnualWon / 12);
+      const npsBaseWon = Math.min(Math.max(monthlyGrossWon, NPS_MONTHLY_FLOOR_WON), NPS_MONTHLY_CAP_WON);
+      const npsWon = Math.round(npsBaseWon * NPS_RATE);
+      const healthBaseWon = Math.min(monthlyGrossWon, MAX_ANNUAL_WAGE / 12);
+      const healthWon = Math.round(healthBaseWon * 0.03545);
+      const ltcWon = Math.round(healthWon * 0.1295);
+      const employmentWon = Math.round(monthlyGrossWon * EMPLOYMENT_RATE);
+      const retirementSavingWon = Math.round(monthlyGrossWon * RETIREMENT_SAVING_RATE);
+      const annualIncomeTaxWon = totalTax(monthlyGrossWon * 12);
+      const monthlyIncomeTaxWon = Math.round((annualIncomeTaxWon / 12) * (taxWithholdingPercent / 100));
+      const totalDeductionWon = npsWon + healthWon + ltcWon + employmentWon + retirementSavingWon + monthlyIncomeTaxWon;
+      return {
+        yearOffset,
+        year: new Date().getFullYear() + yearOffset,
+        grossWon: monthlyGrossWon,
+        deductionWon: totalDeductionWon,
+        netWon: monthlyGrossWon - totalDeductionWon,
+      };
+    });
+  };
+
   const sBase = {
     inBox: { background:"linear-gradient(180deg, rgba(14,21,37,.94), rgba(10,16,28,.92))", border:"1px solid rgba(255,255,255,0.10)", borderRadius:14, padding:"13px 14px", boxShadow:"inset 0 1px 0 rgba(255,255,255,.02)" },
     row: { display:"flex", justifyContent:"space-between", alignItems:"center" },
@@ -3307,6 +3398,11 @@ function App() {
   const multiTagHtml = r.perf > 1.0
     ? <span style={{fontSize:11, color:"#FFD700", background:"rgba(255,215,0,0.15)", border:"1px solid rgba(255,215,0,0.3)", padding:"3px 8px", borderRadius:5, marginLeft:8}}>
         {myRating} ({r.perf}배) 적용
+      </span>
+    : null;
+  const spMultiTagHtml = r.spPerf !== 1.0
+    ? <span style={{fontSize:11, color: r.spPerf > 1 ? "#FFD700" : "#FCA5A5", background: r.spPerf > 1 ? "rgba(255,215,0,0.15)" : "rgba(255,107,107,0.12)", border:`1px solid ${r.spPerf > 1 ? "rgba(255,215,0,0.3)" : "rgba(255,107,107,0.3)"}`, padding:"3px 8px", borderRadius:5, marginLeft:8}}>
+        고과가급 {myRating} ×{r.spPerf} 적용
       </span>
     : null;
 
@@ -3537,18 +3633,16 @@ function App() {
       const baseByDiv = scenarioDiv === 'memory' ? perMemory : scenarioDiv === 'common' ? perCommon : perLepan;
       const capInfo = splitSalaryByCap(scenarioCl, scenarioSalary);
       const baseSalary = capInfo.baseSalary || scenarioSalary;
-      let perf = 1.0;
-      // OPI-2/RSU 예상 입력에서는 CL4 고과 선택 시 평고과(MT) 대비 ES +20%, EM +40%를 적용합니다.
-      if (scenarioCl === 'CL4') { if (scenarioRating === 'EM') perf = 1.4; else if (scenarioRating === 'ES') perf = 1.2; }
+      // [회사 규정안] CL4 고과가급: EM 1.4 · ES 1.2 · MT 1.0 · MS 0.9 · NM 0.8
+      const perf = getSpGradeMult(scenarioCl, scenarioRating);
+      // [회사 규정안] 지급액 = 기초금액 × 지급률. 시나리오 표에는 업무성과급 입력이 없어 기준연봉을 기초금액으로 사용합니다.
+      const rateDenom = (scenarioCl !== 'CL1' && spAvgBase > 0) ? spAvgBase : baseSalary;
       let spGross = 0;
       if (scenarioDiv === 'lepan' && year >= 2027 && scenarioDeficit !== 'none') spGross = (baseSalary * 0.24) * perf;
-      else spGross = baseByDiv * perf;
+      else spGross = baseSalary * (rateDenom > 0 ? baseByDiv / rateDenom : 0) * perf;
 
-      const annualGrossForTax = (scenarioCl === 'CL1' ? scenarioSalary * 14 : baseSalary) + Math.max(0, Number(capInfo.excessCash || 0));
-      const curW = annualGrossForTax * MAN;
-      const spW = spGross * MAN;
-      const spTaxWon = Math.max(0, totalTax(curW + spW) - totalTax(curW));
-      return Math.max(0, Math.round(spGross - spTaxWon / MAN));
+      // [회사 규정안] 소득세 49.5%(지방세 포함) + 4대보험 4.967% + 기부금 공제 후 자사주 지급
+      return Math.round(calcSpDeductions(spGross, spDonationPct).net);
     };
     const getAutoSpForYear = (year) => calcScenarioSpecialNet(year);
     const currentSavedSpNet = getRecordSpecialSpNet(targetSpYear);
@@ -3831,7 +3925,7 @@ function App() {
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:12 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#7DD3FC' }}>조회연도 및 최근 2년 OPI-2 자동 시뮬레이션 입력</div>
-              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·예상 인상률·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, OPI-2 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 OPI-2를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과 선택에 따라 ES +20%, EM +40%가 반영됩니다.</div>
+              <div style={{ color:'#94A3B8', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·예상 인상률·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, OPI-2 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 OPI-2를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과가급(EM 1.4·ES 1.2·MT 1.0·MS 0.9·NM 0.8배)이 반영되고, 세후는 규정안(49.5%·4대보험 4.967%·기부금) 기준입니다.</div>
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) 150px', gap:10, alignItems:'center', marginBottom:10 }} className="two-col-grid">
@@ -3917,9 +4011,11 @@ function App() {
                     <div className="scenario-field">
                       <label>CL4 고과</label>
                       <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (effectiveRow.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(15,23,42,.45)', color:cl4RatingEnabled?'#fff':'#64748B', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'9px 8px', fontWeight:900 }}>
-                        <option value="MT">MT</option>
-                        <option value="ES">ES +20%</option>
-                        <option value="EM">EM +40%</option>
+                        <option value="EM">EM ×1.4</option>
+                        <option value="ES">ES ×1.2</option>
+                        <option value="MT">MT ×1.0</option>
+                        <option value="MS">MS ×0.9</option>
+                        <option value="NM">NM ×0.8</option>
                       </select>
                     </div>
                     <div className="scenario-field">
@@ -4067,6 +4163,45 @@ function App() {
             </div>
           </div>
         </div>
+
+        {/* 누적 총보상 요약 (bonuschip 스타일 헤드라인) */}
+        {(() => {
+          const grandTotal = totalReceiptRows.reduce((s,row)=>s+(row.totalAmount||0),0);
+          const piGrand = totalReceiptRows.reduce((s,row)=>s+(row.piAmount||0),0);
+          const psGrand = totalReceiptRows.reduce((s,row)=>s+(row.psAmount||0),0);
+          const spGrand = totalReceiptRows.reduce((s,row)=>s+(row.spAmount||0),0);
+          const psuGrand = totalReceiptRows.reduce((s,row)=>s+(row.psuAmount||0),0);
+          const maxYearAmount = Math.max(1, ...totalReceiptRows.map(row=>row.totalAmount||0));
+          return (
+            <div style={{ background:'linear-gradient(135deg,rgba(34,197,94,0.1),transparent)', border:'1px solid rgba(34,197,94,.25)', borderRadius:18, padding:18, marginBottom:14 }}>
+              <div style={{ fontSize:13, color:'#94A3B8', marginBottom:4 }}>연도별 예정액 누적 (세후 추정)</div>
+              <div style={{ fontSize:30, fontWeight:900, color:'#86EFAC', marginBottom:12 }}>{fmtM(grandTotal)}</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:16 }}>
+                <div style={{ background:'rgba(167,139,250,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#A78BFA', fontSize:10, fontWeight:900 }}>TAI</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(piGrand)}</div></div>
+                <div style={{ background:'rgba(125,211,252,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#7DD3FC', fontSize:10, fontWeight:900 }}>OPI-1</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(psGrand)}</div></div>
+                <div style={{ background:'rgba(250,204,21,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#FDE68A', fontSize:10, fontWeight:900 }}>OPI-2</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(spGrand)}</div></div>
+                <div style={{ background:'rgba(196,181,253,.1)', borderRadius:10, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#C4B5FD', fontSize:10, fontWeight:900 }}>RSU/PSU</div><div style={{ color:'#fff', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(psuGrand)}</div></div>
+              </div>
+              <div style={{ fontSize:11, color:'#64748B', marginBottom:8, fontWeight:700 }}>연도별 수령 예정액</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {totalReceiptRows.map(row => (
+                  <div key={`bar-${row.key}`}>
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'#CBD5E1', marginBottom:3 }}>
+                      <span>{row.dateLabel}</span>
+                      <span style={{ fontWeight:900, color:'#86EFAC' }}>{fmtM(row.totalAmount)}</span>
+                    </div>
+                    <div style={{ height:8, background:'rgba(255,255,255,0.06)', borderRadius:999, overflow:'hidden' }}>
+                      <div style={{ height:'100%', width:`${Math.max(2,(row.totalAmount||0)/maxYearAmount*100)}%`, background:'linear-gradient(90deg,#22C55E,#86EFAC)', borderRadius:999 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize:10, color:'#64748B', marginTop:10, lineHeight:1.5 }}>
+                * 지급 예정월 기준 세후 추정 합계입니다. 자세한 구성은 아래 표를 확인하세요.
+              </div>
+            </div>
+          );
+        })()}
 
         <div style={{ background:'rgba(15,23,42,.72)', border:'1px solid rgba(34,197,94,.18)', borderRadius:18, padding:16, marginBottom:14 }}>
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:8 }}>
@@ -4283,8 +4418,19 @@ function App() {
       {/* 특별성과급 */}
       {r.sp > 0 ? (
         <ResultCard icon="⭐" title="스페셜 보너스" valueColor="#FFCA45"
-          sub={`성과에 따른 특별 보상 · DS영업이익×${r.appliedSprate}% (OPI와 독립 재원)`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
-          {multiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{multiTagHtml}</div>}
+          sub={`기초금액 × 지급률 ${(r.spPayRate*100).toFixed(1)}%${r.spPerf !== 1 ? ` × 고과가급 ${r.spPerf}` : ''}${r.spWorkRatio < 1 ? ` × 근무 ${Math.round(r.spWorkRatio*12)}/12` : ''} · '27.3월말~4월초 자사주 지급`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
+          {spMultiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{spMultiTagHtml}</div>}
+          <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
+            {[
+              {label:`기초금액 (${r.isCL1 ? "기초액" : "'" + String(simYear).slice(2) + "년 계약연봉 + 업무성과급"})`, val:fmtM(r.bonusSalary)},
+              {label:`사업부 지급률 ${r.isSpFixed24 ? "(르팡 적자 24% 고정)" : r.isSpRateManual ? "(공시값 직접입력)" : "(재원 기반 추정)"}`, val:`${(r.spPayRate*100).toFixed(2)}%`},
+            ].map(item=>(
+              <div key={item.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"8px 12px" }}>
+                <span style={{ fontSize:12, color:"#94A3B8" }}>{item.label}</span>
+                <span style={{ fontSize:13, fontWeight:700, color:"#E2E8F0" }}>{item.val}</span>
+              </div>
+            ))}
+          </div>
           {currentPrice && currentPrice > 0 && (
             <div style={{ background:"rgba(0,220,130,0.08)", border:"1px solid rgba(0,220,130,0.2)", borderRadius:12, padding:"10px 12px", marginBottom:10 }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
@@ -4369,9 +4515,12 @@ function App() {
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
             {[
-              {label:`과세표준 (연봉+업무성과급+OPI-1+OPI-2+TAI 전체 합산)`, val:fmtM(r.taxBaseMan), color:"#CBD5E1"},
-              {label:`OPI-2 한계세율 ${(r.taxRate*100).toFixed(1)}% 소득세+지방세`, val:`－ ${fmtM(r.tax)}`, color:"#FF6B6B"},
-              {label:"세후 자사주 총액", val:fmtM(r.spNet), color:"#FFB400", bold:true},
+              {label:"세전 총지급액", val:fmtM(r.sp), color:"#CBD5E1"},
+              {label:"소득세 45%", val:`－ ${fmtM(r.spDed.incomeTax)}`, color:"#FF6B6B"},
+              {label:"지방소득세 4.5% (합계 49.5%)", val:`－ ${fmtM(r.spDed.localTax)}`, color:"#FF6B6B"},
+              {label:"4대보험 4.967% (건강·장기요양·고용)", val:`－ ${fmtM(r.spInsurance)}`, color:"#FF6B6B"},
+              {label:`기부금 ${spDonationPct > 0 ? spDonationPct.toFixed(1) + "% (세전 기준)" : "미약정"}`, val: r.spDonation > 0 ? `－ ${fmtM(r.spDonation)}` : "0만원", color:"#FF6B6B"},
+              {label:"자사주 지급액 (공제 후)", val:fmtM(r.spNet), color:"#FFB400", bold:true},
             ].map(item=>(
               <div key={item.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
                 <span style={{ fontSize:12, color:"#94A3B8" }}>{item.label}</span>
@@ -4390,7 +4539,10 @@ function App() {
             </div>
           </div>
           <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:8, fontWeight:600 }}>자사주 매도 제한 일정</div>
-          <div style={{ fontSize:11, color:"#FF6B6B", marginBottom:8, fontWeight:700 }}>* 중도 퇴사 시, 매도제한 주식은 지급 불가</div>
+          <div style={{ fontSize:11, color:"#FF6B6B", marginBottom:8, fontWeight:700 }}>* 지급 후 자발적 퇴직·징계해고 시 매도제한 자사주 상당액 회사 반환</div>
+          <div style={{ fontSize:10.5, color:"#94A3B8", marginBottom:8, lineHeight:1.6 }}>
+            * 주식 수량은 지급일 기준주가로 산정 · '27년 소득으로 신고 (연말정산 시 실제 세율에 따라 추가납부/환급 가능)
+          </div>
           <div className="shares-grid" style={{ gridTemplateColumns:"1fr 1fr 1fr" }}>
             {[
               {label:"즉시 매도",color:"#00DC82",bg:"rgba(0,220,130,0.1)"},
@@ -4633,7 +4785,7 @@ function App() {
       <div style={{ background:"linear-gradient(135deg,rgba(0,220,130,0.06),transparent)", border:"1px solid rgba(0,220,130,0.2)", borderRadius:16, padding:"16px 18px" }}>
         <div style={{ fontSize:15, fontWeight:800, color:"#00DC82", marginBottom:6 }}>🏥 차년도 건강보험료 정산 (예상)</div>
         {[
-          {label:"올해 예상 총소득 (연봉+업무성과급+OPI-1+OPI-2+TAI)", val:fmtM(r.totalIncW/MAN), color:"#E2E8F0"},
+          {label:"올해 예상 총소득 (연봉+업무성과급+OPI-1+TAI · OPI-2는 지급 시 4대보험 별도징수·'27년 귀속)", val:fmtM(r.totalIncW/MAN), color:"#E2E8F0"},
           {label:"기납부 기준 (전년도 원천징수)", val:fmtM(r.prevWithholding), color:"#E2E8F0"},
           {label:"건강보험료 정산 (3.545%)", val: r.healthAdd > 0 ? `+ ${fmtM(r.healthAdd)}` : fmtM(r.healthAdd), color: r.healthAdd > 0 ? "#00DC82" : "#FF6B6B"},
           {label:"장기요양보험료 정산 (×12.95%)", val: r.ltcAdd > 0 ? `+ ${fmtM(r.ltcAdd)}` : fmtM(r.ltcAdd), color: r.ltcAdd > 0 ? "#00DC82" : "#FF6B6B"},
@@ -4658,6 +4810,30 @@ function App() {
           <span style={{ fontSize:15, fontWeight:800, color:r.healthTotal > 0 ? "#00DC82" : "#FF6B6B" }}>
             {r.healthTotal > 0 ? `+ ${fmtM(r.healthMonthly)}/월` : `${fmtM(r.healthMonthly)}/월`}
           </span>
+        </div>
+      </div>
+
+      {/* 소득세 연말정산 */}
+      <div style={{ background:"linear-gradient(135deg,rgba(255,107,107,0.06),transparent)", border:"1px solid rgba(255,107,107,0.2)", borderRadius:16, padding:"16px 18px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+          <div style={{ fontSize:15, fontWeight:800, color:"#FF6B6B" }}>🧾 소득세 연말정산 예상</div>
+          <span style={{ fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
+        </div>
+        <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginBottom:12 }}>
+          TAI는 CL등급별 고정세율({(r.taiIncomeTaxRate*100).toFixed(0)}%)로 원천징수되지만, 연말정산에서는 <b style={{color:"#FF6B6B"}}>연봉+업무성과급+OPI-1+TAI를 모두 합산</b>(특별성과급은 '27년 소득으로 별도 신고)한 진짜 한계세율로 재계산됩니다. TAI의 고정세율이 실제 한계세율보다 낮으면 그 차액만큼 <b>추가납부</b>가 발생합니다.
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginTop:10, padding:"12px 14px", background: r.incomeTaxSettlement > 0 ? "rgba(255,107,107,0.1)" : "rgba(0,220,130,0.1)", borderRadius:12 }}>
+          <span style={{ fontSize:14, fontWeight:700, color:r.incomeTaxSettlement > 0 ? "#FF6B6B" : "#00DC82" }}>
+            연말정산 예상 {r.incomeTaxSettlement > 0 ? "추가납부" : "환급"}
+          </span>
+          <div className="result-card-value">
+            <div style={{ fontSize:20, fontWeight:900, color:r.incomeTaxSettlement > 0 ? "#FF6B6B" : "#00DC82" }}>
+              {r.incomeTaxSettlement > 0 ? `+ ${fmtM(r.incomeTaxSettlement)}` : fmtM(r.incomeTaxSettlement)}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginTop:10 }}>
+          * 근로소득 조견표 비율(설정: {taxWithholdingPercent}%)이 낮을수록 연중 원천징수가 적어져 연말정산 추가납부가 커집니다. 실제 소득세는 정확한 간이세액표가 아닌 근사치로 계산되어 오차가 있을 수 있습니다.
         </div>
       </div>
 
@@ -4738,6 +4914,39 @@ function App() {
               </div>
             </React.Fragment>
           ))}
+        </div>
+
+        {/* 다년도 월 실수령액 추이 (bonuschip 스타일) */}
+        <div style={{ marginTop:18, paddingTop:16, borderTop:"1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
+            <div style={{ fontSize:14, fontWeight:800, color:"#00C6FF" }}>📈 앞으로 5년, 월급 추이는?</div>
+            <span style={{ fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
+          </div>
+          <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginBottom:12 }}>
+            매년 <b style={{color:"#7DD3FC"}}>{myRaise}%</b> 인상 가정, 평상월(건보료 정산 제외) 기준입니다. 정산 효과가 포함된 당해년도 상세는 위 표를 참고하세요.
+          </div>
+          <div className="reward-table-wrap">
+            <table className="reward-table compact-mobile" style={{ minWidth:420, width:"100%" }}>
+              <thead>
+                <tr style={{ borderBottom:"1px solid rgba(255,255,255,.12)" }}>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"left", fontSize:11 }}>연도</th>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"right", fontSize:11 }}>세전</th>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"right", fontSize:11 }}>공제</th>
+                  <th style={{ padding:"7px 6px", color:"#94A3B8", fontWeight:700, textAlign:"right", fontSize:11 }}>실수령</th>
+                </tr>
+              </thead>
+              <tbody>
+                {getMultiYearMonthlyTrend(5).map(row => (
+                  <tr key={row.year} style={{ borderBottom:"1px solid rgba(255,255,255,.06)" }}>
+                    <td style={{ padding:"8px 6px", color:"#fff", fontWeight:800 }}>{row.year}{row.yearOffset===0?" (올해)":""}</td>
+                    <td style={{ padding:"8px 6px", color:"#E2E8F0", textAlign:"right" }}>{comma(row.grossWon/MAN)}만</td>
+                    <td style={{ padding:"8px 6px", color:"#FF6B6B", textAlign:"right" }}>−{comma(row.deductionWon/MAN)}만</td>
+                    <td style={{ padding:"8px 6px", color:"#00C6FF", fontWeight:900, textAlign:"right" }}>{comma(row.netWon/MAN)}만</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -5312,6 +5521,25 @@ function App() {
     <div className="settings-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
       {tab === 0 && (
         <>
+          <div style={{ background:"linear-gradient(135deg,rgba(0,198,255,0.1),rgba(167,139,250,0.06))", border:"1px solid rgba(0,198,255,0.3)", borderRadius:18, padding:"18px 20px", marginBottom:14 }}>
+            <div style={{ fontSize:12, color:"#94A3B8", marginBottom:4 }}>한눈에 보기 — 올해 예상 총 수령액 (세전)</div>
+            <div style={{ fontSize:28, fontWeight:900, color:"#00C6FF", marginBottom:10 }}>
+              {fmtM(r.curSalary + r.opi + r.sp + r.samsungTaiAnnual)}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:10 }}>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>연봉</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.curSalary)}</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>OPI</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.opi)}</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>TAI</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.samsungTaiAnnual)}</div></div>
+              <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>특별성과급</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.sp)}</div></div>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.06)", borderRadius:10, padding:"8px 12px" }}>
+              <span style={{ fontSize:11, color:"#94A3B8" }}>성과급만 세후 합계 (OPI+TAI+특별성과급)</span>
+              <span style={{ fontSize:14, fontWeight:900, color:"#86EFAC" }}>{fmtM(r.opiNet + r.taiNet + r.spNet)}</span>
+            </div>
+            <div style={{ fontSize:10, color:"#64748B", marginTop:8, lineHeight:1.5 }}>
+              아래에서 직급·연봉·영업이익 등을 조정하면 실시간으로 반영돼요. 자세한 항목별 산출결과는 [산출결과] 탭에서 확인하세요.
+            </div>
+          </div>
           <FieldBox label="기본 정보" accent="rgba(30,144,255,0.3)">
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
               <div>
@@ -5359,10 +5587,46 @@ function App() {
           <FieldBox label="고과 (CL4 전용)" accent={myCl==="CL4" ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.05)"}>
             <div style={{ opacity: myCl==="CL4" ? 1 : 0.3, pointerEvents: myCl==="CL4" ? "auto" : "none" }}>
               <ChipGroup value={myCl==="CL4" ? myRating : "MT"} onChange={setMyRating} options={[
-                {value:"MT",label:"MT (1.0×)",color:"#E2E8F0"},
-                {value:"ES",label:"ES (1.2×)",color:"#FFD700"},
-                {value:"EM",label:"EM (1.4×)",color:"#FF9500"},
+                {value:"EM",label:"EM ×1.4",color:"#FF9500"},
+                {value:"ES",label:"ES ×1.2",color:"#FFD700"},
+                {value:"MT",label:"MT ×1.0",color:"#E2E8F0"},
+                {value:"MS",label:"MS ×0.9",color:"#94A3B8"},
+                {value:"NM",label:"NM ×0.8",color:"#FCA5A5"},
               ]}/>
+              <div style={{ fontSize:10, color:"#94A3B8", marginTop:6, lineHeight:1.5 }}>
+                [회사 규정안] 특별성과급 고과가급 EM 1.4 · ES 1.2 · MT 1.0 · MS 0.9 · NM 0.8배. OPI 한도 가산은 기존대로 EM·ES만 적용.
+              </div>
+            </div>
+          </FieldBox>
+
+          <FieldBox label="특별성과급 규정 ('27.3월말~4월초 지급)" accent="rgba(255,180,0,0.25)">
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>기부금 (세전 총지급액 대비)</div>
+                <select value={spDonationPct} onChange={e=>setSpDonationPct(+e.target.value)} style={sBase.select}>
+                  {SP_DONATION_OPTIONS.map(v=><option key={v} value={v}>{v === 0 ? "미약정 (0%)" : `${v.toFixed(1)}%`}</option>)}
+                </select>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>'26.10월 개인별 약정 · 0.2%p 단위</div>
+              </div>
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>비근무 차감 (개월)</div>
+                <NumInput value={spAbsentMonths} onChange={v=>setSpAbsentMonths(Math.min(12, Math.max(0, Math.round(Number(v)||0))))} step={1} min={0} max={12}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>병결·산재·무급 출산전후·보건휴가 등 월할</div>
+              </div>
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>사업부 지급률 직접입력 (%)</div>
+                <NumInput value={spPayRateManual} onChange={v=>setSpPayRateManual(Math.max(0, Number(v)||0))} step={0.5} min={0} max={500} color="#FFB400"/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>'27.2월 초 공시 후 입력 · 0 = 자동추정</div>
+              </div>
+              <div style={sBase.inBox}>
+                <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>사업부 평균 기초금액 (만)</div>
+                <NumInput value={spAvgBase} onChange={v=>setSpAvgBase(Math.max(0, Number(v)||0))} step={100} min={0}/>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>자동추정용 · 0 = 내 기초금액과 동일 가정</div>
+              </div>
+            </div>
+            <div style={{ fontSize:10.5, color:"#94A3B8", lineHeight:1.65 }}>
+              지급액 = 기초금액(계약연봉 + 업무성과급) × 지급률 × 고과가급 → 소득세 45%·지방세 4.5%·4대보험 4.967%·기부금 공제 후 자사주 지급.<br/>
+              지급대상: '26.12.31 재직자(육아·임신·입영·90일 이내 간병휴직 포함), '26년 중 DS부문(CSS 제외) 최장 근무자. 근무 1개월 이하·기준일 휴직/정직자·수습사원 제외.
             </div>
           </FieldBox>
 
@@ -6100,13 +6364,17 @@ function App() {
               <div className="logic-title" style={{color:"#00DC82"}}>1. 근로소득공제 및 과세표준 산출</div>
               <div>총소득에서 <b>근로소득공제</b>를 차감하여 과세표준을 산출합니다.</div>
               <ul className="logic-ul">
-                <li>기준: <b>당해 총소득 (기준연봉 + 업무성과급 + OPI-1 + 특별성과급 합산, TAI 제외)</b></li>
+                <li>기준: <b>당해 총소득 (기준연봉 + 업무성과급 + OPI-1 합산, TAI·특별성과급 제외)</b></li>
+                <li>
+                  <b>특별성과급(OPI-2)은 회사 규정안에 따라 별도 처리</b>합니다: 소득세 <b>45%</b> + 지방소득세 4.5% = <b>49.5%</b> 단일세율, 4대보험(건강·장기요양·고용) <b>4.967%</b>, 선택 기부금(세전 0.2~1.0%)을 공제한 뒤 자사주로 지급하며, <b>'27년 소득</b>으로 신고되므로 당해 누적세율·건보 정산에 합산하지 않습니다.
+                  <span style={{ marginLeft:6, fontSize:9, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"1px 5px" }}>회사 규정안</span>
+                </li>
                 <li>
                   <b>TAI는 연봉 누적 한계세율이 아니라 CL등급별 고정 원천징수율</b>을 적용합니다 (CL1 10%·CL2 15%·CL3 20%·CL4 25% — CL2·CL3는 실제 지급 명세서로 확인, CL1·CL4는 5%p 등차 패턴 추정치). 국민연금·건강보험은 공제되지 않고 소득세+지방소득세+고용보험(0.9%)만 공제됩니다.
                   <span style={{ marginLeft:6, fontSize:9, fontWeight:900, color:"#86EFAC", background:"rgba(0,220,130,.14)", border:"1px solid rgba(0,220,130,.3)", borderRadius:6, padding:"1px 5px" }}>실측</span>
                 </li>
-                <li>업무성과급·OPI-1·특별성과급은 근로소득으로서 누진세율 과세 대상입니다.</li>
-                <li>각 항목의 세금은 <b>누적 방식</b>으로 계산됩니다: 연봉 → 특별성과급(OPI-2) → OPI-1 순서로 이전 합산 세액과의 차이로 산출.</li>
+                <li>업무성과급·OPI-1은 근로소득으로서 누진세율 과세 대상입니다.</li>
+                <li>OPI-1 세금은 <b>누적 방식</b>으로 계산됩니다: 연봉 → OPI-1 순서로 이전 합산 세액과의 차이로 산출.</li>
                 <li>OPI-1은 지급 시점에 그해 다른 소득을 모두 포함해 정산하는 항목이라 누적 마지막 순서에 둡니다.</li>
                 <li>근로소득공제 한도: 총급여 1억 원 초과 시 <b>최대 1,475만 원</b>으로 고정됩니다.</li>
               </ul>
