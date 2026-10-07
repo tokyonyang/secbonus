@@ -1360,23 +1360,6 @@ const HYNIX_SECTION_VISIBLE = false;
 const SP_RULE = { incomeTax: 0.45, localTax: 0.045, insurance: 0.04967 };
 const SP_GRADE_MULT = { EM: 1.4, ES: 1.2, MT: 1.0, MS: 0.9, NM: 0.8 };
 const SP_DONATION_OPTIONS = [0, 0.2, 0.4, 0.6, 0.8, 1.0]; // % (0 = 미약정)
-// [회사 규정안·'26.10 보도] 재원 40%는 DS 전체에 균등(기초금액 비례) 배분, 60%는 사업부 성과 차등.
-// 공통조직 지급률 = 메모리 지급률 × 70%. LSI·파운드리(르팡)는 '26년엔 40% 몫만,
-// '27년부터 적자 사업부는 공통 지급률의 60%를 적용. 재원 총액은 항상 정확히 소진되도록 역산합니다.
-const SP_DEFICIT_RATIO_OF_COMMON = 0.6;
-function calcSpRuleDistrib(fund, nM, nC, nL, buPct, commonRatio, lepanDeficit) {
-  const N = nM + nC + nL;
-  if (fund <= 0 || N <= 0) return { perMemory:0, perCommon:0, perLepan:0, equalPerHead:0 };
-  const equalPerHead = fund * (buPct / 100) / N;
-  if (lepanDeficit) {
-    const denom = nM + commonRatio * nC + SP_DEFICIT_RATIO_OF_COMMON * commonRatio * nL;
-    const perMemory = denom > 0 ? fund / denom : 0;
-    return { perMemory, perCommon: perMemory * commonRatio, perLepan: perMemory * commonRatio * SP_DEFICIT_RATIO_OF_COMMON, equalPerHead };
-  }
-  const denom = nM + commonRatio * nC;
-  const perMemory = denom > 0 ? (fund * (1 - buPct / 100) + equalPerHead * (nM + nC)) / denom : 0;
-  return { perMemory, perCommon: perMemory * commonRatio, perLepan: equalPerHead, equalPerHead };
-}
 function getSpGradeMult(cl, rating) {
   return cl === "CL4" ? (SP_GRADE_MULT[rating] ?? 1.0) : 1.0;
 }
@@ -3077,14 +3060,17 @@ function App() {
       }
       const commonRatio = ratCommon; // 공통/메모리 비율 (기본값 0.7)
       if (spDistribMode === "flat") {
-        const d = calcSpRuleDistrib(fund, cntMemory, cntCommon, cntLepan, buPct, commonRatio, (simYear >= 2027) && (lepanDeficit !== "none"));
-        return {
-          perMemory: d.perMemory / MAN, perCommon: d.perCommon / MAN, perLepan: d.perLepan / MAN,
-          buPerMan: d.equalPerHead / MAN,
-          saPerMemory: (d.perMemory - d.equalPerHead) / MAN,
-          saPerCommon: (d.perCommon - d.equalPerHead) / MAN,
-          saPerLepan: Math.max(0, d.perLepan - d.equalPerHead) / MAN,
-        };
+        // [회사 공지 문구 그대로] 차등배분 없이 공통 = 메모리 × ratCommon(70%) 그대로 적용.
+        // 르팡은 부문분(전체 재원 중 buPct% 몫)만큼만 받는다고 가정.
+        const denom = cntMemory + commonRatio * cntCommon + (buPct / 100) * cntLepan;
+        const perMemory = denom > 0 ? (fund / denom) / MAN : 0;
+        const perCommon = perMemory * commonRatio;
+        const perLepan  = perMemory * (buPct / 100);
+        const buPerMan    = perLepan;
+        const saPerMemory = perMemory - buPerMan;
+        const saPerCommon = perCommon - buPerMan;
+        const saPerLepan  = 0;
+        return { perMemory, perCommon, perLepan, buPerMan, saPerMemory, saPerCommon, saPerLepan };
       }
       // [언론보도 기준, 기본값] 부문(균등) buPct% + 사업부(차등) saPct% 2단계 배분.
       const equalPoolFund = fund * (buPct / 100);   // 부문(균등) 재원
@@ -3143,6 +3129,7 @@ function App() {
     const isLepanDeficit = (simYear >= 2027) && (lepanDeficit !== "none");
     const isSpRateManual = !isCL1 && spPayRateManual > 0;
     const calcSpPayRate = (perHead) => {
+      if (myDiv === "lepan" && isLepanDeficit) return 0.24;
       if (isSpRateManual) return spPayRateManual / 100;
       return spRateDenom > 0 ? perHead / spRateDenom : 0;
     };
@@ -3151,7 +3138,7 @@ function App() {
     let sp = 0, isSpFixed24 = false;
     if (isSpEligible) {
       sp = bonusSalary * spPayRate * spPerf * spWorkRatio;
-      isSpFixed24 = myDiv === "lepan" && isLepanDeficit; // 적자 사업부: 공통 지급률 × 60%
+      isSpFixed24 = myDiv === "lepan" && isLepanDeficit;
     }
     const t_sp = bonusSalary * t_spPayRate * spPerf * spWorkRatio;
     const lostOpi = isSpEligible ? 0 : Math.max(0, t_opi - opi);
@@ -3231,8 +3218,8 @@ function App() {
     // 부문분/사업부분 표시는 내 실지급액을 재원 구성비대로 나눠 보여줍니다.
     const _spDivHead = spPerPerson[myIdx] || 0;
     const _spBuShare = _spDivHead > 0 ? spD.buPerMan / _spDivHead : 0;
-    const mySpBu = sp * Math.min(1, _spBuShare);
-    const mySpSa = sp * Math.max(0, 1 - _spBuShare);
+    const mySpBu = isSpFixed24 ? 0 : sp * _spBuShare;
+    const mySpSa = isSpFixed24 ? 0 : sp * (1 - _spBuShare);
     const healthRate = 0.03545, ltcRatio = 0.1295;
     const prevW = prevWithholding * MAN;
     const baseHW = Math.min(prevW, MAX_ANNUAL_WAGE) * healthRate;
@@ -3626,11 +3613,11 @@ function App() {
       const fund = scenarioProfit * 1e12 * (sprate / 100);
       let perMemory, perCommon, perLepan;
       if (spDistribMode === "flat") {
-        // [회사 규정안] 40% DS 전체 균등 + 60% 사업부 차등, 공통 = 메모리 × 70%, 적자('27~) = 공통 × 60%
-        const d = calcSpRuleDistrib(fund, cntMemory, cntCommon, cntLepan, buPct, ratCommon, scenarioDeficit !== 'none');
-        perMemory = d.perMemory / MAN;
-        perCommon = d.perCommon / MAN;
-        perLepan  = d.perLepan / MAN;
+        // [회사 공지 문구 그대로] 차등배분 없이 공통 = 메모리 × ratCommon 그대로
+        const denom = cntMemory + ratCommon * cntCommon + (buPct / 100) * cntLepan;
+        perMemory = denom > 0 ? (fund / denom) / MAN : 0;
+        perCommon = perMemory * ratCommon;
+        perLepan  = perMemory * (buPct / 100);
       } else {
         // [언론보도 기준, 기본값] 부문(균등) buPct% + 사업부(차등) saPct% 2단계 배분 (본문 계산과 동일 로직)
         const equalPoolFund = fund * (buPct / 100);
@@ -3651,7 +3638,8 @@ function App() {
       // [회사 규정안] 지급액 = 기초금액 × 지급률. 시나리오 표에는 업무성과급 입력이 없어 기준연봉을 기초금액으로 사용합니다.
       const rateDenom = (scenarioCl !== 'CL1' && spAvgBase > 0) ? spAvgBase : baseSalary;
       let spGross = 0;
-      spGross = baseSalary * (rateDenom > 0 ? baseByDiv / rateDenom : 0) * perf;
+      if (scenarioDiv === 'lepan' && year >= 2027 && scenarioDeficit !== 'none') spGross = (baseSalary * 0.24) * perf;
+      else spGross = baseSalary * (rateDenom > 0 ? baseByDiv / rateDenom : 0) * perf;
 
       // [회사 규정안] 소득세 49.5%(지방세 포함) + 4대보험 4.967% + 기부금 공제 후 자사주 지급
       return Math.round(calcSpDeductions(spGross, spDonationPct).net);
@@ -4435,7 +4423,7 @@ function App() {
           <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
             {[
               {label:`기초금액 (${r.isCL1 ? "기초액" : "'" + String(simYear).slice(2) + "년 계약연봉 + 업무성과급"})`, val:fmtM(r.bonusSalary)},
-              {label:`사업부 지급률 ${r.isSpFixed24 ? "(적자: 공통×60%)" : r.isSpRateManual ? "(공시값 직접입력)" : "(재원 기반 추정)"}`, val:`${(r.spPayRate*100).toFixed(2)}%`},
+              {label:`사업부 지급률 ${r.isSpFixed24 ? "(르팡 적자 24% 고정)" : r.isSpRateManual ? "(공시값 직접입력)" : "(재원 기반 추정)"}`, val:`${(r.spPayRate*100).toFixed(2)}%`},
             ].map(item=>(
               <div key={item.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"8px 12px" }}>
                 <span style={{ fontSize:12, color:"#94A3B8" }}>{item.label}</span>
@@ -4460,7 +4448,7 @@ function App() {
           )}
           {r.isSpFixed24 ? (
             <div style={{ background:"rgba(255,107,107,0.1)", border:"1px solid rgba(255,107,107,0.3)", borderRadius:10, padding:"8px 12px", marginBottom:8, fontSize:12, color:"#FF6B6B" }}>
-              적자 사업부 — 공통 지급률의 60% 적용 ('27년~)
+              르팡 적자 — {r.isCL1 ? "기준기초액" : "기준연봉"} 24% 고정 배정
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
@@ -4482,7 +4470,7 @@ function App() {
             {[
               { label:"메모리", cnt:cntMemory, buAmt:r.spBuPerMan, saAmt:r.spSaPerMemory, total:r.spTotalPerMemory, color:"#00C6FF", note:"기준 (1인당 지급액 = 메모리 기준값)", id:"memory" },
               { label:"공통",   cnt:cntCommon, buAmt:r.spBuPerMan, saAmt:r.spSaPerCommon, total:r.spTotalPerCommon, color:"#FFD700", note:`(부문+사업부) 합산 = 메모리의 ${(ratCommon*100).toFixed(0)}% 고정`, id:"common" },
-              { label:"르팡",   cnt:cntLepan,  buAmt:r.spBuPerMan, saAmt:r.spSaPerLepan,  total:r.spTotalPerLepan,  color:"#FF6B6B", note: (simYear >= 2027 && lepanDeficit !== "none") ? "적자 사업부 — 공통 지급률의 60%" : "사업부분 미해당 — 부문분(40%)만 지급", id:"lepan" },
+              { label:"르팡",   cnt:cntLepan,  buAmt:r.spBuPerMan, saAmt:r.spSaPerLepan,  total:r.spTotalPerLepan,  color:"#FF6B6B", note:"사업부분 미해당 — 부문분만 지급", id:"lepan" },
             ].map((div) => {
               const isMe = myDiv === div.id;
               const divTotalJo = (div.total * div.cnt / 1e8).toFixed(2);
@@ -5618,7 +5606,7 @@ function App() {
                 <select value={spDonationPct} onChange={e=>setSpDonationPct(+e.target.value)} style={sBase.select}>
                   {SP_DONATION_OPTIONS.map(v=><option key={v} value={v}>{v === 0 ? "미약정 (0%)" : `${v.toFixed(1)}%`}</option>)}
                 </select>
-                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>'26.10월 약정 · 0.2%p 단위 · 회사 1:1 매칭</div>
+                <div style={{ fontSize:10, color:"#94A3B8", marginTop:4 }}>'26.10월 개인별 약정 · 0.2%p 단위</div>
               </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:5 }}>비근무 차감 (개월)</div>
@@ -5912,7 +5900,7 @@ function App() {
             <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:10 }}>공통 조직 배분 방식</div>
             <ChipGroup
               options={[
-                { value:"flat", label:"규정안: 40%균등+공통=메모리×70%", color:"#FFD700" },
+                { value:"flat", label:"공통=메모리×70% (노조 확인)", color:"#FFD700" },
                 { value:"tiered", label:"부문40%+사업부60% (미확인)", color:"#FFD700" },
               ]}
               value={spDistribMode}
@@ -5920,7 +5908,7 @@ function App() {
             />
             <div style={{ fontSize:10, color:"#64748B", marginTop:6, marginBottom:14, lineHeight:1.6 }}>
               {spDistribMode === "flat"
-                ? "✅ 규정안·노조 확인 — 재원 40%는 DS 전체 균등, 60%는 사업부 차등. 공통 최종 지급액 = 메모리의 정확히 70% (예시: 메모리 6억 → 공통 4.2억). 르팡은 '26년 40% 몫만, '27년~ 적자 시 공통의 60%."
+                ? "✅ 노조 최종 확인 — \"DS특별성과급의 공통조직 70%는 메모리사업부 최종 지급 금액의 70%\" (예시: 메모리 OPI2 6억 → 공통 4.2억, 정확히 70.0%)"
                 : "⚠️ 미확인 대안 — 노사 합의서의 \"부문 40%, 사업부 60%\" 문구를 2단계 구조로 해석한 가정입니다. 노조가 확인해준 실제 예시(6억→4.2억, 정확히 70%)와는 맞지 않아, 현재는 참고용으로만 남겨뒀습니다."}
             </div>
             <div style={{ ...sBase.row, marginBottom:10 }}>
@@ -5957,9 +5945,6 @@ function App() {
                     <option value="lsi">S.LSI 적자</option>
                     <option value="both">파운드리·S.LSI 적자</option>
                   </select>
-                )}
-                {d.id==="lepan" && simYear>=2027 && (
-                  <div style={{ fontSize:10, color:"#94A3B8", marginTop:6 }}>[규정안] '27년부터 적자 사업부는 공통 지급률의 60% 적용 (르팡 인원 전체에 적용하는 근사)</div>
                 )}
               </div>
             ))}
@@ -6284,11 +6269,9 @@ function App() {
 
               <div style={{marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 계산 순서</div>
               <div style={{fontSize:11, color:"#94A3B8", marginBottom:8, lineHeight:1.8}}>
-                ① 부문분(40%) 1인당 e = 총재원 × 40% ÷ DS 전체 인원 — 전원 동일<br/>
-                ② 메모리 1인당 M = [총재원 × 60% + e × (메모리인원 + 공통인원)] ÷ (메모리인원 + 0.7×공통인원)<br/>
-                ③ 공통 1인당 = M × 0.7 (최종액 기준 정확히 70%)<br/>
-                ④ 르팡(LSI·파운드리) 1인당 = e ('26년: 40% 몫만) · <b>'27년~ 적자 시 공통 지급률 × 60%</b><br/>
-                ⑤ 검증: 메모리·공통·르팡 지급 합계 = 총재원 (부문분 합계도 정확히 재원의 40%)
+                ① 메모리 1인당 = 총재원 ÷ [메모리인원 + 0.7×공통인원 + (부문분비율)×르팡인원]<br/>
+                ② 공통 1인당 = 메모리 1인당 × 0.7<br/>
+                ③ 르팡 1인당 = 메모리 1인당 × 부문분비율 (적자 사업부라 차등분 없이 부문분만 수령)
               </div>
 
               <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 노조 확인 예시 검증</div>
@@ -6298,8 +6281,7 @@ function App() {
                 <li>OPI(OPI-1)는 사업부 무관 <b>모두 50%</b> 동일 적용, 총 수령액은 OPI + OPI2 합산</li>
               </ul>
               <div style={{ fontSize:11, color:"#64748B", lineHeight:1.6, marginTop:6, marginBottom:12 }}>
-                출처: 노조 Q&A 최종 확인 답변(사용자 제공, 위 예시 포함) + 회사 세부 규정안 보도(글로벌이코노믹·뉴스인사이드 2026-10-07: "40% DS 전체, 60% 사업부 성과 차등, 공통 = 메모리 지급률의 70%, 적자 사업부는 '27년부터 공통 지급률의 60%"). 앱 기본값은 두 조건을 모두 만족하도록 역산합니다.<br/>
-                ※ 이전 버전은 르팡 1인당을 "메모리 × 40%"로 계산해 부문분이 실제로는 재원의 약 55%까지 배분되는 오류가 있었습니다 (르팡 과다·메모리/공통 과소).
+                출처: 노조 Q&A 최종 확인 답변(사용자 제공, 위 예시 포함). 앱 기본값은 이 방식(설정 탭 "공통=메모리×70%")을 사용합니다.
               </div>
 
               <div style={{marginTop:8, marginBottom:4, fontSize:12, fontWeight:700, color:"#E2E8F0"}}>🔹 참고: "부문40%+사업부60% 2단계" 해석 (미확인 — 노조 답변과 불일치)</div>
@@ -6310,7 +6292,7 @@ function App() {
               <div className="logic-title" style={{color:"#FFB400"}}>개인 최종 수령액</div>
               <div>지급액(세전) = <b>사업부별 1인당 × 개인 고과 배수</b></div>
               <ul className="logic-ul">
-                <li>CL4 고과가급: EM 1.4 · ES 1.2 · MT 1.0 · MS 0.9 · NM 0.8배 · CL1~3: 1.0배</li>
+                <li>CL4 ES: 1.2배 / EM: 1.4배 · CL1~3: 1.0배</li>
                 <li>연봉상한 참고: CL3 1.1억, CL4 1.3억. 상한 초과분은 기준연봉에 반영하지 않고 연봉상한 초과금으로 분리하여 1회성 현금 성과급으로 계산합니다. 진급인상률 기본값은 CL2→CL3 5.0%, CL3→CL4 1.0%로 적용합니다.</li>
                 <li>자사주 3등분 지급: 즉시 1/3 + 1년 후 1/3 + 2년 후 1/3 (중도 퇴사 시 미수령분 몰수)</li>
               </ul>
