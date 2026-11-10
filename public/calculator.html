@@ -91,9 +91,9 @@
     .at-a-glance-grid { grid-template-columns: repeat(2, 1fr); }
   }
 
-  /* Phase 1 리디자인: 계산기 1단 레이아웃 — DOM 순서는 결과 → 입력(모바일에서 히어로 먼저),
-     데스크톱은 CSS order로 핵심 입력이 먼저 보이게 한다. calc-side-pad는 result-panel-root의
-     좌우 패딩(26px / ≤1180px 18px / ≤768px 14px)과 맞춘다. */
+  /* Phase 1 리디자인: 계산기 1단 레이아웃 — DOM 순서대로 결과(히어로) → 입력 → 가정 더 바꾸기.
+     데스크톱·모바일 모두 히어로가 먼저 보인다 (계획서 와이어프레임 기준). calc-side-pad는
+     result-panel-root의 좌우 패딩(26px / ≤1180px 18px / ≤768px 14px)과 맞춘다. */
   .calc-stack { display: flex; flex-direction: column; }
   .calc-result { order: 1; }
   .calc-inputs { order: 2; }
@@ -104,10 +104,6 @@
   }
   @media (max-width: 768px) {
     .calc-side-pad { padding-left: 14px; padding-right: 14px; }
-  }
-  @media (min-width: 769px) {
-    .calc-inputs { order: 1; }
-    .calc-result { order: 2; }
   }
 
   /* 💻 PC 전용 CSS 클래스 */
