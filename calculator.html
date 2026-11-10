@@ -2051,14 +2051,57 @@ function App() {
   const [rsuFutureBasePriceManual, setRsuFutureBasePriceManual] = useState(false);
   const [spTargetYearManualMode, setSpTargetYearManualMode] = useState(false);
   const [spTargetYearDraft, setSpTargetYearDraft] = useState('2026');
-  const [spRsuScenarioRows, setSpRsuScenarioRows] = useState({
-    2025: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 },
-    2026: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 },
-    2027: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 },
-    2028: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 },
-    2029: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 },
-    2030: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 },
+  // ── 향후 3년 예상 DS 영업이익 (P2: 특별성과급 3년 현금화 예상용) ─────────
+  // 시뮬레이션 탭의 입력이 spRsuScenarioRows[연도].profit을 직접 갱신합니다.
+  // OPI-2/RSU 탭의 calcScenarioSpecial이 같은 값을 쓰므로 단일 소스입니다.
+  // 기본값은 컨센서스 DS 영업이익 370조(기본 프리셋과 동일)이며, 2027년 이후
+  // 시드값도 370조로 바꿨습니다. 2025·2026년 시드(200조)는 그대로 두어
+  // 당해 연도 산출값이 바뀌지 않게 합니다. 사용자가 바꾼 값은 localStorage
+  // 키 'spFutureProfits'에 연도별로 저장됩니다(기기별, DB 변경 없음).
+  const loadSpFutureProfits = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('spFutureProfits') || '{}') || {};
+      const out = {};
+      Object.keys(saved).forEach(k => {
+        const y = Number(k); const v = Number(saved[k]);
+        if (Number.isFinite(y) && Number.isFinite(v)) out[y] = Math.max(-100, Math.min(900, v));
+      });
+      return out;
+    } catch (e) { return {}; }
+  };
+  const [spRsuScenarioRows, setSpRsuScenarioRows] = useState(() => {
+    const saved = loadSpFutureProfits();
+    const mk = (profit) => ({ salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 });
+    const rows = {
+      2025: mk(200),
+      2026: mk(200),
+      2027: mk(saved[2027] ?? 370),
+      2028: mk(saved[2028] ?? 370),
+      2029: mk(saved[2029] ?? 370),
+      2030: mk(saved[2030] ?? 370),
+    };
+    Object.keys(saved).forEach(k => {
+      const y = Number(k);
+      if (!rows[y]) rows[y] = { ...mk(370), profit: saved[y] };
+    });
+    return rows;
   });
+  // 향후 연도 예상 DS 영업이익 조회 — 행이 없으면 컨센서스 기본값(370조)을 쓴다.
+  const getSpFutureProfit = (year) => {
+    const v = spRsuScenarioRows[Number(year)]?.profit;
+    return Number.isFinite(Number(v)) ? Number(v) : (Number(scenarios?.consensus?.dsProfitJo) || 370);
+  };
+  // 향후 연도 예상 DS 영업이익 변경 — spRsuScenarioRows와 localStorage에 함께 저장한다.
+  const updateSpFutureProfit = (year, v) => {
+    const y = Number(year);
+    const val = Math.max(-100, Math.min(900, Number(v) || 0));
+    setSpRsuScenarioRows(prev => ({ ...prev, [y]: { ...(prev[y] || {}), profit: val } }));
+    try {
+      const saved = loadSpFutureProfits();
+      saved[y] = val;
+      localStorage.setItem('spFutureProfits', JSON.stringify(saved));
+    } catch (e) {}
+  };
 
   // ── DS 비중 연도별 예측 (2026~2035, 참고용) ────────────────────────────
   // [예측] 반도체 사이클 전망을 바탕으로 한 참고용 예측표입니다. 실제 지급
@@ -3760,20 +3803,23 @@ function App() {
       const rates = getScenarioRaiseRates(year, row);
       return Math.round(prevSalary * (1 + rates.total / 100));
     };
-    const calcScenarioSpecialNet = (year) => {
+    // [P2] 연도별 특별성과급 예상 — 세전 총액과 공제 후 자사주 지급액을 함께 반환한다.
+    // 기존 calcScenarioSpecialNet은 이 함수의 net만 돌려주는 래퍼로 남겨둔다.
+    const calcScenarioSpecial = (year) => {
       // 특별경영성과급은 2026년도 성과부터 지급합니다. 2025년까지는 모두 0원입니다.
-      if (Number(year) <= 2025) return 0;
+      if (Number(year) <= 2025) return { gross: 0, net: 0 };
       const rawRow = spRsuScenarioRows[year] || {};
       const row = getEffectiveScenarioRow(year, rawRow);
-      if (!row) return 0;
-      const scenarioProfit = Number(row.profit || 0);
+      if (!row) return { gross: 0, net: 0 };
+      // 향후 연도는 행이 없어도 컨센서스 기본값(370조)을 쓴다 (시뮬레이션 탭 입력 기본값과 동일).
+      const scenarioProfit = Number(row.profit ?? (Number(year) > targetSpYear ? (Number(scenarios?.consensus?.dsProfitJo) || 370) : 0)) || 0;
       const scenarioSalary = getScenarioEstimatedSalary(year, row);
       const scenarioCl = normalizeCl(row.cl || 'CL3');
       const scenarioDiv = row.division || 'memory';
       const scenarioDeficit = (year >= 2027 && scenarioDiv === 'lepan') ? (row.deficit || 'none') : 'none';
       const scenarioRating = row.rating || 'MT';
       const threshold = year >= 2026 ? 200 : 100;
-      if (scenarioProfit < threshold || scenarioSalary <= 0) return 0;
+      if (scenarioProfit < threshold || scenarioSalary <= 0) return { gross: 0, net: 0 };
 
       const buPct = burate * 10;
       const saPct = 100 - buPct;
@@ -3810,8 +3856,9 @@ function App() {
       else spGross = baseSalary * (rateDenom > 0 ? baseByDiv / rateDenom : 0) * perf;
 
       // [회사 규정안] 소득세 49.5%(지방세 포함) + 4대보험 4.967% + 기부금 공제 후 자사주 지급
-      return Math.round(calcSpDeductions(spGross, spDonationPct).net);
+      return { gross: Math.round(spGross), net: Math.round(calcSpDeductions(spGross, spDonationPct).net) };
     };
+    const calcScenarioSpecialNet = (year) => calcScenarioSpecial(year).net;
     const getAutoSpForYear = (year) => calcScenarioSpecialNet(year);
     const currentSavedSpNet = getRecordSpecialSpNet(targetSpYear);
     const prevOneSavedSpNet = getRecordSpecialSpNet(targetSpYear - 1);
@@ -4244,6 +4291,44 @@ function App() {
             </div>
             <div style={{ marginTop:12, background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.15)', borderRadius:12, padding:12, color:'#FDE68A', fontSize:12, lineHeight:1.6 }}>
               {spSchedule.map((x,i)=><div key={x.date}>{i+1}차: {x.date} · {fmtM(x.amount)} <span style={{ color:isUnlockedAsOfToday(x.dateObj)?'#86EFAC':'#FCA5A5' }}>{isUnlockedAsOfToday(x.dateObj)?'현금화 가능':'매도 제한'}</span> <span style={{ color:'#B9C4D2' }}>({x.desc})</span></div>)}
+            </div>
+            <div style={{ marginTop:12, background:'rgba(255,202,69,.06)', border:'1px solid rgba(255,202,69,.25)', borderRadius:12, padding:12 }}>
+              <div style={{ fontSize:14, fontWeight:900, color:'#FACC15', marginBottom:4 }}>향후 3년 특별성과급 예상 (신규 부여분)</div>
+              <div style={{ fontSize:12, color:'#B9C4D2', lineHeight:1.6, marginBottom:10 }}>
+                시뮬레이션 탭에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 3년 합계는 매년 새로 부여되는 특별성과급의 합이며, 위의 3등분 현금화 일정(한 번 부여분의 3년간 분할)과는 별개입니다. 향후 3년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 허들(200조) 미달 연도는 미지급으로 표시됩니다.
+              </div>
+              <div className="reward-table-wrap">
+                <table className="reward-table compact-mobile" style={{ minWidth:480 }}>
+                  <thead>
+                    <tr style={{ borderBottom:'1px solid rgba(255,255,255,.12)' }}>
+                      <th style={{ textAlign:'left', color:'#D5DCE6', fontSize:12, padding:'9px 8px' }}>귀속 연도</th>
+                      <th style={{ textAlign:'right', color:'#D5DCE6', fontSize:12, padding:'9px 8px' }}>예상 DS 영업이익</th>
+                      <th style={{ textAlign:'right', color:'#FDE68A', fontSize:12, padding:'9px 8px' }}>예상 특별성과급 (세전)</th>
+                      <th style={{ textAlign:'right', color:'#86EFAC', fontSize:12, padding:'9px 8px' }}>자사주 지급액 (공제 후)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[targetSpYear+1, targetSpYear+2, targetSpYear+3].map((y) => {
+                      const sp3 = calcScenarioSpecial(y);
+                      const prof3 = getSpFutureProfit(y);
+                      return (
+                        <tr key={y} style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
+                          <td style={{ textAlign:'left', color:'#E2E8F0', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{y}년</td>
+                          <td style={{ textAlign:'right', color:'#D5DCE6', fontSize:13, padding:'9px 8px' }}>{prof3}조</td>
+                          <td style={{ textAlign:'right', color:'#FACC15', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{sp3.gross > 0 ? fmtM(sp3.gross) : '미지급'}</td>
+                          <td style={{ textAlign:'right', color:'#86EFAC', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{sp3.gross > 0 ? fmtM(sp3.net) : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr>
+                      <td style={{ textAlign:'left', color:'#E2E8F0', fontSize:13, fontWeight:900, padding:'9px 8px' }}>3년 합계</td>
+                      <td style={{ textAlign:'right', color:'#94A3B8', fontSize:13, padding:'9px 8px' }}>—</td>
+                      <td style={{ textAlign:'right', color:'#FACC15', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM([targetSpYear+1, targetSpYear+2, targetSpYear+3].reduce((s,y)=>s+calcScenarioSpecial(y).gross,0))}</td>
+                      <td style={{ textAlign:'right', color:'#86EFAC', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM([targetSpYear+1, targetSpYear+2, targetSpYear+3].reduce((s,y)=>s+calcScenarioSpecial(y).net,0))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -6085,6 +6170,26 @@ function App() {
             <div style={{ marginTop:8, fontSize:13, color:"#B9C4D2", lineHeight:1.5 }}>
               적자 연도처럼 DS 영업손실이 있는 경우에는 음수도 입력할 수 있습니다. 예: 2023년 DS -14.9조
             </div>
+
+            {/* 향후 3년 예상 DS 영업이익 (P2: 특별성과급 3년 현금화 예상용) */}
+            <FieldBox label="향후 3년 예상 DS 영업이익 — 특별성과급 예상용" accent="rgba(255,202,69,0.2)">
+              <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:12, lineHeight:1.6 }}>
+                특별성과급은 매년 새로 부여되어 3년에 걸쳐 현금화됩니다. 향후 3년의 예상 DS 영업이익을 넣으면 연도별 특별성과급 예상액을 계산합니다. 기본값은 컨센서스 DS 370조와 동일합니다.
+              </div>
+              {[simYear+1, simYear+2, simYear+3].map((y) => (
+                <div key={y} style={{ ...sBase.row, marginBottom:10 }}>
+                  <span style={{ fontSize:13, color:"#E2E8F0" }}>{y}년 예상 DS 영업이익</span>
+                  <span style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                    <NumInput value={getSpFutureProfit(y)} onChange={v=>updateSpFutureProfit(y, v)} step={5} min={-100} max={900} color="#FFCA45" size={18}/>
+                    <span style={{ fontSize:14, fontWeight:900, color:"#FFCA45" }}>조</span>
+                  </span>
+                </div>
+              ))}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                <span style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.5 }}>연도별 예상액은 OPI-2/RSU 탭의 ‘향후 3년 특별성과급 예상’ 표에서 확인하세요. 입력값은 이 브라우저에 저장됩니다.</span>
+                <button onClick={() => {[simYear+1, simYear+2, simYear+3].forEach(y=>updateSpFutureProfit(y, Number(scenarios?.consensus?.dsProfitJo) || 370));}} style={{ border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", borderRadius:999, padding:"6px 12px", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>↩ 컨센서스 기본값으로 되돌리기</button>
+              </div>
+            </FieldBox>
 
             {/* 파생 DS 비중 표시 (입력 아님) */}
             <div style={{ marginTop:14, background:"rgba(0,198,255,0.12)", border:"1.5px solid rgba(0,198,255,0.4)", borderRadius:13, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
