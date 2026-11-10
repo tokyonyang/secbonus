@@ -1377,9 +1377,17 @@ const HYNIX_SECTION_VISIBLE = false;
 // [회사 규정안] 소득세 45% + 지방소득세 4.5%(=49.5%), 4대보험(건강·장기요양·고용) 4.967% 징수,
 //              기부금은 세전 총지급액의 0.2~1.0%(0.2%p 단위) 선택, 공제 후 잔액을 자사주로 지급.
 // [회사 규정안] '27년 소득으로 신고 → '26년 연봉 누적세율·건보 정산에는 합산하지 않습니다.
-// 4.967% 구성(2026 요율 기준 역산): 건강 3.595% + 장기요양 0.4724% + 고용 0.9%
-// TODO(P0): 세율 하드코딩 — 2026년 공식 요율 대조 필요 (사이트 간 표기 상이: 건보 6.21% vs 7.19% 등). 세율 자체는 이번 패치에서 바꾸지 않음.
-const SP_RULE = { incomeTax: 0.45, localTax: 0.045, insurance: 0.04967 };
+// 세율 근거(사용자 제공, 2026-11-10 — 특별성과급에만 적용하는 확정 규칙):
+//  - 소득세 45% 일괄 적용: 연말정산 시 과다추징 예방을 위해 법정 최고세율 적용.
+//    지방소득세는 소득세의 10%(= 과세표준의 4.5%), 합계 49.5%.
+//  - 4대보험 4.967% = 건강보험 3.595% + 노인장기요양보험 0.472% + 고용보험 0.9%.
+//    월급여에서 일괄 납부되는 것을 방지하기 위해 특별성과급에서 선제 징수.
+//    단, '27년 법정보험료율 인상 시 인상된 보험료율 적용.
+//  - 근로소득 반영 금액 = 지급일 종가 × 총 주식지급 수량. 지급일(2027년 3월말~4월초)은
+//    미래라 지급일 종가를 알 수 없으므로, 본 사이트는 주가 단일 소스(stockPrice.effective:
+//    수동 오버라이드 > VWAP 자동 > 수동 입력)를 기준주가로 쓴 추정치로 표시한다.
+//    OPI/TAI의 세금·보험 계산은 이 규칙과 무관하며 기존 로직을 그대로 둔다.
+const SP_RULE = { incomeTax: 0.45, localTax: 0.045, insurance: 0.04967, insuranceHealth: 0.03595, insuranceLtc: 0.00472, insuranceEmployment: 0.009 };
 const SP_GRADE_MULT = { EM: 1.4, ES: 1.2, MT: 1.0, MS: 0.9, NM: 0.8 };
 const SP_DONATION_OPTIONS = [0, 0.2, 0.4, 0.6, 0.8, 1.0]; // % (0 = 미약정)
 function getSpGradeMult(cl, rating) {
@@ -1389,10 +1397,14 @@ function calcSpDeductions(gross, donationPct) {
   const g = Math.max(0, Number(gross) || 0);
   const incomeTax = g * SP_RULE.incomeTax;
   const localTax = g * SP_RULE.localTax;
-  const insurance = g * SP_RULE.insurance;
+  // 4대보험 4.967% 내역: 건강보험 3.595% + 노인장기요양보험 0.472% + 고용보험 0.9%
+  const insuranceHealth = g * SP_RULE.insuranceHealth;
+  const insuranceLtc = g * SP_RULE.insuranceLtc;
+  const insuranceEmployment = g * SP_RULE.insuranceEmployment;
+  const insurance = insuranceHealth + insuranceLtc + insuranceEmployment;
   const donation = g * (Math.max(0, Number(donationPct) || 0) / 100);
   const total = incomeTax + localTax + insurance + donation;
-  return { incomeTax, localTax, insurance, donation, total, net: Math.max(0, g - total) };
+  return { incomeTax, localTax, insurance, insuranceHealth, insuranceLtc, insuranceEmployment, donation, total, net: Math.max(0, g - total) };
 }
 
 function comma(n) { return Math.round(n).toLocaleString("ko-KR"); }
@@ -4048,7 +4060,7 @@ function App() {
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:12 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#7DD3FC' }}>조회연도 및 최근 2년 OPI-2 자동 시뮬레이션 입력</div>
-              <div style={{ color:'#B9C4D2', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·예상 인상률·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, OPI-2 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 OPI-2를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과가급(EM 1.4·ES 1.2·MT 1.0·MS 0.9·NM 0.8배)이 반영되고, 세후는 규정안(49.5%·4대보험 4.967%·기부금) 기준입니다.</div>
+              <div style={{ color:'#B9C4D2', fontSize:12, marginTop:4, lineHeight:1.6 }}>조회 대상연도와 직전 2개년의 연봉·예상 인상률·직급·사업부·적자여부·CL4 고과·DS영업이익을 넣으면 세후 특별경영성과급을 자동 추정하고, OPI-2 이월 계산의 보조값으로 사용합니다. 예상 조회기준을 2028년으로 바꾸면 2026·2027·2028년 OPI-2를 함께 반영합니다. 연봉저장값이 있으면 저장값이 우선입니다. 적자여부는 2027년 이후 르팡 선택 시에만 활성화되고, CL4는 고과가급(EM 1.4·ES 1.2·MT 1.0·MS 0.9·NM 0.8배)이 반영되고, 세후는 규정안(49.5%·4대보험 4.967%·기부금) 기준이며, 지급일 종가 확정 전 — 현재 주가 기준 추정치입니다. 2027년 소득으로 신고합니다.</div>
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) 150px', gap:10, alignItems:'center', marginBottom:10 }} className="two-col-grid">
@@ -4474,6 +4486,7 @@ function App() {
           <div className="reward-side-card">
             <div className="reward-side-label">스페셜 보너스 (자사주 지급액 · 공제 후)</div>
             <div className="reward-side-value gold">{fmtM(r.spNet)}</div>
+            <div style={{ fontSize:12, color:"#B9C4D2", marginTop:4, lineHeight:1.5 }}>2027년 소득 · 지급일 종가 확정 전 — 현재 주가 기준 추정치</div>
           </div>
           <div className="reward-side-card">
             <div className="reward-side-label">예상 TAI 수령액 (세후 추정)</div>
@@ -4553,7 +4566,7 @@ function App() {
       {/* 특별성과급 */}
       {r.sp > 0 ? (
         <ResultCard icon="⭐" title="스페셜 보너스 (세전 총지급액)" valueColor="#FFCA45"
-          sub={`기초금액 × 지급률 ${(r.spPayRate*100).toFixed(1)}%${r.spPerf !== 1 ? ` × 고과가급 ${r.spPerf}` : ''}${r.spWorkRatio < 1 ? ` × 근무 ${Math.round(r.spWorkRatio*12)}/12` : ''} · '27.3월말~4월초 자사주 지급`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
+          sub={`기초금액 × 지급률 ${(r.spPayRate*100).toFixed(1)}%${r.spPerf !== 1 ? ` × 고과가급 ${r.spPerf}` : ''}${r.spWorkRatio < 1 ? ` × 근무 ${Math.round(r.spWorkRatio*12)}/12` : ''} · 2027년 소득 · '27.3월말~4월초 자사주 지급`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
           {spMultiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{spMultiTagHtml}</div>}
           <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
             {[
@@ -4655,6 +4668,9 @@ function App() {
               {label:"소득세 45%", val:`－ ${fmtM(r.spDed.incomeTax)}`, color:"#FF6B6B"},
               {label:"지방소득세 4.5% (합계 49.5%)", val:`－ ${fmtM(r.spDed.localTax)}`, color:"#FF6B6B"},
               {label:"4대보험 4.967% (건강·장기요양·고용)", val:`－ ${fmtM(r.spInsurance)}`, color:"#FF6B6B"},
+              {label:"└ 건강보험 3.595%", val:`－ ${fmtM(r.spDed.insuranceHealth)}`, color:"#FF6B6B"},
+              {label:"└ 노인장기요양보험 0.472%", val:`－ ${fmtM(r.spDed.insuranceLtc)}`, color:"#FF6B6B"},
+              {label:"└ 고용보험 0.9%", val:`－ ${fmtM(r.spDed.insuranceEmployment)}`, color:"#FF6B6B"},
               {label:`기부금 ${spDonationPct > 0 ? spDonationPct.toFixed(1) + "% (세전 기준)" : "미약정"}`, val: r.spDonation > 0 ? `－ ${fmtM(r.spDonation)}` : "0만원", color:"#FF6B6B"},
               {label:"자사주 지급액 (공제 후)", val:fmtM(r.spNet), color:"#FFB400", bold:true},
             ].map(item=>(
@@ -4663,6 +4679,11 @@ function App() {
                 <span style={{ fontSize:13, fontWeight:item.bold?800:600, color:item.color }}>{item.val}</span>
               </div>
             ))}
+          </div>
+          <div style={{ background:"rgba(255,180,0,0.07)", border:"1px solid rgba(255,180,0,0.25)", borderRadius:12, padding:"10px 12px", marginBottom:10, fontSize:12, color:"#D5DCE6", lineHeight:1.7 }}>
+            <div>💡 세금 45%(지방소득세 포함 49.5%)는 연말정산 시 과다추징 예방을 위해 법정 최고세율을 일괄 적용합니다.</div>
+            <div>💡 4대보험 4.967%는 월급여 일괄 납부 방지를 위해 선제 징수합니다. '27년 법정보험료율 인상 시 인상된 보험료율 적용.</div>
+            <div>💡 지급일(2027년 3월말~4월초) 기준 2027년 소득으로 신고합니다. 지급일 종가 확정 전이므로 위 금액은 현재 주가 기준 추정치입니다.</div>
           </div>
           <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:12, padding:"10px 12px", marginBottom:10 }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
@@ -4673,11 +4694,12 @@ function App() {
               <span style={{ fontSize:13, color:"#B9C4D2" }}>총 예상 주수</span>
               <span style={{ fontSize:13, fontWeight:700, color:"#E2E8F0" }}>{comma(r.sharesEach*3)}주</span>
             </div>
+            <div style={{ fontSize:12, color:"#B9C4D2", marginTop:6, lineHeight:1.5 }}>지급일 종가 확정 전 — 현재 주가 기준 추정치 (근로소득 반영 금액 = 지급일 종가 × 총 주식지급 수량)</div>
           </div>
           <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:8, fontWeight:600 }}>자사주 매도 제한 일정</div>
           <div style={{ fontSize:11, color:"#FF6B6B", marginBottom:8, fontWeight:700 }}>* 지급 후 자발적 퇴직·징계해고 시 매도제한 자사주 상당액 회사 반환</div>
-          <div style={{ fontSize:10.5, color:"#B9C4D2", marginBottom:8, lineHeight:1.6 }}>
-            * 주식 수량은 지급일 기준주가로 산정 · '27년 소득으로 신고 (연말정산 시 실제 세율에 따라 추가납부/환급 가능)
+          <div style={{ fontSize:12, color:"#B9C4D2", marginBottom:8, lineHeight:1.6 }}>
+            * 주식 수량은 지급일 기준주가로 산정 · 2027년 소득으로 신고 (지급일 종가 확정 전 — 현재 주가 기준 추정치, 연말정산 시 실제 세율에 따라 추가납부/환급 가능)
           </div>
           <div className="shares-grid" style={{ gridTemplateColumns:"1fr 1fr 1fr" }}>
             {[
@@ -4921,7 +4943,7 @@ function App() {
       <div style={{ background:"linear-gradient(135deg,rgba(0,220,130,0.06),transparent)", border:"1px solid rgba(0,220,130,0.2)", borderRadius:16, padding:"16px 18px" }}>
         <div style={{ fontSize:15, fontWeight:800, color:"#00DC82", marginBottom:6 }}>🏥 차년도 건강보험료 정산 (예상)</div>
         {[
-          {label:"올해 예상 총소득 (연봉+업무성과급+OPI-1+TAI · OPI-2는 지급 시 4대보험 별도징수·'27년 귀속)", val:fmtM(r.totalIncW/MAN), color:"#E2E8F0"},
+          {label:"올해 예상 총소득 (연봉+업무성과급+OPI-1+TAI · OPI-2는 지급 시 4대보험 별도징수·2027년 귀속)", val:fmtM(r.totalIncW/MAN), color:"#E2E8F0"},
           {label:"기납부 기준 (전년도 원천징수)", val:fmtM(r.prevWithholding), color:"#E2E8F0"},
           {label:"건강보험료 정산 (3.545%)", val: r.healthAdd > 0 ? `+ ${fmtM(r.healthAdd)}` : fmtM(r.healthAdd), color: r.healthAdd > 0 ? "#00DC82" : "#FF6B6B"},
           {label:"장기요양보험료 정산 (×12.95%)", val: r.ltcAdd > 0 ? `+ ${fmtM(r.ltcAdd)}` : fmtM(r.ltcAdd), color: r.ltcAdd > 0 ? "#00DC82" : "#FF6B6B"},
@@ -4956,7 +4978,7 @@ function App() {
           <span style={{ fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
         </div>
         <div style={{ fontSize:13, color:"#94A3B8", lineHeight:1.6, marginBottom:12 }}>
-          TAI는 CL등급별 고정세율({(r.taiIncomeTaxRate*100).toFixed(0)}%)로 원천징수되지만, 연말정산에서는 <b style={{color:"#FF6B6B"}}>연봉+업무성과급+OPI-1+TAI를 모두 합산</b>(특별성과급은 '27년 소득으로 별도 신고)한 진짜 한계세율로 재계산됩니다. TAI의 고정세율이 실제 한계세율보다 낮으면 그 차액만큼 <b>추가납부</b>가 발생합니다.
+          TAI는 CL등급별 고정세율({(r.taiIncomeTaxRate*100).toFixed(0)}%)로 원천징수되지만, 연말정산에서는 <b style={{color:"#FF6B6B"}}>연봉+업무성과급+OPI-1+TAI를 모두 합산</b>(특별성과급은 2027년 소득으로 별도 신고)한 진짜 한계세율로 재계산됩니다. TAI의 고정세율이 실제 한계세율보다 낮으면 그 차액만큼 <b>추가납부</b>가 발생합니다.
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", marginTop:10, padding:"12px 14px", background: r.incomeTaxSettlement > 0 ? "rgba(255,107,107,0.1)" : "rgba(0,220,130,0.1)", borderRadius:12 }}>
           <span style={{ fontSize:14, fontWeight:700, color:r.incomeTaxSettlement > 0 ? "#FF6B6B" : "#00DC82" }}>
@@ -5763,8 +5785,8 @@ function App() {
                 <div style={{ fontSize:10, color:"#B9C4D2", marginTop:4 }}>자동추정용 · 0 = 내 기초금액과 동일 가정</div>
               </div>
             </div>
-            <div style={{ fontSize:10.5, color:"#B9C4D2", lineHeight:1.65 }}>
-              지급액 = 기초금액(계약연봉 + 업무성과급) × 지급률 × 고과가급 → 소득세 45%·지방세 4.5%·4대보험 4.967%·기부금 공제 후 자사주 지급.<br/>
+            <div style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.65 }}>
+              지급액 = 기초금액(계약연봉 + 업무성과급) × 지급률 × 고과가급 → 소득세 45%·지방세 4.5%·4대보험 4.967%(건강 3.595%·장기요양 0.472%·고용 0.9%)·기부금 공제 후 자사주 지급. 2027년 소득으로 신고하며, '27년 법정보험료율 인상 시 인상된 보험료율 적용. 지급일 종가 확정 전 — 현재 주가 기준 추정치.<br/>
               지급대상: '26.12.31 재직자(육아·임신·입영·90일 이내 간병휴직 포함), '26년 중 DS부문(CSS 제외) 최장 근무자. 근무 1개월 이하·기준일 휴직/정직자·수습사원 제외.
             </div>
           </FieldBox>
@@ -6486,7 +6508,7 @@ function App() {
               <ul className="logic-ul">
                 <li>기준: <b>당해 총소득 (기준연봉 + 업무성과급 + OPI-1 합산, TAI·특별성과급 제외)</b></li>
                 <li>
-                  <b>특별성과급(OPI-2)은 회사 규정안에 따라 별도 처리</b>합니다: 소득세 <b>45%</b> + 지방소득세 4.5% = <b>49.5%</b> 단일세율, 4대보험(건강·장기요양·고용) <b>4.967%</b>, 선택 기부금(세전 0.2~1.0%)을 공제한 뒤 자사주로 지급하며, <b>'27년 소득</b>으로 신고되므로 당해 누적세율·건보 정산에 합산하지 않습니다.
+                  <b>특별성과급(OPI-2)은 회사 규정안에 따라 별도 처리</b>합니다: 소득세 <b>45%</b> + 지방소득세 4.5% = <b>49.5%</b> 단일세율, 4대보험(건강·장기요양·고용) <b>4.967%</b>(건강보험 3.595% + 노인장기요양보험 0.472% + 고용보험 0.9%), 선택 기부금(세전 0.2~1.0%)을 공제한 뒤 자사주로 지급하며, <b>2027년 소득</b>으로 신고되므로 당해 누적세율·건보 정산에 합산하지 않습니다. 세금 45%는 연말정산 시 과다추징 예방을 위한 법정 최고세율 일괄 적용, 4대보험 4.967%는 월급여 일괄 납부 방지를 위한 선제 징수이며, '27년 법정보험료율 인상 시 인상된 보험료율이 적용됩니다. 근로소득 반영 금액은 지급일 종가 × 총 주식지급 수량이며, 지급일 종가 확정 전이므로 본 사이트 금액은 현재 주가 기준 추정치입니다.
                   <span style={{ marginLeft:6, fontSize:9, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"1px 5px" }}>회사 규정안</span>
                 </li>
                 <li>
