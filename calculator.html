@@ -91,6 +91,25 @@
     .at-a-glance-grid { grid-template-columns: repeat(2, 1fr); }
   }
 
+  /* Phase 1 리디자인: 계산기 1단 레이아웃 — DOM 순서는 결과 → 입력(모바일에서 히어로 먼저),
+     데스크톱은 CSS order로 핵심 입력이 먼저 보이게 한다. calc-side-pad는 result-panel-root의
+     좌우 패딩(26px / ≤1180px 18px / ≤768px 14px)과 맞춘다. */
+  .calc-stack { display: flex; flex-direction: column; }
+  .calc-result { order: 1; }
+  .calc-inputs { order: 2; }
+  .calc-more { order: 3; }
+  .calc-side-pad { padding-left: 26px; padding-right: 26px; }
+  @media (max-width: 1180px) {
+    .calc-side-pad { padding-left: 18px; padding-right: 18px; }
+  }
+  @media (max-width: 768px) {
+    .calc-side-pad { padding-left: 14px; padding-right: 14px; }
+  }
+  @media (min-width: 769px) {
+    .calc-inputs { order: 1; }
+    .calc-result { order: 2; }
+  }
+
   /* 💻 PC 전용 CSS 클래스 */
   @media (min-width: 769px) {
     .hide-on-pc { display: none !important; }
@@ -2008,7 +2027,7 @@ function LiveChatPopup({ salaryUser, salaryToken, onLoginClick }) {
 function App() {
   // ══════════════════════════════════════════════════════════════════════
   //  STATE: 화면 하단 화면들(EquityRewardSimContent/ResultPanel/
-  //  SalaryContent/SalaryTrendContent/SettingsContent)이 아래 state를
+  //  SalaryContent/SalaryTrendContent/CoreInputs/MoreAssumptions)이 아래 state를
   //  전부 공유하는 클로저 구조입니다. 특정 state가 어디서 쓰이는지 찾을 땐
   //  Ctrl+F로 변수명을 검색하세요.
   // ══════════════════════════════════════════════════════════════════════
@@ -2021,10 +2040,10 @@ function App() {
   const [shareMsg, setShareMsg] = useState("");
 
   // ── UI 네비게이션 ────────────────────────────────────────────────────
-  const [tab, setTab] = useState(0); // 0: 정보, 1: 시뮬레이션, 2: 산출결과, 3: 로직
+  const [tab, setTab] = useState(0); // Phase 1: 0 계산기, 1 성과급 상세, 2 내 연봉, 3 더보기
   const [forceSpRsuOpen, setForceSpRsuOpen] = useState(false);
 
-  // ── 내 정보 / 연봉 / 인상률 입력 (SalaryContent, SettingsContent) ─────
+  // ── 내 정보 / 연봉 / 인상률 입력 (SalaryContent, CoreInputs/MoreAssumptions) ─────
   const [simYear, setSimYear] = useState(2026);
   const [myDiv, setMyDiv] = useState("memory");
   const [myCl, setMyCl] = useState("CL3");
@@ -2048,7 +2067,7 @@ function App() {
   const [taxWithholdingPercent, setTaxWithholdingPercent] = useState(() => { const v = Number(localStorage.getItem('taxWithholdingPercent') || 100); return [80, 100, 120].includes(v) ? v : 100; }); // 세금공제기준(급여) — 근로소득 조견표 비율. 산출세액 × 80/100/120% 중 선택 반영 (localStorage에 저장)
   const [healthSettlementMonths, setHealthSettlementMonths] = useState(9); // 건보료 정산 분할납부 개월수 (법정 최대 12회, 회사 신청에 따라 다름)
 
-  // ── 회사 실적 / 시뮬레이션 기준값 (ResultPanel, SettingsContent) ──────
+  // ── 회사 실적 / 시뮬레이션 기준값 (ResultPanelTop/Lower, CoreInputs/MoreAssumptions) ──────
   // ── P0: 영업이익 시나리오 프리셋 (단일 설정값 — 숫자를 바꿀 때는 여기만 고친다) ──
   // 주의: 370~390조는 단일 확정 컨센서스가 아니다. 증권사별 편차가 크다
   // (KB DS 208조 ~ 키움 DS 390조). 기본값은 FnGuide 전사 컨센서스
@@ -2104,12 +2123,12 @@ function App() {
     setSprate(10.5);
   };
 
-  // ── 부문별 인원수 (ResultPanel, SettingsContent) ───────────────────────
+  // ── 부문별 인원수 (ResultPanelTop/Lower, MoreAssumptions) ───────────────────────
   const [cntMemory, setCntMemory] = useState(27400);
   const [cntCommon, setCntCommon] = useState(29000);
   const [cntLepan, setCntLepan] = useState(20900);
 
-  // ── 부문별 배분비율 (ResultPanel, SettingsContent) ─────────────────────
+  // ── 부문별 배분비율 (ResultPanelTop/Lower, MoreAssumptions) ─────────────────────
   const [ratMemory, setRatMemory] = useState(1.0);
   const [ratCommon, setRatCommon] = useState(0.7);
   const [spDistribMode, setSpDistribMode] = useState("flat"); // "flat": 공통=메모리 최종×70% (노조 확인, 기본값) | "tiered": 부문40%균등+사업부60%차등 (미확인 대안)
@@ -2138,7 +2157,7 @@ function App() {
   const [spTargetYearManualMode, setSpTargetYearManualMode] = useState(false);
   const [spTargetYearDraft, setSpTargetYearDraft] = useState('2026');
   // ── 향후 3년 예상 DS 영업이익 (P2: 특별성과급 현금화 예상용) ─────────
-  // 시뮬레이션 탭의 입력이 spRsuScenarioRows[연도].profit을 직접 갱신합니다.
+  // '가정 더 바꾸기'의 입력이 spRsuScenarioRows[연도].profit을 직접 갱신합니다.
   // OPI-2/RSU 탭의 calcScenarioSpecial이 같은 값을 쓰므로 단일 소스입니다.
   // 기본값은 컨센서스 DS 영업이익 370조(기본 프리셋과 동일)이며, 2027년 이후
   // 시드값도 370조입니다. 2025년 시드(200조)는 과거 실적이라 그대로 둡니다.
@@ -2221,7 +2240,7 @@ function App() {
   // ── DS 비중 연도별 예측 (2026~2035, 참고용) ────────────────────────────
   // [예측] 반도체 사이클 전망을 바탕으로 한 참고용 예측표입니다. 실제 지급
   // 데이터가 아니며, 계산에 쓰이지 않습니다 (P0 후속: 연도 변경이 profit/
-  // totalProfit을 바꾸지 않는다). 아래 로직 설명 탭의 표에서만 보여줍니다.
+  // totalProfit을 바꾸지 않는다). 아래 더보기 그룹의 로직 설명 표에서만 보여줍니다.
   const DS_RATIO_DEFAULTS = {
     2026: 72, // AI 슈퍼사이클 정점 (2026 Q1 실적 기준 약 94% 기록)
     2027: 65, // 강세 지속
@@ -3252,17 +3271,17 @@ function App() {
   };
 
   // 성능 최적화: 초기 진입 시 무거운 API를 한꺼번에 호출하지 않습니다.
-  // 현재가는 시뮬레이션/산출결과/기준주가 설정 화면을 볼 때만 1회 조회합니다.
+  // 현재가는 계산기 화면을 볼 때만 1회 조회합니다.
   useEffect(() => {
-    if ((tab === 0 || tab === 1 || tab === 2) && !currentPrice && !priceLoading) {
+    if (tab === 0 && !currentPrice && !priceLoading) {
       const timer = setTimeout(fetchCurrentPrice, 700);
       return () => clearTimeout(timer);
     }
   }, [tab]);
 
-  // VWAP/PSU 기준주가는 OPI-2/RSU 탭 진입 시 또는 사용자가 새로고침을 누를 때만 조회합니다.
+  // VWAP/PSU 기준주가는 성과급 상세 그룹 진입 시 또는 사용자가 새로고침을 누를 때만 조회합니다.
   useEffect(() => {
-    if (tab === 7 && !vwapPrice && !vwapLoading) {
+    if (tab === 1 && !vwapPrice && !vwapLoading) {
       const timer = setTimeout(fetchVwapPrice, 300);
       return () => clearTimeout(timer);
     }
@@ -3875,30 +3894,33 @@ function App() {
       </span>
     : null;
 
+  // Phase 1 리디자인: 8개 탭 → 4개 그룹 (구 탭 → 새 그룹 매핑은 REDESIGN_PHASE1_CHANGES.md 참조)
+  // 0 계산기(구 내 정보·시뮬레이션·산출결과), 1 성과급 상세(구 OPI-2/RSU + 산출결과 하단 카드),
+  // 2 내 연봉(구 연봉저장·연봉추이), 3 더보기(구 로직 설명·게시판·채팅)
   const tabs = [
-    { icon:"👤", label:"내 정보" },
-    { icon:"📊", label:"시뮬레이션" },
-    { icon:"💰", label:"산출결과" },
-    { icon:"📖", label:"로직 설명" },
-    { icon:"💾", label:"연봉저장" },
-    { icon:"📈", label:"연봉추이" },
-    { icon:"💬", label:"게시판" },
-    { icon:"🎁", label:"OPI-2/RSU" },
+    { icon:"🧮", label:"계산기" },
+    { icon:"🎁", label:"성과급 상세" },
+    { icon:"💾", label:"내 연봉" },
+    { icon:"⋯", label:"더보기" },
   ];
 
+  // Phase 1 리디자인: 기존 해시 링크는 새 그룹으로 매핑해 공유 링크·북마크가 깨지지 않게 유지한다.
+  // #info/#simulation/#result → 계산기(0), #sp-rsu/#rsu/#sp → 성과급 상세(1),
+  // #salary-save/#salary-trend → 내 연봉(2), #logic/#board → 더보기(3)
   const tabHashMap = {
     '#info': 0,
-    '#simulation': 1,
-    '#result': 2,
+    '#simulation': 0,
+    '#result': 0,
     '#logic': 3,
-    '#salary-save': 4,
-    '#salary-trend': 5,
-    '#board': 6,
-    '#sp-rsu': 7,
-    '#rsu': 7,
-    '#sp': 7,
+    '#salary-save': 2,
+    '#salary-trend': 2,
+    '#board': 3,
+    '#sp-rsu': 1,
+    '#rsu': 1,
+    '#sp': 1,
+    '#more': 3,
   };
-  const tabHashes = ['#info', '#simulation', '#result', '#logic', '#salary-save', '#salary-trend', '#board', '#sp-rsu'];
+  const tabHashes = ['#info', '#sp-rsu', '#salary-save', '#more'];
 
   const scrollMainToTop = () => {
     if (typeof window === 'undefined') return;
@@ -3915,7 +3937,7 @@ function App() {
       const normalizedHash = String(window.location.hash || '').toLowerCase();
       const nextTab = tabHashMap[normalizedHash];
       if (Number.isInteger(nextTab)) {
-        setForceSpRsuOpen(nextTab === 7);
+        setForceSpRsuOpen(nextTab === 1);
         setTab(nextTab);
         scrollMainToTop();
       }
@@ -3932,7 +3954,7 @@ function App() {
       if (!target) return;
       event.preventDefault();
       setForceSpRsuOpen(true);
-      setTab(7);
+      setTab(1);
       if (typeof window !== 'undefined') {
         window.history.replaceState(null, '', '#sp-rsu');
         scrollMainToTop();
@@ -3943,7 +3965,7 @@ function App() {
   }, []);
 
   const moveTab = (nextTab) => {
-    setForceSpRsuOpen(nextTab === 7);
+    setForceSpRsuOpen(nextTab === 1);
     setTab(nextTab);
     if (typeof window !== 'undefined') {
       const hash = tabHashes[nextTab];
@@ -3957,14 +3979,14 @@ function App() {
   const openSpRsu = (event) => {
     if (event?.preventDefault) event.preventDefault();
     setForceSpRsuOpen(true);
-    setTab(7);
+    setTab(1);
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', '#sp-rsu');
       scrollMainToTop();
     }
   };
 
-  const isSpRsuView = forceSpRsuOpen || tab === 7;
+  const isSpRsuView = forceSpRsuOpen || tab === 1;
 
 
 
@@ -4077,7 +4099,7 @@ function App() {
       const rawRow = spRsuScenarioRows[year] || {};
       const row = getEffectiveScenarioRow(year, rawRow);
       if (!row) return { gross: 0, net: 0 };
-      // 향후 연도는 행이 없어도 컨센서스 기본값(370조)을 쓴다 (시뮬레이션 탭 입력 기본값과 동일).
+      // 향후 연도는 행이 없어도 컨센서스 기본값(370조)을 쓴다 ('가정 더 바꾸기' 입력 기본값과 동일).
       const scenarioProfit = Number(profitOverride ?? row.profit ?? (Number(year) > targetSpYear ? (Number(scenarios?.consensus?.dsProfitJo) || 370) : 0)) || 0;
       const scenarioSalary = getScenarioEstimatedSalary(year, row);
       const scenarioCl = normalizeCl(row.cl || 'CL3');
@@ -4624,7 +4646,7 @@ function App() {
             <div style={{ marginTop:12, background:'rgba(255,202,69,.06)', border:'1px solid rgba(255,202,69,.25)', borderRadius:12, padding:12 }}>
               <div style={{ fontSize:14, fontWeight:900, color:'#FACC15', marginBottom:4 }}>향후 5년 특별성과급 예상 (신규 부여분)</div>
               <div style={{ fontSize:12, color:'#B9C4D2', lineHeight:1.6, marginBottom:10 }}>
-                시뮬레이션 탭에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 4·5년차는 3년차 예상 영업이익을 그대로 이어받은 추정치입니다(별도 전망치가 아닙니다). 특별성과급은 {Number(simYear)}~{Number(simYear) + 2}년 귀속분까지만 부여되는 것으로 가정합니다({spNoGrantFromYear}년 귀속분부터 미지급). 5년 합계는 지급 대상 연도({simYear + 1}~{simYear + 2}년 부여분)의 합이며, 위 ‘특별성과급 현금화 예정표’의 연도별 매도 가능액(1/3씩 3년 분할)과는 기준이 다릅니다. 향후 5년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조. 허들 미달 연도는 미지급으로 표시됩니다.
+                '가정 더 바꾸기'에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 4·5년차는 3년차 예상 영업이익을 그대로 이어받은 추정치입니다(별도 전망치가 아닙니다). 특별성과급은 {Number(simYear)}~{Number(simYear) + 2}년 귀속분까지만 부여되는 것으로 가정합니다({spNoGrantFromYear}년 귀속분부터 미지급). 5년 합계는 지급 대상 연도({simYear + 1}~{simYear + 2}년 부여분)의 합이며, 위 ‘특별성과급 현금화 예정표’의 연도별 매도 가능액(1/3씩 3년 분할)과는 기준이 다릅니다. 향후 5년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조. 허들 미달 연도는 미지급으로 표시됩니다.
               </div>
               <div className="reward-table-wrap">
                 <table className="reward-table compact-mobile" style={{ minWidth:560 }}>
@@ -5004,7 +5026,7 @@ function App() {
   // ║  hynix*, samsungTaiRateH1/H2 (위 "회사 실적/부문/파라미터" 그룹들)  ║
   // ╚══════════════════════════════════════════════════════════════════╝
   /* ── 결과 패널 ── */
-  const ResultPanel = () => (
+  const ResultPanelTop = () => (
     <div className="result-panel-root">
       <div className="result-hero">
         <div>
@@ -5046,7 +5068,6 @@ function App() {
           <div className="reward-side-card">
             <div className="reward-side-label">예상 OPI 수령액 (세후 추정)</div>
             <div className="reward-side-value cyan">{fmtM(r.opiNet)}</div>
-            <div style={{ fontSize:12, color:"#B9C4D2", marginTop:4, lineHeight:1.5 }}>지급일 '{String(simYear+1).slice(2)}.1.31</div>
           </div>
           <div className="reward-side-card">
             <div className="reward-side-label">스페셜 보너스 (자사주 지급액 · 공제 후)</div>
@@ -5056,7 +5077,6 @@ function App() {
           <div className="reward-side-card">
             <div className="reward-side-label">예상 TAI 수령액 (세후 추정)</div>
             <div className="reward-side-value purple">{fmtM(r.taiNet)}</div>
-            <div style={{ fontSize:12, color:"#B9C4D2", marginTop:4, lineHeight:1.5 }}>상반기 '{String(simYear).slice(2)}.7.8 · 하반기 '{String(simYear).slice(2)}.12.24</div>
           </div>
           <div className="reward-side-card highlight">
             <div className="reward-side-label">보상 리포트 포인트</div>
@@ -5070,9 +5090,12 @@ function App() {
           내장 프리셋의 출처·기준일은 로드 시점에 이미 알 수 있어 API 응답을 기다리지 않는다. */}
       <div style={{ background:"rgba(0,198,255,0.07)", border:"1px solid rgba(0,198,255,0.25)", borderRadius:14, padding:"12px 16px", marginBottom:14, fontSize:14, lineHeight:1.6, color:"#D5DCE6" }}>
         <div style={{ fontWeight:900, color:"#E2E8F0" }}>📊 시나리오: {activeScenario ? activeScenario.label : '직접 입력'} · DS {profit}조 / 전사 {totalProfit}조</div>
-        <div style={{ marginTop:4 }}>출처: {activeScenario ? activeScenario.source : '직접 입력'} · 기준일: {activeScenario ? activeScenario.asOf : '-'}</div>
-        <div style={{ color:"#B9C4D2" }}>{dispersionNote} · DS 영업이익 전망은 증권사·시점별로 크게 갈리므로, 위 숫자는 추정치입니다.</div>
-        <div style={{ color:"#B9C4D2" }}>기준: {scenarioSource === 'db' ? 'DB 설정 기준' : scenarioSource === 'seeded' ? 'DB 설정 기준(기본값으로 새로 저장됨)' : '기본값(코드 내장)'}{scenarioSource !== 'builtin' && scenarioUpdatedAt ? ` · 업데이트: ${formatUpdatedDateKo(scenarioUpdatedAt)}` : ''}</div>
+        <details style={{ marginTop:4 }}>
+          <summary style={{ cursor:"pointer", color:"#7DD3FC", fontWeight:800, fontSize:13 }}>자세히 — 출처·기준일 보기</summary>
+          <div style={{ marginTop:6 }}>출처: {activeScenario ? activeScenario.source : '직접 입력'} · 기준일: {activeScenario ? activeScenario.asOf : '-'}</div>
+          <div style={{ color:"#B9C4D2" }}>{dispersionNote} · DS 영업이익 전망은 증권사·시점별로 크게 갈리므로, 위 숫자는 추정치입니다.</div>
+          <div style={{ color:"#B9C4D2" }}>기준: {scenarioSource === 'db' ? 'DB 설정 기준' : scenarioSource === 'seeded' ? 'DB 설정 기준(기본값으로 새로 저장됨)' : '기본값(코드 내장)'}{scenarioSource !== 'builtin' && scenarioUpdatedAt ? ` · 업데이트: ${formatUpdatedDateKo(scenarioUpdatedAt)}` : ''}</div>
+        </details>
         {sharedLinkApplied && (<div style={{ marginTop:6, fontWeight:900, color:"#7DD3FC" }}>🔗 공유 링크로 열린 화면입니다 — 입력값이 링크 기준으로 적용되었습니다.</div>)}
         {isSimModified && (<div style={{ marginTop:6, fontWeight:900, color:"#FBBF24" }}>⚠️ 시뮬레이션 적용 중 — 현재 입력값이 {activeScenario ? activeScenario.label : '기본'} 프리셋과 다릅니다.</div>)}
       </div>
@@ -5100,26 +5123,9 @@ function App() {
         </div>
       </div>
 
-      {/* 상단 요약 반응형 그리드 */}
-      <div className="summary-grid" style={{ gridTemplateColumns:`repeat(${numResultCols},1fr)` }}>
-        {[
-          {label:"예상 OPI (세전)", val:fmtM(r.opi), color:"#00C6FF"},
-          {label:"스페셜 보너스 (세전 총지급액)", val:fmtM(r.sp), color:"#FFCA45"},
-          ...(r.samsungTaiAnnual>0?[{label:"예상 TAI (세전)",val:fmtM(r.samsungTaiAnnual),color:"#8B7CFF"}]:[]),
-          ...(r.bizPerfBonus>0?[{label:"업무성과 보너스",val:fmtM(r.bizPerfBonus),color:"#28E6A3"}]:[]),
-          ...(r.excessCash>0?[{label:"추가 현금보상",val:fmtM(r.excessCash),color:"#FF5C73"}]:[]),
-          {label:"연봉 대비 총보상 배수 (세전)", val: r.curSalary > 0 ? (r.totalComp / r.curSalary).toFixed(1) + "배" : "-", color:"#EAF2FF"},
-        ].map(item=>(
-          <div key={item.label} className="summary-card">
-            <div className="summary-card-label">{item.label}</div>
-            <div className="summary-card-value" style={{ color:item.color }}>{item.val}</div>
-          </div>
-        ))}
-      </div>
-
       {/* OPI */}
       <ResultCard icon="📈" title="예상 OPI (세전)" valueColor="#00C6FF"
-        sub={<>{r.isCL1 ? '기초액의 최대 700% 한도' : `연봉의 최대 ${(50*r.perf).toFixed(0)}% 한도`} <span style={{marginLeft:6, color:"#D5DCE6"}}>*전사 공통 비율 적용</span> <span style={{marginLeft:6, color:"#00C6FF", fontWeight:700}}>지급일 '{String(simYear+1).slice(2)}.1.31</span></>}
+        sub={<>{r.isCL1 ? '기초액의 최대 700% 한도' : `연봉의 최대 ${(50*r.perf).toFixed(0)}% 한도`} <span style={{marginLeft:6, color:"#D5DCE6"}}>*전사 공통 비율 적용</span></>}
         value={fmtM(r.opi)} accent="rgba(0,198,255,0.08)">
         {multiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{multiTagHtml}</div>}
         <div className="card-status-grid" style={{ gridTemplateColumns:"1fr 1fr 1fr" }}>
@@ -5156,7 +5162,7 @@ function App() {
       {/* 특별성과급 */}
       {r.sp > 0 ? (
         <ResultCard icon="⭐" title="스페셜 보너스 (세전 총지급액)" valueColor="#FFCA45"
-          sub={`기초금액 × 지급률 ${(r.spPayRate*100).toFixed(1)}%${r.spPerf !== 1 ? ` × 고과가급 ${r.spPerf}` : ''}${r.spWorkRatio < 1 ? ` × 근무 ${Math.round(r.spWorkRatio*12)}/12` : ''} · ${simYear+1}년 소득 · '${String(simYear+1).slice(2)}.3월말~4월초 자사주 지급`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
+          sub={`기초금액 × 지급률 ${(r.spPayRate*100).toFixed(1)}%${r.spPerf !== 1 ? ` × 고과가급 ${r.spPerf}` : ''}${r.spWorkRatio < 1 ? ` × 근무 ${Math.round(r.spWorkRatio*12)}/12` : ''}`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
           {spMultiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{spMultiTagHtml}</div>}
           <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
             {[
@@ -5330,7 +5336,7 @@ function App() {
 
       {/* 삼성 TAI(PI) - 목표달성인센티브 */}
       <ResultCard icon="🎯" title="예상 TAI (세전)" valueColor="#8B7CFF"
-        sub={`기준급(연봉÷20) × 상반기 ${(r.taiRateH1Val*100).toFixed(1)}% + 하반기 ${(r.taiRateH2Val*100).toFixed(1)}% · 세전 기준 · 지급일: 상반기 '${String(simYear).slice(2)}.7.8 · 하반기 '${String(simYear).slice(2)}.12.24`}
+        sub={`기준급(연봉÷20) × 상반기 ${(r.taiRateH1Val*100).toFixed(1)}% + 하반기 ${(r.taiRateH2Val*100).toFixed(1)}% · 세전 기준`}
         value={fmtM(r.samsungTaiAnnual)} accent="rgba(167,139,250,0.08)">
         <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:10 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"9px 12px" }}>
@@ -5372,12 +5378,18 @@ function App() {
           </div>
         </div>
         <div style={{ fontSize:13, color:"#B9C4D2", lineHeight:1.7, padding:"6px 2px" }}>
-          * TAI 비율은 시뮬레이션 탭 → [삼성 TAI 설정]에서 조정하세요.<br/>
+          * TAI 비율은 아래 '가정 더 바꾸기' → [삼성 TAI 설정]에서 조정하세요.<br/>
           * TAI는 매년 7월 8일(상반기)과 12월 24일(하반기), 연 2회 지급됩니다.<br/>
           * [실측] 삼성 기준급 = 연봉 ÷ 20 (실제 지급 기준 확인값)<br/>
           * TAI는 연봉 누적 한계세율이 아닌 <b>CL등급별 고정 원천징수율</b>(CL1 10%·CL2 15%·CL3 20%·CL4 25%)을 적용하며, 국민연금·건강보험은 공제되지 않습니다. CL2·CL3는 실제 지급 명세서로 확인됐고, CL1·CL4는 5%p 등차 패턴 추정치입니다.
         </div>
       </ResultCard>
+    </div>
+  );
+
+  // ── Phase 1 리디자인: 산출결과 하단 카드 (성과급 상세 그룹으로 이동 — 카드 자체는 변경 없음) ──
+  const ResultPanelLower = () => (
+    <div className="result-panel-root">
 
       {/* SK하이닉스 비교 (노사 재협의 중 임시 비공개) */}
       {HYNIX_SECTION_VISIBLE ? (
@@ -5500,7 +5512,7 @@ function App() {
           </div>
           {r.hynixDcRate === 0 ? (
             <div style={{ fontSize:12, color:"#D5DCE6", textAlign:"center", padding:"4px 0" }}>
-              시뮬레이션 탭에서 DC 전환 비율을 선택하면 절세 효과를 확인할 수 있습니다.
+              '가정 더 바꾸기' → [SK하이닉스 비교 설정]에서 DC 전환 비율을 선택하면 절세 효과를 확인할 수 있습니다.
             </div>
           ) : (
             <>
@@ -5609,7 +5621,7 @@ function App() {
         </div>
 
         <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px", marginBottom:14 }}>
-          <div style={{ fontSize:13, color:"#D5DCE6", fontWeight:700 }}>⚙️ 근로소득 조견표 비율: {taxWithholdingPercent}% 적용 중 — 왼쪽 기본 정보 › 세금공제기준(급여)에서 변경할 수 있습니다.</div>
+          <div style={{ fontSize:13, color:"#D5DCE6", fontWeight:700 }}>⚙️ 근로소득 조견표 비율: {taxWithholdingPercent}% 적용 중 — 아래 '가정 더 바꾸기' › 세금공제기준(급여)에서 변경할 수 있습니다.</div>
         </div>
 
         <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px", marginBottom:14 }}>
@@ -6119,11 +6131,11 @@ function App() {
         <FieldBox label="개인별 연봉 변동 추이" accent="rgba(0,198,255,0.30)">
           {!salaryToken ? (
             <div style={{ fontSize:12, color:"#D5DCE6", lineHeight:1.6 }}>
-              연봉추이는 개인 저장공간에 로그인한 뒤 확인할 수 있습니다. 연봉저장 탭에서 로그인하거나 처음 등록을 먼저 진행하세요.
+              연봉추이는 개인 저장공간에 로그인한 뒤 확인할 수 있습니다. 위 로그인 영역에서 로그인하거나 처음 등록을 먼저 진행하세요.
             </div>
           ) : trendRecords.length === 0 ? (
             <div style={{ fontSize:13, color:"#B9C4D2", lineHeight:1.6 }}>
-              아직 저장된 연봉정보가 없습니다. 연봉저장 탭에서 2011년 이후 연봉을 수기 입력하면 이곳에 연도별 추이가 자동으로 정리됩니다.
+              아직 저장된 연봉정보가 없습니다. 위 '개인 연봉정보 저장'에서 2011년 이후 연봉을 수기 입력하면 이곳에 연도별 추이가 자동으로 정리됩니다.
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -6254,7 +6266,7 @@ function App() {
               </div>
 
               <div style={{ fontSize:13, color:"#B9C4D2", lineHeight:1.5 }}>
-                오기입 데이터는 연봉저장 탭의 연도별 누적 내역에서 삭제 후 다시 입력할 수 있습니다.
+                오기입 데이터는 위 '개인 연봉정보 저장'의 연도별 누적 내역에서 삭제 후 다시 입력할 수 있습니다.
               </div>
             </div>
           )}
@@ -6264,47 +6276,99 @@ function App() {
   };
 
   // ╔══════════════════════════════════════════════════════════════════╗
-  // ║  화면 5/5: SettingsContent — 시뮬레이션 파라미터 설정              ║
-  // ║  ResultPanel이 쓰는 값들(profit, totalProfit, cnt*, rat* 등)을     ║
-  // ║  직접 편집하는 입력 폼입니다.                                      ║
+  // ║  화면 5/5: CoreInputs / MoreAssumptions / LogicSettings            ║
+  // ║  (Phase 1 리디자인 — 구 SettingsContent를 3개로 나눔)               ║
+  // ║  ResultPanelTop/Lower가 쓰는 값들(profit, totalProfit, cnt*, rat*  ║
+  // ║  등)을 직접 편집하는 입력 폼입니다.                                 ║
   // ╚══════════════════════════════════════════════════════════════════╝
-  /* ── 설정 패널 컨텐츠 ── */
-  const SettingsContent = () => (
-    <div className="settings-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
-      {tab === 0 && (
-        <>
-          <div style={{ background:"linear-gradient(135deg,rgba(0,198,255,0.1),rgba(167,139,250,0.06))", border:"1px solid rgba(0,198,255,0.3)", borderRadius:18, padding:"18px 20px", marginBottom:14 }}>
-            <div style={{ fontSize:14, color:"#B9C4D2", marginBottom:10, fontWeight:800 }}>한눈에 보기 — 올해 총보상 구성 (세전)</div>
-            <div style={{ fontSize:13, color:"#B9C4D2", marginBottom:12, lineHeight:1.6 }}>총보상 = 올해 기준연봉 {fmtM(r.curSalary)} + OPI + TAI + 특별성과급 (세전)</div>
-            <div className="at-a-glance-grid">
-              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>연봉 (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#E2E8F0", whiteSpace:"nowrap" }}>{fmtM(r.curSalary)}</div></div>
-              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>OPI (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#00C6FF", whiteSpace:"nowrap" }}>{fmtM(r.opi)}</div></div>
-              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>TAI (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#8B7CFF", whiteSpace:"nowrap" }}>{fmtM(r.samsungTaiAnnual)}</div></div>
-              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>특별성과급 (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#FFCA45", whiteSpace:"nowrap" }}>{fmtM(r.sp)}</div></div>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.06)", borderRadius:10, padding:"8px 12px" }}>
-              <span style={{ fontSize:13, color:"#B9C4D2" }}>성과급만 세후 합계 (OPI+TAI+특별성과급)</span>
-              <span style={{ fontSize:14, fontWeight:900, color:"#86EFAC", whiteSpace:"nowrap" }}>{fmtM(r.opiNet + r.taiNet + r.spNet)}</span>
-            </div>
-            <div style={{ fontSize:12, color:"#B9C4D2", marginTop:8, lineHeight:1.5 }}>
-              아래에서 직급·연봉·영업이익 등을 조정하면 실시간으로 반영돼요. 자세한 항목별 산출결과는 [산출결과] 탭에서 확인하세요.
-            </div>
+  /* ── Phase 1 리디자인: 핵심 4개 입력 (계산기 첫 화면) ──
+     직급·전년도 연봉·올해 체결 연봉은 기존 기본 정보/금액 정보에서, DS 영업이익 프리셋·슬라이더는
+     기존 DS 영업이익 설정에서 그대로 가져옴 (state·핸들러·기본값 변경 없음). ── */
+  const CoreInputs = () => (
+    <FieldBox label="핵심 입력" accent="rgba(30,144,255,0.3)">
+      <div style={{ fontSize:13, color:"#B9C4D2", marginBottom:12, lineHeight:1.6 }}>아래 4개만 바꾸면 결과가 바로 다시 계산돼요. 나머지는 아래 '가정 더 바꾸기'에서 조정할 수 있습니다.</div>
+      <div style={{ marginBottom:12 }}>
+        <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:6 }}>직급</div>
+        <select value={myCl} onChange={handleClChange} style={sBase.select}>
+          <option value="CL1">CL1 (비연봉제)</option>
+          <option value="CL2">CL2</option>
+          <option value="CL3">CL3</option>
+          <option value="CL4">CL4 이상</option>
+        </select>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+        <div style={sBase.inBox}>
+          <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>{myCl === "CL1" ? "전년도 기초액(만)" : "전년도 연봉(만)"}</div>
+          <NumInput value={mySalary} onChange={handlePrevSalaryChange} step={100} min={1}/>
+          <div style={{ fontSize:10, color: salarySyncMode === "prev" ? "#7DD3FC" : "#B9C4D2", marginTop:4 }}>입력 시 올해 체결연봉 자동 계산</div>
+        </div>
+        <div style={sBase.inBox}>
+          <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>{myCl === "CL1" ? "올해 체결 기초액(만)" : "올해 체결연봉(만)"}</div>
+          <NumInput value={agreedSalary} onChange={handleAgreedSalaryChange} step={100} min={0}/>
+          <div style={{ fontSize:10, color: agreedSalary >= 100000 ? "#FCA5A5" : (salarySyncMode === "current" ? "#7DD3FC" : "#B9C4D2"), marginTop:4 }}>{agreedSalary >= 100000 ? `단위 확인: ${comma(agreedSalary)}만원 = 약 ${(agreedSalary/10000).toFixed(1)}억원` : (agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산")}</div>
+        </div>
+      </div>
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:8 }}>시나리오 프리셋 (출처·기준일과 함께 적용)</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+          {Object.values(scenarios).map(sc => (
+            <button key={sc.id} onClick={() => applyScenario(sc.id)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"11px 12px", borderRadius:11, fontSize:13, fontWeight:800, border: activeScenarioId === sc.id ? "1.5px solid #00C6FF" : "1.5px solid rgba(255,255,255,0.1)", background: activeScenarioId === sc.id ? "rgba(0,198,255,0.16)" : "rgba(255,255,255,0.04)", color: activeScenarioId === sc.id ? "#7DD3FC" : "#B9C4D2", cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>{sc.label}<span style={{ fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}>DS {sc.dsProfitJo}조 / 전사 {sc.totalProfitJo}조</span></button>
+          ))}
+        </div>
+        <div style={{ fontSize:13, color:"#B9C4D2", marginTop:8, lineHeight:1.6 }}>
+          {activeScenario ? <>출처: {activeScenario.source} · 기준일: {activeScenario.asOf}</> : '직접 입력 상태입니다.'}<br/>{dispersionNote}
+        </div>
+        <div style={{ display:"flex", gap:8, marginTop:10, alignItems:"center", flexWrap:"wrap" }}>
+          <button onClick={resetToPreset} style={{ padding:"10px 14px", borderRadius:11, border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>↩ 기본값으로 되돌리기</button>
+          {isSimModified && <span style={{ fontSize:12, fontWeight:900, color:"#FBBF24" }}>⚠️ 시뮬레이션 적용 중</span>}
+        </div>
+      </div>
+      <div style={{ ...sBase.row, marginBottom:12, alignItems:"flex-end", gap:10 }}>
+        <div>
+          <span style={{ fontSize:13, color:"#E2E8F0" }}>DS부문 영업이익 (직접 입력)</span>
+          <div style={{ fontSize:13, color:"#B9C4D2", marginTop:4 }}>슬라이더 또는 숫자 입력으로 조정</div>
+        </div>
+        <div style={{
+          minWidth:120,
+          background:"rgba(0,198,255,0.10)",
+          border:"1.5px solid rgba(0,198,255,0.35)",
+          borderRadius:13,
+          padding:"10px 12px",
+          display:"flex",
+          alignItems:"baseline",
+          justifyContent:"flex-end",
+          gap:4
+        }}>
+          <div style={{ width:72, textAlign:"right" }}>
+            <NumInput value={profit} onChange={setProfit} step={0.1} min={-100} max={900} color="#00C6FF" size={28}/>
           </div>
+          <span style={{ fontSize:18, fontWeight:900, color:"#00C6FF" }}>조</span>
+        </div>
+      </div>
+      <Slider value={profit} min={-100} max={900} step={5} onChange={setProfit} color="#00C6FF"/>
+      <div style={{ ...sBase.row, marginTop:7, flexWrap:"wrap", rowGap:4 }}>
+        <span style={{ fontSize:13, color:"#B9C4D2" }}>-100조</span>
+        <span style={{ fontSize:13, color:"#FF6B6B" }}>허들 {r.spThreshold}조</span>
+        <span style={{ fontSize:13, color:"#B9C4D2" }}>900조</span>
+      </div>
+      <div style={{ marginTop:8, fontSize:13, color:"#B9C4D2", lineHeight:1.5 }}>
+        적자 연도처럼 DS 영업손실이 있는 경우에는 음수도 입력할 수 있습니다. 예: 2023년 DS -14.9조
+      </div>
+    </FieldBox>
+  );
+
+  /* ── Phase 1 리디자인: 가정 더 바꾸기 (접은 설정 — 기존 내 정보/시뮬레이션 나머지 전부) ── */
+  const MoreAssumptions = () => (
+    <details style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:16, padding:"14px 16px" }}>
+      <summary style={{ cursor:"pointer", fontSize:14, fontWeight:900, color:"#E2E8F0" }}>⚙️ 가정 더 바꾸기</summary>
+      <div style={{ display:"flex", flexDirection:"column", gap:12, marginTop:14 }}>
+        <>
           <FieldBox label="기본 정보" accent="rgba(30,144,255,0.3)">
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div style={{ marginBottom:12 }}>
               <div>
                 <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:6 }}>기준 연도</div>
                 <select value={simYear} onChange={e=>setSimYear(+e.target.value)} style={sBase.select}>
                   {[2026,2027,2028,2029,2030,2031,2032,2033,2034,2035].map(y=><option key={y} value={y}>{y}년</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:6 }}>직급</div>
-                <select value={myCl} onChange={handleClChange} style={sBase.select}>
-                  <option value="CL1">CL1 (비연봉제)</option>
-                  <option value="CL2">CL2</option>
-                  <option value="CL3">CL3</option>
-                  <option value="CL4">CL4 이상</option>
                 </select>
               </div>
             </div>
@@ -6402,16 +6466,6 @@ function App() {
 
           <FieldBox label="금액 정보" accent="rgba(0,220,130,0.2)">
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-              <div style={sBase.inBox}>
-                <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>{myCl === "CL1" ? "전년도 기초액(만)" : "전년도 연봉(만)"}</div>
-                <NumInput value={mySalary} onChange={handlePrevSalaryChange} step={100} min={1}/>
-                <div style={{ fontSize:10, color: salarySyncMode === "prev" ? "#7DD3FC" : "#B9C4D2", marginTop:4 }}>입력 시 올해 체결연봉 자동 계산</div>
-              </div>
-              <div style={sBase.inBox}>
-                <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>{myCl === "CL1" ? "올해 체결 기초액(만)" : "올해 체결연봉(만)"}</div>
-                <NumInput value={agreedSalary} onChange={handleAgreedSalaryChange} step={100} min={0}/>
-                <div style={{ fontSize:10, color: agreedSalary >= 100000 ? "#FCA5A5" : (salarySyncMode === "current" ? "#7DD3FC" : "#B9C4D2"), marginTop:4 }}>{agreedSalary >= 100000 ? `단위 확인: ${comma(agreedSalary)}만원 = 약 ${(agreedSalary/10000).toFixed(1)}억원` : (agreedSalary > 0 ? "입력 시 전년도 연봉 자동 역산" : "0이면 전년도×인상률 자동계산")}</div>
-              </div>
               <div style={sBase.inBox}>
                 <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>베이스업 인상률(%)</div>
                 <NumInput value={baseUpRaise} onChange={handleBaseUpRaiseChange} step={0.1} min={-99.9} max={100}/>
@@ -6532,41 +6586,14 @@ function App() {
             </div>
           </FieldBox>
 
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:10 }} className="two-col-grid">
-            <button onClick={()=>moveTab(1)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#1E90FF,#0070CC)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(30,144,255,0.4)", transition:"all .2s" }}>
-              시뮬레이션 설정으로 →
-            </button>
-            <button data-open-sp-rsu="true" onClick={openSpRsu} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
-              OPI-2/RSU 예상보기 →
-            </button>
-          </div>
         </>
-      )}
-
-      {tab === 1 && (
         <>
           {/* ── DS부문 영업이익 입력 섹션 ── */}
-          <FieldBox label="DS 영업이익 설정 (성과급 산출 기준)" accent="rgba(0,198,255,0.3)">
-            {/* P0: 시나리오 프리셋 — DS/전사를 함께 설정 (슬라이더는 활성 프리셋 값에서 시작, 비중은 파생값) */}
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:8 }}>시나리오 프리셋 (출처·기준일과 함께 적용)</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                {Object.values(scenarios).map(sc => (
-                  <button key={sc.id} onClick={() => applyScenario(sc.id)} style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, padding:"11px 12px", borderRadius:11, fontSize:13, fontWeight:800, border: activeScenarioId === sc.id ? "1.5px solid #00C6FF" : "1.5px solid rgba(255,255,255,0.1)", background: activeScenarioId === sc.id ? "rgba(0,198,255,0.16)" : "rgba(255,255,255,0.04)", color: activeScenarioId === sc.id ? "#7DD3FC" : "#B9C4D2", cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>{sc.label}<span style={{ fontSize:12, fontWeight:700, whiteSpace:"nowrap" }}>DS {sc.dsProfitJo}조 / 전사 {sc.totalProfitJo}조</span></button>
-                ))}
-              </div>
-              <div style={{ fontSize:13, color:"#B9C4D2", marginTop:8, lineHeight:1.6 }}>
-                {activeScenario ? <>출처: {activeScenario.source} · 기준일: {activeScenario.asOf}</> : '직접 입력 상태입니다.'}<br/>{dispersionNote}
-              </div>
-              <div style={{ display:"flex", gap:8, marginTop:10, alignItems:"center", flexWrap:"wrap" }}>
-                <button onClick={resetToPreset} style={{ padding:"10px 14px", borderRadius:11, border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>↩ 기본값으로 되돌리기</button>
-                {isSimModified && <span style={{ fontSize:12, fontWeight:900, color:"#FBBF24" }}>⚠️ 시뮬레이션 적용 중</span>}
-              </div>
-            </div>
+          <FieldBox label="전사 영업이익 · DS 비중" accent="rgba(0,198,255,0.3)">
             {/* P0 후속: DS·전사 영업이익은 독립 입력 — 한쪽을 바꿔도 다른 쪽이 바뀌지 않는다.
                 DS 비중은 파생 표시값일 뿐 입력이 아니다. (입력 방식 토글·자동환산·비중 슬라이더 제거) */}
             <div style={{ fontSize:13, color:"#B9C4D2", marginBottom:14, lineHeight:1.6 }}>
-              DS 영업이익과 전사 영업이익은 각각 직접 입력합니다. DS 비중은 두 값에서 자동 계산되는 파생값입니다.
+              전사 영업이익은 여기서, DS 영업이익은 위 '핵심 입력'에서 각각 직접 입력합니다. DS 비중은 두 값에서 자동 계산되는 파생값입니다.
             </div>
 
             {/* 전사 영업이익 (독립 입력) */}
@@ -6578,39 +6605,6 @@ function App() {
             <div style={{ ...sBase.row, marginTop:5, marginBottom:18, flexWrap:"wrap", rowGap:4 }}>
               <span style={{ fontSize:13, color:"#B9C4D2" }}>10조</span>
               <span style={{ fontSize:13, color:"#B9C4D2" }}>900조</span>
-            </div>
-
-            {/* DS 영업이익 (독립 입력) */}
-            <div style={{ ...sBase.row, marginBottom:12, alignItems:"flex-end", gap:10 }}>
-              <div>
-                <span style={{ fontSize:13, color:"#E2E8F0" }}>DS부문 영업이익 (직접 입력)</span>
-                <div style={{ fontSize:13, color:"#B9C4D2", marginTop:4 }}>슬라이더 또는 숫자 입력으로 조정</div>
-              </div>
-              <div style={{
-                minWidth:120,
-                background:"rgba(0,198,255,0.10)",
-                border:"1.5px solid rgba(0,198,255,0.35)",
-                borderRadius:13,
-                padding:"10px 12px",
-                display:"flex",
-                alignItems:"baseline",
-                justifyContent:"flex-end",
-                gap:4
-              }}>
-                <div style={{ width:72, textAlign:"right" }}>
-                  <NumInput value={profit} onChange={setProfit} step={0.1} min={-100} max={900} color="#00C6FF" size={28}/>
-                </div>
-                <span style={{ fontSize:18, fontWeight:900, color:"#00C6FF" }}>조</span>
-              </div>
-            </div>
-            <Slider value={profit} min={-100} max={900} step={5} onChange={setProfit} color="#00C6FF"/>
-            <div style={{ ...sBase.row, marginTop:7, flexWrap:"wrap", rowGap:4 }}>
-              <span style={{ fontSize:13, color:"#B9C4D2" }}>-100조</span>
-              <span style={{ fontSize:13, color:"#FF6B6B" }}>허들 {r.spThreshold}조</span>
-              <span style={{ fontSize:13, color:"#B9C4D2" }}>900조</span>
-            </div>
-            <div style={{ marginTop:8, fontSize:13, color:"#B9C4D2", lineHeight:1.5 }}>
-              적자 연도처럼 DS 영업손실이 있는 경우에는 음수도 입력할 수 있습니다. 예: 2023년 DS -14.9조
             </div>
 
             {/* 향후 3년 예상 DS 영업이익 (P2: 특별성과급 현금화 예상용) */}
@@ -6882,21 +6876,18 @@ function App() {
             </FieldBox>
           )}
           
-          {/* 시뮬레이션 하단에서 결과 탭으로 바로 이동하는 편의 기능 추가 */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:10, marginTop:10 }} className="two-col-grid">
-            <button onClick={()=>moveTab(2)} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#FFB400,#F59E0B)", border:"none", color:"#fff", fontSize:15, fontWeight:800, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(255,180,0,0.3)", transition:"all .2s" }}>
-              산출결과 확인하기 →
-            </button>
-            <button data-open-sp-rsu="true" onClick={openSpRsu} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
-              OPI-2/RSU 예상보기 →
-            </button>
-          </div>
         </>
-      )}
+        <button data-open-sp-rsu="true" onClick={openSpRsu} style={{ width:"100%", padding:17, borderRadius:13, background:"linear-gradient(135deg,#A855F7,#7C3AED)", border:"none", color:"#fff", fontSize:15, fontWeight:900, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 20px rgba(168,85,247,0.32)", transition:"all .2s" }}>
+          🎁 성과급 상세 보기 →
+        </button>
+      </div>
+    </details>
+  );
 
-      {/* 💡 탭 인덱스 3번 (로직 설명) - 세금 정보 상세 보완 */}
-      {tab === 3 && (
-        <>
+  /* ── Phase 1 리디자인: 로직 설명 (더보기 그룹 — 기존 로직 설명 탭 그대로) ── */
+  const LogicSettings = () => (
+    <div className="settings-content" style={{ padding:"16px 18px 30px", display:"flex", flexDirection:"column", gap:12 }}>
+      <>
           <FieldBox label="📊 데이터 신뢰도 안내" accent="rgba(0,220,130,0.3)">
             <div className="logic-text">
               <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
@@ -7049,7 +7040,7 @@ function App() {
             </div>
             <div style={{ marginTop:10, fontSize:13, color:"#94A3B8", lineHeight:1.6 }}>
               * 예측치는 과거 반도체 사이클(약 3~4년 주기) 및 AI 수요 트렌드를 근거로 한 추정입니다.<br/>
-              * 시뮬레이션 탭에서는 DS·전사 영업이익을 각각 직접 입력합니다. DS 비중은 두 값에서 자동 계산되는 파생 표시값입니다.
+              * '가정 더 바꾸기'에서는 DS·전사 영업이익을 각각 직접 입력합니다. DS 비중은 두 값에서 자동 계산되는 파생 표시값입니다.
             </div>
           </FieldBox>
 
@@ -7225,8 +7216,7 @@ function App() {
               </ul>
             </div>
           </FieldBox>
-        </>
-      )}
+      </>
     </div>
   );
 
@@ -7252,7 +7242,7 @@ function App() {
             }}>로그아웃</button>
           </>
         ) : (
-          <button onClick={() => moveTab(4)} style={{
+          <button onClick={() => moveTab(2)} style={{
             padding:"6px 14px", borderRadius:999, border:"none",
             background:"rgba(167,139,250,0.2)", color:"#A78BFA",
             fontSize:11, fontWeight:800, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
@@ -7268,112 +7258,59 @@ function App() {
           </div>
           <div className="nav-tabs">
             {tabs.map((t,i) => (
-              <button key={i} onClick={() => moveTab(i)} aria-current={(i===7 ? isSpRsuView : tab===i) ? "page" : undefined} style={{
+              <button key={i} onClick={() => moveTab(i)} aria-current={(i===1 ? isSpRsuView : tab===i) ? "page" : undefined} style={{
                 padding:"7px 18px", border:"none", cursor:"pointer", fontFamily:"inherit",
                 borderRadius:9, display:"flex", alignItems:"center", gap:6,
-                background: (i===7 ? isSpRsuView : tab===i) ? "rgba(30,144,255,0.18)" : "none",
+                background: (i===1 ? isSpRsuView : tab===i) ? "rgba(30,144,255,0.18)" : "none",
                 transition:"all .18s",
               }}>
                 <span style={{ fontSize:15 }}>{t.icon}</span>
-                <span style={{ fontSize:13, fontWeight:700, color: (i===7 ? isSpRsuView : tab===i) ? "#4DA8FF" : "#B9C4D2" }}>{t.label}</span>
+                <span style={{ fontSize:13, fontWeight:700, color: (i===1 ? isSpRsuView : tab===i) ? "#4DA8FF" : "#B9C4D2" }}>{t.label}</span>
               </button>
             ))}
           </div>
         </div>
-        <div
-          className="header-right"
-          style={{
-            display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end",
-            fontSize:10, color:"#B9C4D2", lineHeight:1.35, minWidth:340
-          }}
-        >
-          <button
-            className="opi-shortcut-button"
-            type="button"
-            data-open-sp-rsu="true" onClick={openSpRsu}
-            title="OPI-2/RSU 예상보기"
-            style={{
-              border:"1px solid rgba(168,85,247,.35)", borderRadius:12,
-              background: isSpRsuView ? "linear-gradient(135deg,#A855F7,#7C3AED)" : "rgba(168,85,247,.14)",
-              color:"#F5F3FF", padding:"9px 12px", fontWeight:900, fontSize:12,
-              cursor:"pointer", whiteSpace:"nowrap", boxShadow: isSpRsuView ? "0 4px 18px rgba(168,85,247,.25)" : "none"
-            }}
-          >
-            OPI-2/RSU
-          </button>
-          <button
-            onClick={marketInfo?.type === 'stock' ? () => fetchStockQuote(marketInfo.symbol, { save:false }) : fetchKospiIndex}
-            title="시장정보 새로고침"
-            style={{
-              fontSize:10, color:"#B9C4D2", textAlign:"right", lineHeight:1.35,
-              background:"rgba(255,255,255,0.045)", border:"1px solid rgba(255,255,255,0.09)",
-              borderRadius:12, padding:"7px 10px", cursor:"pointer", minWidth:126
-            }}
-          >
-            <div style={{ letterSpacing:"0.08em", fontWeight:800, color: marketInfo?.type === 'stock' ? "#A7F3D0" : "#7DD3FC" }}>
-              {marketInfo?.type === 'stock' ? (marketInfo.name || marketInfo.symbol) : "오늘의 KOSPI"}
-            </div>
-            <div style={{ color:"#E2E8F0", fontWeight:900, fontSize:15, marginTop:1 }}>
-              {marketLoading ? "조회중" : marketInfo?.price ? marketInfo.price.toLocaleString("ko-KR", { minimumFractionDigits: marketInfo.type === 'index' ? 2 : 0, maximumFractionDigits: marketInfo.type === 'index' ? 2 : 0 }) : "-"}
-            </div>
-            <div style={{ color: marketInfo?.change > 0 ? "#F87171" : marketInfo?.change < 0 ? "#60A5FA" : "#B9C4D2", fontSize:10, fontWeight:800 }}>
-              {marketInfo?.price ? `${marketInfo.change > 0 ? "+" : ""}${marketInfo.change.toLocaleString("ko-KR", { maximumFractionDigits:2 })} (${marketInfo.changeRate > 0 ? "+" : ""}${marketInfo.changeRate.toFixed(2)}%)` : "클릭 새로고침"}
-            </div>
-          </button>
-          <form className="market-search-form" onSubmit={handleStockSearchSubmit} style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0, flexWrap:"wrap" }}>
-            <input
-              value={stockSearchText}
-              onChange={e=>setStockSearchText(e.target.value)}
-              placeholder="종목명/코드"
-              title={salaryToken ? "검색한 종목은 로그인 계정 기본값으로 저장됩니다." : "로그인하면 마지막 검색 종목이 계정에 저장됩니다."}
-              style={{
-                width:140, background:"#0b1220", color:"#E2E8F0", border:"1px solid rgba(255,255,255,.13)",
-                borderRadius:10, padding:"8px 9px", fontSize:13, fontWeight:800
-              }}
-            />
-            <button type="submit" disabled={marketLoading} style={{ border:0, borderRadius:10, padding:"8px 9px", background:"rgba(0,220,130,.18)", color:"#A7F3D0", fontWeight:900, fontSize:11, cursor:marketLoading?'wait':'pointer' }}>검색</button>
-            {(marketInfo?.type === 'stock' || hasPreferredStock) && <button type="button" onClick={resetPreferredStock} style={{ border:"1px solid rgba(255,255,255,.12)", borderRadius:10, padding:"8px 8px", background:"rgba(255,255,255,.04)", color:"#D5DCE6", fontWeight:900, fontSize:11, cursor:'pointer' }}>리셋</button>}
-          </form>
-          {marketMsg && <div style={{ maxWidth:210, color: marketMsg.includes('실패') ? '#FCA5A5' : '#A7F3D0', fontSize:10, fontWeight:800, lineHeight:1.25, whiteSpace:'normal' }}>{marketMsg}</div>}
-        </div>
       </div>
 
-      {/* ── 반응형 바디 레이아웃 ── */}
+      {/* ── 반응형 바디 레이아웃 (Phase 1 리디자인: 1단 중앙 레이아웃, 최대 800px) ── */}
       <div className="main-layout">
-        {/* 연봉저장/게시판 탭: 전체 너비로 표시 */}
-        {tab === 4 ? (
+        {/* 그룹 0: 계산기 — DOM 순서는 결과 → 입력(모바일에서 히어로가 먼저 보이게), 데스크톱은 CSS order로 입력이 먼저 */}
+        {tab === 0 && (
+          <div style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
+            <div className="calc-stack" style={{ maxWidth:800, margin:'0 auto', width:'100%', padding:"20px 0 30px", display:"flex", flexDirection:"column", gap:16 }}>
+              <div className="calc-result">{ResultPanelTop()}</div>
+              <div className="calc-inputs calc-side-pad">{CoreInputs()}</div>
+              <div className="calc-more calc-side-pad">{MoreAssumptions()}</div>
+            </div>
+          </div>
+        )}
+        {/* 그룹 1: 성과급 상세 — OPI-2/RSU 전체 + 산출결과 하단 카드 */}
+        {tab === 1 && (
+          <div style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
+            <div id="sp-rsu-section">
+              <ErrorBoundary><EquityRewardSimContent /></ErrorBoundary>
+            </div>
+            <div style={{ maxWidth:800, margin:'0 auto', width:'100%' }}>
+              {ResultPanelLower()}
+            </div>
+          </div>
+        )}
+        {/* 그룹 2: 내 연봉 — 연봉저장 + 연봉추이 병합 */}
+        {tab === 2 && (
           <div style={{ flex:1, overflowY:'auto', background:'transparent', maxWidth:760, margin:'0 auto', width:'100%' }}>
             {SalaryContent()}
-          </div>
-        ) : tab === 5 ? (
-          <div style={{ flex:1, overflowY:'auto', background:'transparent', maxWidth:960, margin:'0 auto', width:'100%' }}>
             {SalaryTrendContent()}
           </div>
-        ) : tab === 6 ? (
-          <div style={{ flex:1, overflowY:'auto', background:'transparent' }}>
-            <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(4)} />
+        )}
+        {/* 그룹 3: 더보기 — 로직 설명 + 게시판 + 채팅 */}
+        {tab === 3 && (
+          <div style={{ flex:1, overflowY:'auto', background:'transparent', maxWidth:760, margin:'0 auto', width:'100%' }}>
+            {LogicSettings()}
+            <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(2)} />
+            <LiveChatPopup salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(2)} />
           </div>
-        ) : isSpRsuView ? (
-          <div id="sp-rsu-section" style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
-            <ErrorBoundary><EquityRewardSimContent /></ErrorBoundary>
-          </div>
-        ) : (
-          <>
-            {/* PC: 탭 2(결과) 선택 시 숨김 | 모바일: 탭 2(결과) 선택 시 숨김 */}
-            <div className={`sidebar ${tab === 2 ? 'hide-on-pc hide-on-mobile' : ''}`}>
-              {SettingsContent()}
-            </div>
-            
-            {/* PC: 항상 보임 (대시보드) | 모바일: 탭 2(결과) 선택 시에만 보임 */}
-            <div className={`content-panel ${tab !== 2 ? 'hide-on-mobile' : ''}`}>
-              <div style={{ maxWidth: tab === 2 ? "800px" : "100%", margin: "0 auto", width: "100%", height: "100%" }}>
-                {ResultPanel()}
-              </div>
-            </div>
-          </>
         )}
       </div>
-      <LiveChatPopup salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(4)} />
     </div>
   );
 }
