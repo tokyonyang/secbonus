@@ -1937,13 +1937,22 @@ function App() {
   // profit/totalProfit에서 자동 계산되는 파생 표시값(dsRatioDerived)이다.
   // (제거 전 dsSharePct: 보수적 70, 컨센서스 99.5, 낙관 97.5 — 산술값이라
   //  입력으로 쓰면 전사 변경 시 DS가 따라 바뀌는 문제가 있었다.)
-  const SCENARIOS = {
+  // 컨센서스 DB 연동 (2026-11-10): 아래는 내장 기본값이다. 첫 로드 시
+  // /api/settings/consensus에서 DB 설정을 읽어오면 scenarios state가
+  // 그 값으로 교체된다. DB가 없거나 API가 실패하면 이 기본값 그대로 쓴다.
+  const SCENARIOS_BUILTIN = {
     conservative: { id:'conservative', label:'보수적 · 기존 기본값', dsProfitJo:50, totalProfitJo:65, source:'기존 사이트 기본값, 2025년 DS 실적 43.6조 기준', asOf:'2026-11-10 확인' },
     consensus: { id:'consensus', label:'기본 · 컨센서스', dsProfitJo:370, totalProfitJo:372, source:'FnGuide 컨센서스 전사 371.7조(2026-10-26) + DS 약 370조 추산', asOf:'2026-10-26' },
     optimistic: { id:'optimistic', label:'낙관', dsProfitJo:390, totalProfitJo:400, source:'키움증권 DS 2026E 약 390조 표기', asOf:'2026-10-30 보고서 기준' },
   };
   const SCENARIO_DISPERSION_NOTE = '증권사별 편차 큼: KB DS 208조 ~ 키움 DS 390조';
   const DEFAULT_SCENARIO_ID = 'consensus';
+  // DB에서 불러온 프리셋 (초기값 = 내장 기본값). 프리셋 버튼·배너·applyScenario은
+  // 이 state를 본다. SCENARIOS_BUILTIN은 폴백용으로만 남긴다.
+  const [scenarios, setScenarios] = useState(SCENARIOS_BUILTIN);
+  const [scenarioSource, setScenarioSource] = useState('builtin');
+  const [scenarioUpdatedAt, setScenarioUpdatedAt] = useState(null);
+  const [dispersionNote, setDispersionNote] = useState(SCENARIO_DISPERSION_NOTE);
   const [manualBasePrice, setManualBasePrice] = useState(260117);
   const [profit, setProfit] = useState(370); // DS부문 영업이익 (조) — 기본 프리셋(컨센서스) 값
   const [totalProfit, setTotalProfit] = useState(372); // 전사 영업이익 (조) — 기본 프리셋(컨센서스) 값
@@ -1957,7 +1966,7 @@ function App() {
   // ── P0: 활성 시나리오 + 적용/되돌리기 ──────────────────────────────────
   const [activeScenarioId, setActiveScenarioId] = useState(DEFAULT_SCENARIO_ID);
   const applyScenario = (id) => {
-    const sc = SCENARIOS[id] || SCENARIOS[DEFAULT_SCENARIO_ID];
+    const sc = scenarios[id] || scenarios[DEFAULT_SCENARIO_ID];
     setActiveScenarioId(sc.id);
     // P0 후속: DS·전사는 독립 입력이라 두 값을 직접 지정한다. 비중은 파생값이라
     // 따로 설정하지 않는다. 자동환산은 없다.
@@ -3067,40 +3076,51 @@ function App() {
     return () => clearTimeout(timer);
   }, [salaryToken]);
 
-  // ── 영업이익(DS) 공유 설정값 로드/저장 ──────────────────────────────────
-  // 누군가 입력하면 전역 공유값이 갱신되어 비로그인 사용자에게도 유지되고,
-  // 로그인 사용자는 본인이 마지막으로 저장한 값을 우선 반영합니다.
-  const sharedProfitLoaded = React.useRef(false);
+  // ── 컨센서스 설정 로드 (DB → 내장 기본값 폴백) ─────────────────────────
+  // /api/settings/consensus에서 프리셋을 읽어온다. DB에 값이 없거나 API가
+  // 실패하면 내장 기본값(SCENARIOS_BUILTIN)이 이미 state에 있어 그대로 둔다.
+  // 주의 — 구 공유 영업이익 효과는 삭제했다. 마운트 시 GET /api/settings/profit
+  // 으로 전역값을 가져오고, profit 변경 시 900ms 디바운스로 POST하던 동작이
+  // "마지막 방문자의 슬라이더 값 = 모든 방문자의 기본값"이 되는 버그의
+  // 원인이었다. 이제 profit을 서버에 자동 저장하는 코드는 어디에도 없다.
+  const consensusLoaded = React.useRef(false);
+  const isValidConsensusPayload = (p) => {
+    if (!p || typeof p !== 'object') return false;
+    const scs = p.scenarios;
+    if (!scs || typeof scs !== 'object' || !scs.consensus) return false;
+    for (const key of Object.keys(scs)) {
+      const sc = scs[key];
+      if (!sc || typeof sc !== 'object') return false;
+      if (!Number.isFinite(Number(sc.dsProfitJo)) || !Number.isFinite(Number(sc.totalProfitJo))) return false;
+      if (typeof sc.source !== 'string' || typeof sc.asOf !== 'string') return false;
+    }
+    if (p.defaultScenarioId && !scs[p.defaultScenarioId]) return false;
+    return true;
+  };
 
   useEffect(() => {
-    sharedProfitLoaded.current = false;
+    if (consensusLoaded.current) return;
+    consensusLoaded.current = true;
     (async () => {
       try {
-        const res = await fetch('/api/settings/profit', { headers: salaryHeaders(), cache:'no-store' });
+        const res = await fetch('/api/settings/consensus', { cache:'no-store' });
         const data = await res.json().catch(() => ({}));
-        if (res.ok && data.value !== null && data.value !== undefined) {
-          // P0 후속: 공유값은 DS 영업이익(profit)만 직접 지정한다. 전사
-          // (totalProfit)는 건드리지 않으며, 자동환산은 없다.
-          setProfit(Number(data.value));
-        }
+        if (!res.ok || !isValidConsensusPayload(data)) return;
+        const scs = data.scenarios;
+        setScenarios(scs);
+        if (typeof data.dispersionNote === 'string' && data.dispersionNote) setDispersionNote(data.dispersionNote);
+        setScenarioSource(data.source || 'db');
+        setScenarioUpdatedAt(data.updatedAt || null);
+        const defId = (data.defaultScenarioId && scs[data.defaultScenarioId]) ? data.defaultScenarioId : DEFAULT_SCENARIO_ID;
+        const sc = scs[defId];
+        setActiveScenarioId(sc.id || defId);
+        setTotalProfit(Number(sc.totalProfitJo));
+        setProfit(Number(sc.dsProfitJo));
       } catch (e) {
-        console.warn('영업이익 공유 설정 조회 실패', e);
+        console.warn('컨센서스 설정 조회 실패 — 내장 기본값을 사용합니다', e);
       }
-      sharedProfitLoaded.current = true;
     })();
-  }, [salaryToken]);
-
-  useEffect(() => {
-    if (!sharedProfitLoaded.current) return;
-    const timer = setTimeout(() => {
-      fetch('/api/settings/profit', {
-        method: 'POST',
-        headers: salaryHeaders(),
-        body: JSON.stringify({ value: profit }),
-      }).catch(e => console.warn('영업이익 공유 설정 저장 실패', e));
-    }, 900);
-    return () => clearTimeout(timer);
-  }, [profit]);
+  }, []);
 
   const calc = useCallback(() => {
     const buPct = burate * 10, saPct = 100 - buPct;
@@ -3382,7 +3402,7 @@ function App() {
   const r = calc();
 
   // ── P0: 활성 시나리오 + 시뮬레이션 변경 여부 ───────────────────────────
-  const activeScenario = SCENARIOS[activeScenarioId] || SCENARIOS[DEFAULT_SCENARIO_ID];
+  const activeScenario = scenarios[activeScenarioId] || scenarios[DEFAULT_SCENARIO_ID];
   // 프리셋 값과 하나라도 다르면 "시뮬레이션 적용 중"으로 표시한다.
   // (P0 후속: DS·전사는 독립 입력이라 두 값만 비교한다. 비중은 파생값이라
   // 비교 대상이 아니다.)
@@ -4449,7 +4469,8 @@ function App() {
       <div style={{ background:"rgba(0,198,255,0.07)", border:"1px solid rgba(0,198,255,0.25)", borderRadius:14, padding:"12px 16px", marginBottom:14, fontSize:12, lineHeight:1.6, color:"#CBD5E1" }}>
         <div style={{ fontWeight:900, color:"#E2E8F0" }}>📊 시나리오: {activeScenario ? activeScenario.label : '직접 입력'} · DS {profit}조 / 전사 {totalProfit}조</div>
         <div>출처: {activeScenario ? activeScenario.source : '직접 입력'} · 기준일: {activeScenario ? activeScenario.asOf : '-'}</div>
-        <div style={{ color:"#94A3B8" }}>{SCENARIO_DISPERSION_NOTE} · DS 영업이익 전망은 증권사·시점별로 크게 갈리므로, 위 숫자는 추정치입니다.</div>
+        <div style={{ color:"#94A3B8" }}>{dispersionNote} · DS 영업이익 전망은 증권사·시점별로 크게 갈리므로, 위 숫자는 추정치입니다.</div>
+        <div style={{ color:"#94A3B8" }}>기준: {scenarioSource === 'db' ? 'DB 설정 기준' : scenarioSource === 'seeded' ? 'DB 설정 기준(기본값으로 새로 저장됨)' : '기본값(코드 내장)'}{scenarioSource !== 'builtin' && scenarioUpdatedAt ? ` · 업데이트: ${String(scenarioUpdatedAt).slice(0, 10)}` : ''}</div>
         {isSimModified && (<div style={{ marginTop:6, fontWeight:900, color:"#FBBF24" }}>⚠️ 시뮬레이션 적용 중 — 현재 입력값이 {activeScenario ? activeScenario.label : '기본'} 프리셋과 다릅니다.</div>)}
       </div>
 
@@ -5859,12 +5880,12 @@ function App() {
             <div style={{ marginBottom:14 }}>
               <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:8 }}>시나리오 프리셋 (출처·기준일과 함께 적용)</div>
               <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-                {Object.values(SCENARIOS).map(sc => (
+                {Object.values(scenarios).map(sc => (
                   <button key={sc.id} onClick={() => applyScenario(sc.id)} style={{ flex:1, minWidth:90, padding:"10px 6px", borderRadius:11, fontSize:12, fontWeight:800, border: activeScenarioId === sc.id ? "1.5px solid #00C6FF" : "1.5px solid rgba(255,255,255,0.1)", background: activeScenarioId === sc.id ? "rgba(0,198,255,0.16)" : "rgba(255,255,255,0.04)", color: activeScenarioId === sc.id ? "#7DD3FC" : "#94A3B8", cursor:"pointer", fontFamily:"inherit" }}>{sc.label}<div style={{ fontSize:10, fontWeight:600, marginTop:2 }}>DS {sc.dsProfitJo}조</div></button>
                 ))}
               </div>
               <div style={{ fontSize:11, color:"#94A3B8", marginTop:8, lineHeight:1.6 }}>
-                {activeScenario ? <>출처: {activeScenario.source} · 기준일: {activeScenario.asOf}</> : '직접 입력 상태입니다.'}<br/>{SCENARIO_DISPERSION_NOTE}
+                {activeScenario ? <>출처: {activeScenario.source} · 기준일: {activeScenario.asOf}</> : '직접 입력 상태입니다.'}<br/>{dispersionNote}
               </div>
               <div style={{ display:"flex", gap:8, marginTop:10, alignItems:"center", flexWrap:"wrap" }}>
                 <button onClick={resetToPreset} style={{ padding:"10px 14px", borderRadius:11, border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>↩ 기본값으로 되돌리기</button>
