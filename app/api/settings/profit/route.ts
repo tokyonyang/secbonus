@@ -1,3 +1,11 @@
+// ─────────────────────────────────────────────────────────────
+// [주의 — 2026-11-10 consensus-db] 이 라우트의 동작은 바꾸지 않았으나,
+// 클라이언트(calculator.html)는 더 이상 profit 변경 시 이 엔드포인트에
+// 자동 POST하지 않는다. 그 자동 POST가 "마지막 방문자의 슬라이더 값 =
+// 모든 방문자의 기본값"이 되는 버그의 원인이었다. 전역 'profit' 행은
+// 이제 관리자 전용 POST /api/settings/consensus에서 컨센서스 시나리오의
+// DS 영업이익으로 함께 동기화한다. 이 라우트는 하위 호환용으로 유지한다.
+// ─────────────────────────────────────────────────────────────
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '../../_lib/supabase';
 import { verifySalaryToken } from '../../_lib/salary-auth';
