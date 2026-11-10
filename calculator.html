@@ -91,13 +91,14 @@
     .at-a-glance-grid { grid-template-columns: repeat(2, 1fr); }
   }
 
-  /* Phase 1 리디자인: 계산기 1단 레이아웃 — DOM 순서대로 결과(히어로) → 입력 → 가정 더 바꾸기.
+  /* 계산기 1단 레이아웃 — DOM 순서대로 히어로 → 핵심 입력 → 상세(배너·지급 일정·상세 카드) → 가정 더 바꾸기.
      데스크톱·모바일 모두 히어로가 먼저 보인다 (계획서 와이어프레임 기준). calc-side-pad는
      result-panel-root의 좌우 패딩(26px / ≤1180px 18px / ≤768px 14px)과 맞춘다. */
   .calc-stack { display: flex; flex-direction: column; }
   .calc-result { order: 1; }
   .calc-inputs { order: 2; }
-  .calc-more { order: 3; }
+  .calc-detail { order: 3; }
+  .calc-more { order: 4; }
   .calc-side-pad { padding-left: 26px; padding-right: 26px; }
   @media (max-width: 1180px) {
     .calc-side-pad { padding-left: 18px; padding-right: 18px; }
@@ -5080,6 +5081,12 @@ function App() {
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  // ── 히어로 바로 아래 핵심 입력 배치: 시나리오 배너·지급 일정·OPI/스페셜/TAI 상세 카드를 별도 컴포넌트로 분리 (내용 변경 없음) ──
+  const ResultPanelDetail = () => (
+    <div className="result-panel-root">
 
       {/* P0: 시나리오 배너 — 활성 프리셋의 출처·기준일·편차를 결과 바로 아래에 표시 */}
       {/* P2 배치2: 출처·기준일·편차·기준을 접은 상세 안에 두지 않고 항상 보이게 표시한다.
@@ -7270,12 +7277,13 @@ function App() {
 
       {/* ── 반응형 바디 레이아웃 (Phase 1 리디자인: 1단 중앙 레이아웃, 최대 800px) ── */}
       <div className="main-layout">
-        {/* 그룹 0: 계산기 — DOM 순서는 결과 → 입력(모바일에서 히어로가 먼저 보이게), 데스크톱은 CSS order로 입력이 먼저 */}
+        {/* 그룹 0: 계산기 — DOM 순서는 히어로 → 핵심 입력 → 상세 → 가정 더 바꾸기 */}
         {tab === 0 && (
           <div style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
             <div className="calc-stack" style={{ maxWidth:800, margin:'0 auto', width:'100%', padding:"20px 0 30px", display:"flex", flexDirection:"column", gap:16 }}>
               <div className="calc-result">{ResultPanelTop()}</div>
               <div className="calc-inputs calc-side-pad">{CoreInputs()}</div>
+              <div className="calc-detail calc-side-pad">{ResultPanelDetail()}</div>
               <div className="calc-more calc-side-pad">{MoreAssumptions()}</div>
             </div>
           </div>
