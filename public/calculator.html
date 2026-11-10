@@ -1373,7 +1373,7 @@ const MAX_ANNUAL_WAGE = 1435501440;
 const HYNIX_SECTION_VISIBLE = false;
 
 // ── 특별성과급(OPI-2) 회사 세부 규정안 ('26년 성과분, '27.3월말~4월초 지급) ──
-// [회사 규정안] 지급액 = 개인별 기초금액(CL2~4: '26년 계약연봉 + 업무성과급) × 사업부 지급률 × 고과가급(CL4)
+// [회사 규정안] 지급액 = 개인별 기초금액(CL2~4: '26년 계약연봉 + 업무성과급 / CL1·시간선택제: 기준급×120%+직무조정급 20만원) × 사업부 지급률 × 고과가급(CL4)
 // [회사 규정안] 소득세 45% + 지방소득세 4.5%(=49.5%), 4대보험(건강·장기요양·고용) 4.967% 징수,
 //              기부금은 세전 총지급액의 0.2~1.0%(0.2%p 단위) 선택, 공제 후 잔액을 자사주로 지급.
 // [회사 규정안] '27년 소득으로 신고 → '26년 연봉 누적세율·건보 정산에는 합산하지 않습니다.
@@ -1949,6 +1949,9 @@ function App() {
   const [performanceRaise, setPerformanceRaise] = useState(0); // 업무성과 인상률(%)
   const [myRaise, setMyRaise] = useState(4.1); // 총 임금인상률 = 베이스업 + 업무성과
   const [bizPerfBonus, setBizPerfBonus] = useState(0);
+  const [isPartTime, setIsPartTime] = useState(() => localStorage.getItem('opiBasePartTime') === '1'); // 시간선택제 — CL1과 동일하게 OPI 기초금액을 기준급×120%+직무조정급으로 계산
+  const [cl1BasePay, setCl1BasePay] = useState(() => Math.max(0, Number(localStorage.getItem('opiBaseCl1BasePay') || 0) || 0)); // CL1·시간선택제 기준급(공통급+능력급, 월 만원) — 0 = 미입력(기존 직접 입력 기초액 사용)
+  const [cl1JobAdjPay, setCl1JobAdjPay] = useState(() => { const v = Number(localStorage.getItem('opiBaseCl1JobAdjPay') || 20); return Number.isFinite(v) && v >= 0 ? v : 20; }); // 직무조정급(월 만원) — 사용자 제공 기본값 20만원
   const [prevWithholding, setPrevWithholding] = useState(8000);
   const [myRating, setMyRating] = useState("MT");
   // ── 특별성과급 규정안 입력값 ──
@@ -2693,6 +2696,12 @@ function App() {
   }, [taxWithholdingPercent]);
 
   useEffect(() => {
+    localStorage.setItem('opiBasePartTime', isPartTime ? '1' : '0');
+    localStorage.setItem('opiBaseCl1BasePay', String(cl1BasePay));
+    localStorage.setItem('opiBaseCl1JobAdjPay', String(cl1JobAdjPay));
+  }, [isPartTime, cl1BasePay, cl1JobAdjPay]);
+
+  useEffect(() => {
     if (salarySaveMode !== 'manual') return;
     const suggestion = getManualClYearSuggestion(salaryRecordYear, salaryManualCl);
     if (suggestion) setSalaryManualClYear(suggestion);
@@ -3232,7 +3241,21 @@ function App() {
     const salaryCap = salaryCapInfo.cap;
     const excessCash = salaryCapInfo.excessCash;
     // 연봉상한 초과분은 기준연봉에 넣지 않고, 1회성 현금 성과급으로 분리한다.
-    let bonusSalary = cappedBaseSalary + bizPerfBonus;
+    // ── [OPI 기초금액 — 사용자 제공 규칙, 2026-11-10] ───────────────────
+    // CL2~CL4: '26년 계약연봉(curSalary, 상한 미적용) + 업무성과급.
+    //   ※ 기존에는 연봉상한 적용 후 기준연봉(cappedBaseSalary)을 썼으나, 사용자가 준 공식과
+    //   사이트 자체 라벨("'26년 계약연봉 + 업무성과급")에 맞춰 상한을 빼고 계약연봉 그대로 쓴다.
+    //   상한 이하에서는 기존과 동일하고, CL3 1.1억·CL4 1.3억 초과 시에만 달라진다.
+    // CL1·시간선택제: 기준급(공통급+능력급) × 120% + 직무조정급 20만원(월).
+    //   기준급 미입력 시에는 기존처럼 직접 입력한 기초액을 그대로 쓴다(기존 CL1 사용자 호환).
+    //   ※ 주의: 이 "기준급"은 TAI용 기준급(연봉÷20)과 다른 개념이다.
+    const isCl1Base = isCL1 || isPartTime;
+    const cl1FormulaBase = (Number(cl1BasePay) || 0) > 0
+      ? Math.round((Number(cl1BasePay) || 0) * 1.2 + (Number(cl1JobAdjPay) || 0))
+      : null;
+    let bonusSalary = isCl1Base
+      ? (cl1FormulaBase !== null ? cl1FormulaBase : cappedBaseSalary + bizPerfBonus)
+      : curSalary + bizPerfBonus;
     let perf = 1.0;
     if (isCL4) { if (myRating === "EM") perf = 1.4; else if (myRating === "ES") perf = 1.2; }
     
@@ -3408,7 +3431,7 @@ function App() {
     const hynixDcTaxSaving = hynixActive.dcTaxSaving;
     const hynixDcMarginalRate = hynixActive.dcMarginalRate;
     return {
-      bizPerfBonus, curSalary, bonusSalary, cappedBaseSalary, salaryCap, excessCash, perf, usePrice, isCL1, isCL4,
+      bizPerfBonus, curSalary, bonusSalary, cappedBaseSalary, salaryCap, excessCash, perf, usePrice, isCL1, isCL4, isCl1Base, cl1FormulaBase,
       opi, opiCap, opiPct, opiTax, opiNet, sp, isSpFixed24, tax, spNet, taxRate,
       spPerf, spPayRate, isSpRateManual, spWorkRatio, spInsurance, spDonation, spDed, spRateDenom, spDivHead: _spDivHead,
       totalIncW, prevWithholding, taxBaseMan, healthAdd, ltcAdd, healthTotal, healthMonthly, isHealthCapped,
@@ -3439,7 +3462,8 @@ function App() {
   }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice, manualPriceOverride,
       prevWithholding, profit, rerate, sprate, burate, cntMemory, cntCommon, cntLepan,
       spDonationPct, spAbsentMonths, spPayRateManual, spAvgBase,
-      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode, taxWithholdingPercent]);
+      ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode, taxWithholdingPercent,
+      isPartTime, cl1BasePay, cl1JobAdjPay]);
 
   const r = calc();
 
@@ -4569,7 +4593,7 @@ function App() {
         {multiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{multiTagHtml}</div>}
         <div className="card-status-grid" style={{ gridTemplateColumns:"1fr 1fr 1fr" }}>
           {[
-            {label: r.isCL1 ? "기준 기초액" : "기준 연봉", val:comma(r.bonusSalary)+"만", color:"#E2E8F0"},
+            {label: r.isCl1Base ? "OPI 기초금액" : "기준 연봉", val:comma(r.bonusSalary)+"만", color:"#E2E8F0"},
             {label: r.isCL1 ? "한도 700%" : `한도 ${(50*r.perf).toFixed(0)}%`, val:fmtM(r.opiCap), color:"#00C6FF"},
             {label:"풀 계산값", val:fmtM(r.opiPerPersonBase*r.perf), color:(r.opiPerPersonBase*r.perf)>=r.opiCap?"#FF6B6B":"#E2E8F0"},
           ].map(item=>(
@@ -4579,6 +4603,7 @@ function App() {
             </div>
           ))}
         </div>
+        <div style={{ fontSize:12, color:"#B9C4D2", marginBottom:10 }}>OPI 기초금액 = {r.isCl1Base ? (r.cl1FormulaBase !== null ? "기준급(공통급+능력급) × 120% + 직무조정급 20만원" : "직접 입력한 기초액(기준급 미입력)") : `'${String(simYear).slice(2)}년 계약연봉 + 업무성과급`}</div>
         <div style={{ height:6, background:"#0a0f1a", borderRadius:99, overflow:"hidden", marginBottom:10 }}>
           <div style={{ width:`${r.opiPct}%`, height:"100%", background:"linear-gradient(90deg,#00C6FF,#7C83FF)", borderRadius:99 }}/>
         </div>
@@ -4600,11 +4625,11 @@ function App() {
       {/* 특별성과급 */}
       {r.sp > 0 ? (
         <ResultCard icon="⭐" title="스페셜 보너스 (세전 총지급액)" valueColor="#FFCA45"
-          sub={`기초금액 × 지급률 ${(r.spPayRate*100).toFixed(1)}%${r.spPerf !== 1 ? ` × 고과가급 ${r.spPerf}` : ''}${r.spWorkRatio < 1 ? ` × 근무 ${Math.round(r.spWorkRatio*12)}/12` : ''} · {simYear+1}년 소득 · '{String(simYear+1).slice(2)}.3월말~4월초 자사주 지급`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
+          sub={`기초금액 × 지급률 ${(r.spPayRate*100).toFixed(1)}%${r.spPerf !== 1 ? ` × 고과가급 ${r.spPerf}` : ''}${r.spWorkRatio < 1 ? ` × 근무 ${Math.round(r.spWorkRatio*12)}/12` : ''} · ${simYear+1}년 소득 · '${String(simYear+1).slice(2)}.3월말~4월초 자사주 지급`} value={fmtM(r.sp)} accent="rgba(255,180,0,0.08)">
           {spMultiTagHtml && <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>{spMultiTagHtml}</div>}
           <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:10 }}>
             {[
-              {label:`기초금액 (${r.isCL1 ? "기초액" : "'" + String(simYear).slice(2) + "년 계약연봉 + 업무성과급"})`, val:fmtM(r.bonusSalary)},
+              {label:`기초금액 (${r.isCl1Base ? (r.cl1FormulaBase !== null ? "기준급 × 120% + 직무조정급 20만원" : "기초액(직접 입력)") : "'" + String(simYear).slice(2) + "년 계약연봉 + 업무성과급"})`, val:fmtM(r.bonusSalary)},
               {label:`사업부 지급률 ${r.isSpFixed24 ? "(르팡 적자 24% 고정)" : r.isSpRateManual ? "(공시값 직접입력)" : "(재원 기반 추정)"}`, val:`${(r.spPayRate*100).toFixed(2)}%`},
             ].map(item=>(
               <div key={item.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.04)", borderRadius:10, padding:"8px 12px" }}>
@@ -5756,6 +5781,10 @@ function App() {
                 </select>
               </div>
             </div>
+            <label style={{ display:"flex", alignItems:"flex-start", gap:8, fontSize:13, color:"#D5DCE6", cursor:"pointer", marginBottom:12 }}>
+              <input type="checkbox" checked={isPartTime} onChange={e=>setIsPartTime(e.target.checked)} style={{ marginTop:2 }} />
+              <span>시간선택제 — CL1과 동일하게 OPI 기초금액을 기준급×120%+직무조정급으로 계산합니다</span>
+            </label>
             <div style={{ marginBottom:12, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
               <div className="input-info-card" style={{ ...sBase.inBox, background:"rgba(0,198,255,0.055)", borderColor:"rgba(0,198,255,0.18)" }}>
                 <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>연차 정보</div>
@@ -5839,7 +5868,7 @@ function App() {
               </div>
             </div>
             <div style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.65 }}>
-              지급액 = 기초금액(계약연봉 + 업무성과급) × 지급률 × 고과가급 → 소득세 45%·지방세 4.5%·4대보험 4.967%(건강 3.595%·장기요양 0.472%·고용 0.9%)·기부금 공제 후 자사주 지급. 2027년 소득으로 신고하며, '27년 법정보험료율 인상 시 인상된 보험료율 적용. 지급일 종가 확정 전 — 현재 주가 기준 추정치.<br/>
+              {(myCl === "CL1" || isPartTime) ? "지급액 = 기초금액(기준급×120% + 직무조정급 20만원) × 지급률 × 고과가급 → " : "지급액 = 기초금액(계약연봉 + 업무성과급) × 지급률 × 고과가급 → "}소득세 45%·지방세 4.5%·4대보험 4.967%(건강 3.595%·장기요양 0.472%·고용 0.9%)·기부금 공제 후 자사주 지급. 2027년 소득으로 신고하며, '27년 법정보험료율 인상 시 인상된 보험료율 적용. 지급일 종가 확정 전 — 현재 주가 기준 추정치.<br/>
               지급대상: '26.12.31 재직자(육아·임신·입영·90일 이내 간병휴직 포함), '26년 중 DS부문(CSS 제외) 최장 근무자. 근무 1개월 이하·기준일 휴직/정직자·수습사원 제외.
             </div>
           </FieldBox>
@@ -5876,6 +5905,20 @@ function App() {
                 <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>고과 업무성과급(만)</div>
                 <NumInput value={bizPerfBonus} onChange={setBizPerfBonus} step={10} color="#A78BFA" min={0}/>
               </div>
+              {(myCl === "CL1" || isPartTime) && (
+                <>
+                  <div style={sBase.inBox}>
+                    <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>기준급(공통급+능력급, 월 만원)</div>
+                    <NumInput value={cl1BasePay} onChange={v=>setCl1BasePay(Math.max(0, Number(v)||0))} step={10} min={0}/>
+                    <div style={{ fontSize:10, color:"#B9C4D2", marginTop:4 }}>0이면 직접 입력한 기초액을 그대로 사용</div>
+                  </div>
+                  <div style={sBase.inBox}>
+                    <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>직무조정급(월 만원)</div>
+                    <NumInput value={cl1JobAdjPay} onChange={v=>setCl1JobAdjPay(Math.max(0, Number(v)||0))} step={10} min={0}/>
+                    <div style={{ fontSize:10, color:"#B9C4D2", marginTop:4 }}>기본값 20만원 · 기준급 입력 시에만 적용</div>
+                  </div>
+                </>
+              )}
               <div style={sBase.inBox}>
                 <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:5 }}>전년도 원천징수(만)</div>
                 <NumInput value={prevWithholding} onChange={setPrevWithholding} step={100} color="#00DC82" min={0}/>
