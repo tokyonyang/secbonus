@@ -84,6 +84,12 @@
   .card-status-grid { display: grid; gap: 6px; margin-bottom: 10px; }
   .shares-grid { display: grid; gap: 6px; }
   .dc-ratio-grid { display: grid; gap: 6px; }
+  /* P1 잔여 손질 (P2 배치2): 한눈에 보기 4분할 그리드 — 라벨 줄바꿈 방지, 좁은 화면은 2열 */
+  .at-a-glance-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .at-a-glance-grid .at-a-glance-label { white-space: nowrap; }
+  @media (max-width: 640px) {
+    .at-a-glance-grid { grid-template-columns: repeat(2, 1fr); }
+  }
 
   /* 💻 PC 전용 CSS 클래스 */
   @media (min-width: 769px) {
@@ -1410,6 +1416,79 @@ function calcSpDeductions(gross, donationPct) {
 function comma(n) { return Math.round(n).toLocaleString("ko-KR"); }
 function fmtM(n) { return comma(Math.round(n)) + "만원"; }
 
+// ── P2 배치2: 공유 링크 파라미터 정의 ────────────────────────────────────
+// 로그인 토큰·연봉기록 ID·개인 식별정보는 절대 넣지 않는다. 입력값만 인코딩한다.
+// y: 기준연도, cl: 직급, dv: 사업부, sal: 전년도 연봉(만), agr: 올해 체결 연봉(만),
+// sm: 연봉 동기화 모드, bu: 베이스업%, pr: 업무성과 인상률%, bp: 업무성과급(만),
+// rt: 고과, pw: 전년도 원천징수(만), dsp: DS 영업이익(조), tp: 전사 영업이익(조),
+// sc: 프리셋 id, fp: 향후 3년 예상 DS 영업이익 "연도:값,연도:값,연도:값",
+// tw: 조견표 비율, pt: 시간선택제(1), cb: CL1 기준급(월 만), cj: CL1 직무조정급(월 만),
+// sa: 사업부 평균 기초금액(만), sr: 사업부 지급률 직접입력(%), am: 비근무 월할(개월),
+// dn: 기부금(%), mp: 주가 수동 입력값(원)
+const SHARE_CL_VALUES = ["CL1", "CL2", "CL3", "CL4"];
+const SHARE_DIV_VALUES = ["memory", "common", "lepan"];
+const SHARE_RATING_VALUES = ["MT", "ES", "EM"];
+const SHARE_SCENARIO_IDS = ["conservative", "consensus", "optimistic"];
+function shareNum(raw, def, min, max) {
+  const v = Number(raw);
+  if (!Number.isFinite(v)) return def;
+  return Math.max(min, Math.min(max, v));
+}
+function parseShareParams() {
+  const out = {};
+  try {
+    const q = new URLSearchParams(window.location.search || "");
+    if (!q || [...q.keys()].length === 0) return out;
+    const yRaw = Number(q.get("y"));
+    if (Number.isFinite(yRaw) && yRaw >= 2026 && yRaw <= 2035) out.y = Math.round(yRaw);
+    if (SHARE_CL_VALUES.includes(q.get("cl"))) out.cl = q.get("cl");
+    if (SHARE_DIV_VALUES.includes(q.get("dv"))) out.dv = q.get("dv");
+    if (q.get("sal") !== null) out.sal = shareNum(q.get("sal"), NaN, 0, 100000);
+    if (q.get("agr") !== null) out.agr = shareNum(q.get("agr"), NaN, 0, 100000);
+    if (q.get("sm") === "current" || q.get("sm") === "prev") out.sm = q.get("sm");
+    if (q.get("bu") !== null) out.bu = shareNum(q.get("bu"), NaN, 0, 30);
+    if (q.get("pr") !== null) out.pr = shareNum(q.get("pr"), NaN, -10, 30);
+    if (q.get("bp") !== null) out.bp = shareNum(q.get("bp"), NaN, 0, 100000);
+    if (SHARE_RATING_VALUES.includes(q.get("rt"))) out.rt = q.get("rt");
+    if (q.get("pw") !== null) out.pw = shareNum(q.get("pw"), NaN, 0, 100000);
+    if (q.get("dsp") !== null) out.dsp = shareNum(q.get("dsp"), NaN, -100, 900);
+    if (q.get("tp") !== null) out.tp = shareNum(q.get("tp"), NaN, 0, 2000);
+    if (SHARE_SCENARIO_IDS.includes(q.get("sc"))) out.sc = q.get("sc");
+    if (q.get("fp")) {
+      const fp = {};
+      String(q.get("fp")).split(",").forEach(pair => {
+        const [ys, vs] = String(pair).split(":");
+        const yyRaw = Number(ys);
+        const vv = shareNum(vs, NaN, -100, 900);
+        if (Number.isFinite(yyRaw) && yyRaw >= 2026 && yyRaw <= 2035 && Number.isFinite(vv)) fp[Math.round(yyRaw)] = Math.round(vv);
+      });
+      if (Object.keys(fp).length > 0) out.fp = fp;
+    }
+    const tw = shareNum(q.get("tw"), NaN, 0, 1000);
+    if ([80, 100, 120].includes(tw)) out.tw = tw;
+    if (q.get("pt") === "1") out.pt = true;
+    if (q.get("cb") !== null) out.cb = shareNum(q.get("cb"), NaN, 0, 100000);
+    if (q.get("cj") !== null) out.cj = shareNum(q.get("cj"), NaN, 0, 100000);
+    if (q.get("sa") !== null) out.sa = shareNum(q.get("sa"), NaN, 0, 100000);
+    if (q.get("sr") !== null) out.sr = shareNum(q.get("sr"), NaN, 0, 100);
+    if (q.get("am") !== null) out.am = shareNum(q.get("am"), NaN, 0, 12);
+    if (q.get("dn") !== null) out.dn = shareNum(q.get("dn"), NaN, 0, 100);
+    if (q.get("mp") !== null) out.mp = shareNum(q.get("mp"), NaN, 0, 1000000);
+    // NaN이 들어간 키는 버린다 (shareNum이 def=NaN을 반환한 경우).
+    for (const k of Object.keys(out)) if (typeof out[k] === "number" && !Number.isFinite(out[k])) delete out[k];
+  } catch (e) {}
+  return out;
+}
+
+// ── P2 배치2: 컨센서스 업데이트 날짜를 한국 형식으로 표시 ─────────────────
+function formatUpdatedDateKo(iso) {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso || "").slice(0, 10);
+    return d.toLocaleDateString("ko-KR", { year:"numeric", month:"long", day:"numeric" });
+  } catch (e) { return String(iso || "").slice(0, 10); }
+}
+
 function workIncomeDeduction(g) {
   if (g <= 5000000) return g * 0.70;
   if (g <= 15000000) return 3500000 + (g - 5000000) * 0.40;
@@ -1933,6 +2012,13 @@ function App() {
   //  전부 공유하는 클로저 구조입니다. 특정 state가 어디서 쓰이는지 찾을 땐
   //  Ctrl+F로 변수명을 검색하세요.
   // ══════════════════════════════════════════════════════════════════════
+
+  // ── P2 배치2: 공유 링크 파라미터는 컨센서스 기본값보다 우선한다.
+  const sharedParamsRef = useRef(null);
+  if (sharedParamsRef.current === null) sharedParamsRef.current = parseShareParams();
+  const sharedParams = sharedParamsRef.current;
+  const [sharedLinkApplied, setSharedLinkApplied] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
 
   // ── UI 네비게이션 ────────────────────────────────────────────────────
   const [tab, setTab] = useState(0); // 0: 정보, 1: 시뮬레이션, 2: 산출결과, 3: 로직
@@ -3177,6 +3263,142 @@ function App() {
   // "마지막 방문자의 슬라이더 값 = 모든 방문자의 기본값"이 되는 버그의
   // 원인이었다. 이제 profit을 서버에 자동 저장하는 코드는 어디에도 없다.
   const consensusLoaded = React.useRef(false);
+  // ── P2 배치2: 공유 링크 ───────────────────────────────────────────────
+  // 현재 입력값을 URL 파라미터로 인코딩한다. 로그인 토큰·연봉기록 ID·개인
+  // 식별정보는 절대 포함하지 않는다. 파라미터 정의는 파일 상단 parseShareParams 참조.
+  const buildShareUrl = () => {
+    const p = new URLSearchParams();
+    p.set('y', String(simYear));
+    p.set('cl', myCl);
+    p.set('dv', myDiv);
+    p.set('sal', String(Math.round(mySalary)));
+    if (agreedSalary > 0) p.set('agr', String(Math.round(agreedSalary)));
+    if (salarySyncMode !== 'current') p.set('sm', salarySyncMode);
+    p.set('bu', String(baseUpRaise));
+    p.set('pr', String(performanceRaise));
+    if (bizPerfBonus > 0) p.set('bp', String(Math.round(bizPerfBonus)));
+    p.set('rt', myRating);
+    if (prevWithholding !== 8000) p.set('pw', String(Math.round(prevWithholding)));
+    p.set('dsp', String(profit));
+    p.set('tp', String(totalProfit));
+    p.set('sc', activeScenarioId);
+    const fp = [simYear + 1, simYear + 2, simYear + 3]
+      .map(y => `${y}:${Math.round(Number((spRsuScenarioRows[y] || {}).profit ?? 370))}`).join(',');
+    p.set('fp', fp);
+    if (taxWithholdingPercent !== 100) p.set('tw', String(taxWithholdingPercent));
+    if (isPartTime) p.set('pt', '1');
+    if (cl1BasePay > 0) p.set('cb', String(cl1BasePay));
+    if (cl1JobAdjPay !== 20) p.set('cj', String(cl1JobAdjPay));
+    if (spAvgBase > 0) p.set('sa', String(Math.round(spAvgBase)));
+    if (spPayRateManual > 0) p.set('sr', String(spPayRateManual));
+    if (spAbsentMonths > 0) p.set('am', String(spAbsentMonths));
+    if (spDonationPct !== 0.2) p.set('dn', String(spDonationPct));
+    if (manualBasePrice !== 260117) p.set('mp', String(Math.round(manualBasePrice)));
+    return `${window.location.origin}${window.location.pathname}?${p.toString()}`;
+  };
+  const flashShareMsg = (msg) => {
+    setShareMsg(msg);
+    setTimeout(() => setShareMsg(''), 3000);
+  };
+  const copyShareLink = async () => {
+    const url = buildShareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      flashShareMsg('공유 링크를 복사했습니다 ✓');
+    } catch (e) {
+      // 클립보드 API가 막힌 환경용 폴백
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        flashShareMsg('공유 링크를 복사했습니다 ✓');
+      } catch (e2) { flashShareMsg('복사에 실패했습니다. 주소창 URL을 직접 복사해 주세요.'); }
+    }
+  };
+  // ── P2 배치2: 공유 링크로 열린 경우 — 컨센서스 기본값보다 우선 적용한다.
+  const applySharedParams = (sp) => {
+    if (!sp || Object.keys(sp).length === 0) return;
+    let applied = false;
+    const setIf = (key, fn) => { if (sp[key] !== undefined) { fn(sp[key]); applied = true; } };
+    setIf('sc', v => setActiveScenarioId(v));
+    setIf('y', v => setSimYear(v));
+    setIf('cl', v => setMyCl(v));
+    setIf('dv', v => setMyDiv(v));
+    setIf('sal', v => setMySalary(v));
+    setIf('agr', v => setAgreedSalary(v));
+    setIf('sm', v => setSalarySyncMode(v));
+    setIf('bu', v => setBaseUpRaise(v));
+    setIf('pr', v => setPerformanceRaise(v));
+    setIf('bp', v => setBizPerfBonus(v));
+    setIf('rt', v => setMyRating(v));
+    setIf('pw', v => setPrevWithholding(v));
+    setIf('dn', v => setSpDonationPct(v));
+    setIf('am', v => setSpAbsentMonths(v));
+    setIf('sr', v => setSpPayRateManual(v));
+    setIf('sa', v => setSpAvgBase(v));
+    setIf('dsp', v => setProfit(v));
+    setIf('tp', v => setTotalProfit(v));
+    setIf('mp', v => setManualBasePrice(v));
+    setIf('tw', v => setTaxWithholdingPercent(v));
+    setIf('pt', () => setIsPartTime(true));
+    setIf('cb', v => setCl1BasePay(v));
+    setIf('cj', v => setCl1JobAdjPay(v));
+    if (sp.fp) {
+      Object.keys(sp.fp).forEach(y => { updateSpFutureProfit(Number(y), sp.fp[y]); applied = true; });
+    }
+    if (applied) setSharedLinkApplied(true);
+  };
+  // ── P2 배치2: 이미지로 저장 — 요약 카드 이미지를 캔버스로 그려 PNG 다운로드한다.
+  // 외부 라이브러리 없이 순수 캔버스 텍스트로 그린다. 개인 식별정보는 포함하지 않는다.
+  const downloadSummaryImage = () => {
+    try {
+      const W = 1080, H = 780;
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      const font = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+      ctx.fillStyle = '#0B1220'; ctx.fillRect(0, 0, W, H);
+      const grad = ctx.createLinearGradient(0, 0, W, 0);
+      grad.addColorStop(0, 'rgba(0,198,255,0.25)'); grad.addColorStop(1, 'rgba(167,139,250,0.18)');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 10);
+      ctx.fillStyle = '#8B7CFF'; ctx.font = `800 30px ${font}`; ctx.textAlign = 'left';
+      ctx.fillText('secbonus · 올해 총보상 결과', 64, 84);
+      ctx.fillStyle = '#B9C4D2'; ctx.font = `400 26px ${font}`;
+      ctx.fillText(`기준연도 ${simYear}년 · ${activeScenario ? activeScenario.label : '직접 입력'} · DS 영업이익 ${profit}조 / 전사 ${totalProfit}조`, 64, 126);
+      ctx.fillStyle = '#E2E8F0'; ctx.font = `800 34px ${font}`;
+      ctx.fillText('올해 총보상 (세전)', 64, 196);
+      ctx.fillStyle = '#FFCA45'; ctx.font = `900 96px ${font}`;
+      ctx.fillText(fmtM(r.totalComp), 64, 300);
+      ctx.fillStyle = '#B9C4D2'; ctx.font = `400 26px ${font}`;
+      ctx.fillText(`성과급 합계 ${fmtM(r.totalBonus)} · 세후 추정 ${fmtM(r.bonusNet)}`, 64, 344);
+      const rows = [
+        ['연봉 (세전)', fmtM(r.curSalary), '#E2E8F0'],
+        ['OPI (세전)', `${fmtM(r.opi)} · 세후 ${fmtM(r.opiNet)}`, '#00C6FF'],
+        ['TAI (세전)', `${fmtM(r.samsungTaiAnnual)} · 세후 ${fmtM(r.taiNet)}`, '#8B7CFF'],
+        ['특별성과급 (세전)', `${fmtM(r.sp)} · 공제 후 ${fmtM(r.spNet)}`, '#FFCA45'],
+      ];
+      let y = 420;
+      rows.forEach(([label, val, color]) => {
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(64, y, W - 128, 64, 14); ctx.fill(); }
+        else ctx.fillRect(64, y, W - 128, 64);
+        ctx.fillStyle = '#B9C4D2'; ctx.font = `700 28px ${font}`; ctx.textAlign = 'left';
+        ctx.fillText(label, 92, y + 42);
+        ctx.fillStyle = color; ctx.font = `800 30px ${font}`; ctx.textAlign = 'right';
+        ctx.fillText(val, W - 92, y + 42);
+        y += 80;
+      });
+      ctx.fillStyle = '#64748B'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
+      ctx.fillText('추정치 · secbonus.vercel.app', 64, H - 36);
+      const a = document.createElement('a');
+      a.download = `secbonus-총보상-${simYear}.png`;
+      a.href = cv.toDataURL('image/png');
+      a.click();
+      flashShareMsg('이미지를 저장했습니다 ✓');
+    } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
+  };
+
   const isValidConsensusPayload = (p) => {
     if (!p || typeof p !== 'object') return false;
     const scs = p.scenarios;
@@ -3198,20 +3420,23 @@ function App() {
       try {
         const res = await fetch('/api/settings/consensus', { cache:'no-store' });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !isValidConsensusPayload(data)) return;
-        const scs = data.scenarios;
-        setScenarios(scs);
-        if (typeof data.dispersionNote === 'string' && data.dispersionNote) setDispersionNote(data.dispersionNote);
-        setScenarioSource(data.source || 'db');
-        setScenarioUpdatedAt(data.updatedAt || null);
-        const defId = (data.defaultScenarioId && scs[data.defaultScenarioId]) ? data.defaultScenarioId : DEFAULT_SCENARIO_ID;
-        const sc = scs[defId];
-        setActiveScenarioId(sc.id || defId);
-        setTotalProfit(Number(sc.totalProfitJo));
-        setProfit(Number(sc.dsProfitJo));
+        if (res.ok && isValidConsensusPayload(data)) {
+          const scs = data.scenarios;
+          setScenarios(scs);
+          if (typeof data.dispersionNote === 'string' && data.dispersionNote) setDispersionNote(data.dispersionNote);
+          setScenarioSource(data.source || 'db');
+          setScenarioUpdatedAt(data.updatedAt || null);
+          const defId = (data.defaultScenarioId && scs[data.defaultScenarioId]) ? data.defaultScenarioId : DEFAULT_SCENARIO_ID;
+          const sc = scs[defId];
+          setActiveScenarioId(sc.id || defId);
+          setTotalProfit(Number(sc.totalProfitJo));
+          setProfit(Number(sc.dsProfitJo));
+        }
       } catch (e) {
         console.warn('컨센서스 설정 조회 실패 — 내장 기본값을 사용합니다', e);
       }
+      // P2 배치2: 공유 링크 파라미터는 컨센서스 기본값보다 우선한다.
+      if (sharedParams && Object.keys(sharedParams).length > 0) applySharedParams(sharedParams);
     })();
   }, []);
 
@@ -4770,6 +4995,9 @@ function App() {
             <span className="reward-status-badge success">올해 총보상 공개</span>
             <span className="reward-status-badge gold">기준연도 {simYear}</span>
             <button onClick={resetToPreset} style={{ border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", borderRadius:999, padding:"6px 12px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>↩ 기본값으로 되돌리기</button>
+            <button onClick={copyShareLink} style={{ border:"1px solid rgba(0,198,255,0.4)", background:"rgba(0,198,255,0.12)", color:"#7DD3FC", borderRadius:999, padding:"6px 12px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>🔗 공유 링크 복사</button>
+            <button onClick={downloadSummaryImage} style={{ border:"1px solid rgba(255,202,69,0.4)", background:"rgba(255,202,69,0.10)", color:"#FFCA45", borderRadius:999, padding:"6px 12px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>🖼️ 이미지로 저장</button>
+            {shareMsg && <span style={{ fontSize:13, fontWeight:800, color:"#28E6A3" }}>{shareMsg}</span>}
           </div>
         </div>
         <div className="reward-main-side">
@@ -4796,14 +5024,14 @@ function App() {
       </div>
 
       {/* P0: 시나리오 배너 — 활성 프리셋의 출처·기준일·편차를 결과 바로 아래에 표시 */}
+      {/* P2 배치2: 출처·기준일·편차·기준을 접은 상세 안에 두지 않고 항상 보이게 표시한다.
+          내장 프리셋의 출처·기준일은 로드 시점에 이미 알 수 있어 API 응답을 기다리지 않는다. */}
       <div style={{ background:"rgba(0,198,255,0.07)", border:"1px solid rgba(0,198,255,0.25)", borderRadius:14, padding:"12px 16px", marginBottom:14, fontSize:14, lineHeight:1.6, color:"#D5DCE6" }}>
         <div style={{ fontWeight:900, color:"#E2E8F0" }}>📊 시나리오: {activeScenario ? activeScenario.label : '직접 입력'} · DS {profit}조 / 전사 {totalProfit}조</div>
-        <details style={{ marginTop:6 }}>
-          <summary style={{ cursor:"pointer", fontSize:13, fontWeight:700, color:"#B9C4D2" }}>출처·기준일 보기</summary>
-          <div style={{ marginTop:6 }}>출처: {activeScenario ? activeScenario.source : '직접 입력'} · 기준일: {activeScenario ? activeScenario.asOf : '-'}</div>
-          <div style={{ color:"#B9C4D2" }}>{dispersionNote} · DS 영업이익 전망은 증권사·시점별로 크게 갈리므로, 위 숫자는 추정치입니다.</div>
-          <div style={{ color:"#B9C4D2" }}>기준: {scenarioSource === 'db' ? 'DB 설정 기준' : scenarioSource === 'seeded' ? 'DB 설정 기준(기본값으로 새로 저장됨)' : '기본값(코드 내장)'}{scenarioSource !== 'builtin' && scenarioUpdatedAt ? ` · 업데이트: ${String(scenarioUpdatedAt).slice(0, 10)}` : ''}</div>
-        </details>
+        <div style={{ marginTop:4 }}>출처: {activeScenario ? activeScenario.source : '직접 입력'} · 기준일: {activeScenario ? activeScenario.asOf : '-'}</div>
+        <div style={{ color:"#B9C4D2" }}>{dispersionNote} · DS 영업이익 전망은 증권사·시점별로 크게 갈리므로, 위 숫자는 추정치입니다.</div>
+        <div style={{ color:"#B9C4D2" }}>기준: {scenarioSource === 'db' ? 'DB 설정 기준' : scenarioSource === 'seeded' ? 'DB 설정 기준(기본값으로 새로 저장됨)' : '기본값(코드 내장)'}{scenarioSource !== 'builtin' && scenarioUpdatedAt ? ` · 업데이트: ${formatUpdatedDateKo(scenarioUpdatedAt)}` : ''}</div>
+        {sharedLinkApplied && (<div style={{ marginTop:6, fontWeight:900, color:"#7DD3FC" }}>🔗 공유 링크로 열린 화면입니다 — 입력값이 링크 기준으로 적용되었습니다.</div>)}
         {isSimModified && (<div style={{ marginTop:6, fontWeight:900, color:"#FBBF24" }}>⚠️ 시뮬레이션 적용 중 — 현재 입력값이 {activeScenario ? activeScenario.label : '기본'} 프리셋과 다릅니다.</div>)}
       </div>
 
@@ -6006,15 +6234,11 @@ function App() {
           <div style={{ background:"linear-gradient(135deg,rgba(0,198,255,0.1),rgba(167,139,250,0.06))", border:"1px solid rgba(0,198,255,0.3)", borderRadius:18, padding:"18px 20px", marginBottom:14 }}>
             <div style={{ fontSize:14, color:"#B9C4D2", marginBottom:10, fontWeight:800 }}>한눈에 보기 — 올해 총보상 구성 (세전)</div>
             <div style={{ fontSize:13, color:"#B9C4D2", marginBottom:12, lineHeight:1.6 }}>총보상 = 올해 기준연봉 {fmtM(r.curSalary)} + OPI + TAI + 특별성과급 (세전)</div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
-              <div style={{ textAlign:"center" }}><div style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>연봉 (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#E2E8F0", whiteSpace:"nowrap" }}>{fmtM(r.curSalary)}</div></div>
-              <div style={{ textAlign:"center" }}><div style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>OPI (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#00C6FF", whiteSpace:"nowrap" }}>{fmtM(r.opi)}</div></div>
-              <div style={{ textAlign:"center" }}><div style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>TAI (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#8B7CFF", whiteSpace:"nowrap" }}>{fmtM(r.samsungTaiAnnual)}</div></div>
-              <div style={{ textAlign:"center" }}><div style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>특별성과급 (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#FFCA45", whiteSpace:"nowrap" }}>{fmtM(r.sp)}</div></div>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <span style={{ fontSize:13, color:"#B9C4D2" }}>합계 (세전)</span>
-              <span style={{ fontSize:15, fontWeight:900, color:"#E2E8F0", whiteSpace:"nowrap" }}>{fmtM(r.totalComp)}</span>
+            <div className="at-a-glance-grid">
+              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>연봉 (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#E2E8F0", whiteSpace:"nowrap" }}>{fmtM(r.curSalary)}</div></div>
+              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>OPI (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#00C6FF", whiteSpace:"nowrap" }}>{fmtM(r.opi)}</div></div>
+              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>TAI (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#8B7CFF", whiteSpace:"nowrap" }}>{fmtM(r.samsungTaiAnnual)}</div></div>
+              <div style={{ textAlign:"center" }}><div className="at-a-glance-label" style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.4 }}>특별성과급 (세전)</div><div style={{ fontSize:16, fontWeight:800, color:"#FFCA45", whiteSpace:"nowrap" }}>{fmtM(r.sp)}</div></div>
             </div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(255,255,255,0.06)", borderRadius:10, padding:"8px 12px" }}>
               <span style={{ fontSize:13, color:"#B9C4D2" }}>성과급만 세후 합계 (OPI+TAI+특별성과급)</span>
