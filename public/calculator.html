@@ -2014,7 +2014,7 @@ function App() {
   // ══════════════════════════════════════════════════════════════════════
 
   // ── P2 배치2: 공유 링크 파라미터는 컨센서스 기본값보다 우선한다.
-  const sharedParamsRef = useRef(null);
+  const sharedParamsRef = React.useRef(null);
   if (sharedParamsRef.current === null) sharedParamsRef.current = parseShareParams();
   const sharedParams = sharedParamsRef.current;
   const [sharedLinkApplied, setSharedLinkApplied] = useState(false);
