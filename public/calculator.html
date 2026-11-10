@@ -1357,6 +1357,7 @@ const HYNIX_SECTION_VISIBLE = false;
 //              기부금은 세전 총지급액의 0.2~1.0%(0.2%p 단위) 선택, 공제 후 잔액을 자사주로 지급.
 // [회사 규정안] '27년 소득으로 신고 → '26년 연봉 누적세율·건보 정산에는 합산하지 않습니다.
 // 4.967% 구성(2026 요율 기준 역산): 건강 3.595% + 장기요양 0.4724% + 고용 0.9%
+// TODO(P0): 세율 하드코딩 — 2026년 공식 요율 대조 필요 (사이트 간 표기 상이: 건보 6.21% vs 7.19% 등). 세율 자체는 이번 패치에서 바꾸지 않음.
 const SP_RULE = { incomeTax: 0.45, localTax: 0.045, insurance: 0.04967 };
 const SP_GRADE_MULT = { EM: 1.4, ES: 1.2, MT: 1.0, MS: 0.9, NM: 0.8 };
 const SP_DONATION_OPTIONS = [0, 0.2, 0.4, 0.6, 0.8, 1.0]; // % (0 = 미약정)
@@ -1926,14 +1927,51 @@ function App() {
   const [healthSettlementMonths, setHealthSettlementMonths] = useState(9); // 건보료 정산 분할납부 개월수 (법정 최대 12회, 회사 신청에 따라 다름)
 
   // ── 회사 실적 / 시뮬레이션 기준값 (ResultPanel, SettingsContent) ──────
+  // ── P0: 영업이익 시나리오 프리셋 (단일 설정값 — 숫자를 바꿀 때는 여기만 고친다) ──
+  // 주의: 370~390조는 단일 확정 컨센서스가 아니다. 증권사별 편차가 크다
+  // (KB DS 208조 ~ 키움 DS 390조). 기본값은 FnGuide 전사 컨센서스
+  // 371.7조(2026-10-26)에 맞춘 추정치이며, 출처·기준일을 결과 배너에 함께
+  // 표시한다.
+  // P0 후속 (2026-11-10): DS 영업이익과 전사 영업이익은 독립 입력이다.
+  // 프리셋은 두 값을 직접 지정할 뿐, DS 비중을 입력하지 않는다. DS 비중은
+  // profit/totalProfit에서 자동 계산되는 파생 표시값(dsRatioDerived)이다.
+  // (제거 전 dsSharePct: 보수적 70, 컨센서스 99.5, 낙관 97.5 — 산술값이라
+  //  입력으로 쓰면 전사 변경 시 DS가 따라 바뀌는 문제가 있었다.)
+  const SCENARIOS = {
+    conservative: { id:'conservative', label:'보수적 · 기존 기본값', dsProfitJo:50, totalProfitJo:65, source:'기존 사이트 기본값, 2025년 DS 실적 43.6조 기준', asOf:'2026-11-10 확인' },
+    consensus: { id:'consensus', label:'기본 · 컨센서스', dsProfitJo:370, totalProfitJo:372, source:'FnGuide 컨센서스 전사 371.7조(2026-10-26) + DS 약 370조 추산', asOf:'2026-10-26' },
+    optimistic: { id:'optimistic', label:'낙관', dsProfitJo:390, totalProfitJo:400, source:'키움증권 DS 2026E 약 390조 표기', asOf:'2026-10-30 보고서 기준' },
+  };
+  const SCENARIO_DISPERSION_NOTE = '증권사별 편차 큼: KB DS 208조 ~ 키움 DS 390조';
+  const DEFAULT_SCENARIO_ID = 'consensus';
   const [manualBasePrice, setManualBasePrice] = useState(260117);
-  const [profit, setProfit] = useState(47); // DS부문 영업이익 (조)
-  const [totalProfit, setTotalProfit] = useState(65); // 전사 영업이익 (조)
-  const [dsRatio, setDsRatio] = useState(70); // DS 비중 (%)
-  const [dsAutoMode, setDsAutoMode] = useState(true); // 전사→DS 자동환산 여부
+  const [profit, setProfit] = useState(370); // DS부문 영업이익 (조) — 기본 프리셋(컨센서스) 값
+  const [totalProfit, setTotalProfit] = useState(372); // 전사 영업이익 (조) — 기본 프리셋(컨센서스) 값
+  // P0 후속: DS 비중은 입력이 아니라 파생 표시값이다 (profit/totalProfit에서 계산).
+  // dsRatio/dsAutoMode state와 자동환산 effect는 제거했다. 한쪽 영업이익을 바꿔도
+  // 다른 쪽이 바뀌지 않는다.
+  const dsRatioDerived = totalProfit > 0 ? (profit / totalProfit * 100) : 0;
   const [rerate, setRerate] = useState(1.5);
   const [sprate, setSprate] = useState(10.5);
   const [burate, setBurate] = useState(4);
+  // ── P0: 활성 시나리오 + 적용/되돌리기 ──────────────────────────────────
+  const [activeScenarioId, setActiveScenarioId] = useState(DEFAULT_SCENARIO_ID);
+  const applyScenario = (id) => {
+    const sc = SCENARIOS[id] || SCENARIOS[DEFAULT_SCENARIO_ID];
+    setActiveScenarioId(sc.id);
+    // P0 후속: DS·전사는 독립 입력이라 두 값을 직접 지정한다. 비중은 파생값이라
+    // 따로 설정하지 않는다. 자동환산은 없다.
+    setTotalProfit(sc.totalProfitJo);
+    setProfit(sc.dsProfitJo);
+  };
+  // P0: 기본값으로 되돌리기 — DS/전사는 활성 프리셋 값으로, TAI·OPI 입력은 코드 기본값으로 복원
+  const resetToPreset = () => {
+    applyScenario(activeScenarioId || DEFAULT_SCENARIO_ID);
+    setSamsungTaiRateH1("1.0");
+    setSamsungTaiRateH2("1.0");
+    setRerate(1.5);
+    setSprate(10.5);
+  };
 
   // ── 부문별 인원수 (ResultPanel, SettingsContent) ───────────────────────
   const [cntMemory, setCntMemory] = useState(27400);
@@ -1977,9 +2015,10 @@ function App() {
     2030: { salary: '', cl: 'CL3', division: 'memory', deficit: 'none', profit: 200, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 },
   });
 
-  // ── DS 비중 연도별 기본값 (2026~2035 예측) ──────────────────────────────
-  // [예측] 미래 시뮬레이션 가정값입니다. 실제 지급 데이터가 아니라 반도체 사이클
-  // 전망을 바탕으로 한 시뮬레이션 기본값이며, 사용자가 자유롭게 조정 가능합니다.
+  // ── DS 비중 연도별 예측 (2026~2035, 참고용) ────────────────────────────
+  // [예측] 반도체 사이클 전망을 바탕으로 한 참고용 예측표입니다. 실제 지급
+  // 데이터가 아니며, 계산에 쓰이지 않습니다 (P0 후속: 연도 변경이 profit/
+  // totalProfit을 바꾸지 않는다). 아래 로직 설명 탭의 표에서만 보여줍니다.
   const DS_RATIO_DEFAULTS = {
     2026: 72, // AI 슈퍼사이클 정점 (2026 Q1 실적 기준 약 94% 기록)
     2027: 65, // 강세 지속
@@ -2131,20 +2170,16 @@ function App() {
   const calcPsAmountMan = (salaryMan, psRate) => Math.round((Number(salaryMan) || 0) * (Number(psRate) || 0) / 100);
   const calcPiAmountMan = (salaryMan, piRate) => Math.round(((Number(salaryMan) || 0) / 20) * ((Number(piRate) || 0) / 100) * 2); // 기준급 = 연봉÷20
 
-  // ── DS 자동환산: totalProfit × dsRatio 변경 시 profit 자동 업데이트 ─────
-  React.useEffect(() => {
-    if (dsAutoMode) {
-      const ds = Math.max(10, Math.round(totalProfit * dsRatio / 100 / 10) * 10);
-      setProfit(ds);
-    }
-  }, [dsAutoMode, totalProfit, dsRatio]);
+  // ── P0 후속: DS 자동환산 effect 제거 ───────────────────────────────────
+  // 이전에는 totalProfit × dsRatio로 profit을 자동 계산했으나, 전사를 바꾸면
+  // DS가 조용히 따라 바뀌고 프리셋 비중(예: 99.5%)이 입력으로 굳는 문제가 있어
+  // 제거했다. DS(profit)와 전사(totalProfit)는 독립 입력이며, DS 비중은
+  // dsRatioDerived 파생 표시값으로만 쓴다.
 
-  // ── simYear 변경 시 DS 비중 기본값 적용 ──────────────────────────────────
-  React.useEffect(() => {
-    if (DS_RATIO_DEFAULTS[simYear] !== undefined) {
-      setDsRatio(DS_RATIO_DEFAULTS[simYear]);
-    }
-  }, [simYear]);
+  // ── P0 후속: simYear 변경 시 DS_RATIO_DEFAULTS 적용 effect 제거 ─────────
+  // DS_RATIO_DEFAULTS는 이제 참고용 예측 표(사이클 전망)로만 쓰이며, 연도를
+  // 바꿔도 profit/totalProfit에 절대 쓰지 않는다. (기존 effect는 연도 변경 시
+  // dsRatio를 덮어 프리셋을 깨뜨렸다.)
 
   const reversePrevSalaryFromContract = (contractSalary, raiseRate) => {
     const contract = Number(contractSalary) || 0;
@@ -2771,9 +2806,12 @@ function App() {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceSource, setPriceSource] = useState(null); // "naver" | "yahoo"
+  const [priceUpdatedAt, setPriceUpdatedAt] = useState(null); // P0: updatedAt from /api/stock/current
   const [vwapPrice, setVwapPrice] = useState(null);
   const [vwapLoading, setVwapLoading] = useState(false);
   const [vwapSource, setVwapSource] = useState(null); // "naver" | "yahoo"
+  const [vwapUpdatedAt, setVwapUpdatedAt] = useState(null); // P0: updatedAt from /api/stock/vwap
+  const [manualPriceOverride, setManualPriceOverride] = useState(false); // P0: manual price overrides VWAP
   const [marketInfo, setMarketInfo] = useState(null);
   const [marketLoading, setMarketLoading] = useState(false);
   const [stockSearchText, setStockSearchText] = useState("");
@@ -2845,9 +2883,11 @@ function App() {
       if (!data.price) throw new Error(data.error || '현재가 조회 실패');
       setCurrentPrice(Math.round(Number(data.price)));
       setPriceSource(data.source || 'api');
+      setPriceUpdatedAt(data.updatedAt || null);
     } catch(e) {
       console.warn('현재가 조회 실패', e);
       setCurrentPrice(null);
+      setPriceUpdatedAt(null);
     }
     setPriceLoading(false);
   };
@@ -2861,11 +2901,35 @@ function App() {
       if (!data.vwap) throw new Error(data.error || 'VWAP 조회 실패');
       setVwapPrice(Math.round(Number(data.vwap)));
       setVwapSource(data.source || 'api');
+      setVwapUpdatedAt(data.updatedAt || null);
     } catch(e) {
       console.warn('VWAP 조회 실패 — 수동 입력 모드 유지', e);
       setVwapPrice(null);
+      setVwapUpdatedAt(null);
     }
     setVwapLoading(false);
+  };
+
+  // ── P0: 주가 단일 소스 (STOCK_PRICE) ───────────────────────────────────
+  // 계산에 쓰는 기준주가는 이 객체 하나에서만 나온다.
+  //   effective = 수동 오버라이드 > VWAP 자동 조회 > 수동 입력값
+  // 현재가(currentPrice)는 참고용 표시 전용이며 계산에는 쓰지 않는다.
+  // API가 실제로 반환하는 필드만 사용한다:
+  //   /api/stock/current → { price, source: 'naver'|'yahoo', updatedAt }
+  //   /api/stock/vwap    → { vwap, source: 'yahoo', updatedAt }
+  const fmtPriceTime = (iso) => {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+  };
+  const stockPrice = {
+    effective: manualPriceOverride ? manualBasePrice : (vwapPrice || manualBasePrice),
+    vwap: vwapPrice,
+    current: currentPrice,
+    manual: manualBasePrice,
+    mode: manualPriceOverride ? 'manual-override' : (vwapPrice ? 'auto-vwap' : 'manual-fallback'),
+    source: manualPriceOverride ? 'manual' : (vwapPrice ? (vwapSource || 'yahoo') : 'manual'),
+    sourceLabel: manualPriceOverride ? '수동 입력' : (vwapPrice ? (vwapSource === 'naver' ? '네이버' : 'Yahoo Finance') : '수동 입력'),
+    updatedAt: manualPriceOverride ? null : (vwapPrice ? vwapUpdatedAt : null),
   };
 
   // ── 헤더 시장정보 조회: KOSPI 또는 로그인 계정별 선호 종목 ─────────────
@@ -3015,7 +3079,8 @@ function App() {
         const res = await fetch('/api/settings/profit', { headers: salaryHeaders(), cache:'no-store' });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.value !== null && data.value !== undefined) {
-          setDsAutoMode(false);
+          // P0 후속: 공유값은 DS 영업이익(profit)만 직접 지정한다. 전사
+          // (totalProfit)는 건드리지 않으며, 자동환산은 없다.
           setProfit(Number(data.value));
         }
       } catch (e) {
@@ -3114,7 +3179,7 @@ function App() {
     let perf = 1.0;
     if (isCL4) { if (myRating === "EM") perf = 1.4; else if (myRating === "ES") perf = 1.2; }
     
-    const usePrice = vwapPrice ? vwapPrice : manualBasePrice;
+    const usePrice = stockPrice.effective; // P0: 주가 단일 소스(STOCK_PRICE) — VWAP 자동 조회가 기준, 수동은 오버라이드/대체
     const opiCap = isCL1 ? (bonusSalary * 7.0) : (bonusSalary * 0.5 * perf);
     const opi = Math.min(opiPerPersonBase * perf, opiCap);
     const opiPct = opiCap > 0 ? Math.min(opi / opiCap * 100, 100) : 0;
@@ -3220,6 +3285,7 @@ function App() {
     const _spBuShare = _spDivHead > 0 ? spD.buPerMan / _spDivHead : 0;
     const mySpBu = isSpFixed24 ? 0 : sp * _spBuShare;
     const mySpSa = isSpFixed24 ? 0 : sp * (1 - _spBuShare);
+    // TODO(P0): 건보료율 하드코딩(3.545%) — 2026년 공식 요율 대조 필요. 이번 패치에서 값은 바꾸지 않음.
     const healthRate = 0.03545, ltcRatio = 0.1295;
     const prevW = prevWithholding * MAN;
     const baseHW = Math.min(prevW, MAX_ANNUAL_WAGE) * healthRate;
@@ -3287,6 +3353,10 @@ function App() {
       spPerf, spPayRate, isSpRateManual, spWorkRatio, spInsurance, spDonation, spDed, spRateDenom, spDivHead: _spDivHead,
       totalIncW, prevWithholding, taxBaseMan, healthAdd, ltcAdd, healthTotal, healthMonthly, isHealthCapped,
       third, sharesEach, totalBonus: opi + sp + excessCash + bizPerfBonus + samsungTaiAnnual,
+      // P0: 총보상 단일 정의 — 총보상(세전) = 올해 기준연봉(curSalary, 베이스업 적용 후) + OPI + TAI + 특별성과급.
+      // totalBonus는 연봉 제외 성과급 합계(업무성과·초과분 포함), bonusNet은 그 세후 추정.
+      totalComp: curSalary + opi + samsungTaiAnnual + sp,
+      bonusNet: opiNet + taiNet + spNet,
       isSpEligible, spThreshold, appliedSprate, appliedRerate, rerate,
       opiTotalFund, spTotalFund, buPct, saPct, lostOpi, lostSp, lostTotal,
       opiPerPersonBase, mySpBu, mySpSa,
@@ -3304,12 +3374,24 @@ function App() {
       hynixDcRate, hynixDcAmount, hynixCashAfterDc, hynixDcTaxSaving, hynixDcMarginalRate,
       hynixSame, hynix70, hynixActive,
     };
-  }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice,
+  }, [simYear, myDiv, myCl, mySalary, agreedSalary, myRaise, bizPerfBonus, myRating, manualBasePrice, vwapPrice, manualPriceOverride,
       prevWithholding, profit, rerate, sprate, burate, cntMemory, cntCommon, cntLepan,
       spDonationPct, spAbsentMonths, spPayRateManual, spAvgBase,
       ratMemory, ratCommon, ratLepan, lepanDeficit, hynixMargin, hynixDcRate, hynixProfitMode, samsungTaiRateH1, samsungTaiRateH2, spDistribMode, taxWithholdingPercent]);
 
   const r = calc();
+
+  // ── P0: 활성 시나리오 + 시뮬레이션 변경 여부 ───────────────────────────
+  const activeScenario = SCENARIOS[activeScenarioId] || SCENARIOS[DEFAULT_SCENARIO_ID];
+  // 프리셋 값과 하나라도 다르면 "시뮬레이션 적용 중"으로 표시한다.
+  // (P0 후속: DS·전사는 독립 입력이라 두 값만 비교한다. 비중은 파생값이라
+  // 비교 대상이 아니다.)
+  const isSimModified = !!activeScenario && (
+    profit !== activeScenario.dsProfitJo ||
+    totalProfit !== activeScenario.totalProfitJo ||
+    samsungTaiRateH1 !== "1.0" || samsungTaiRateH2 !== "1.0" ||
+    rerate !== 1.5 || sprate !== 10.5
+  );
 
   // ── 월별 실수령액 시뮬레이션 (예측/추정) ────────────────────────────────
   // [예측] 소득세는 정확한 간이세액표가 아니라 연간 누진세율을 12개월 균등분할한
@@ -4059,7 +4141,8 @@ function App() {
             </div>
 
             <div style={{ marginTop:10, color:'#94a3b8', fontSize:12, lineHeight:1.6 }}>
-              산출결과 {targetSpYear}년 세후 OPI-2: <b style={{ color:'#FACC15' }}>{fmtM(spBaseNet)}</b> · 현재 적용값: <b style={{ color:'#FACC15' }}>{fmtM(specialNet)}</b><br/>
+              산출결과 {targetSpYear}년 세후 OPI-2 (메인 DS {profit}조 기준): <b style={{ color:'#FACC15' }}>{fmtM(spBaseNet)}</b> · 현재 적용값 (연도 시나리오 DS {spRsuScenarioRows[targetSpYear]?.profit ?? 200}조 · 저장값 우선): <b style={{ color:'#FACC15' }}>{fmtM(specialNet)}</b><br/>
+              <span style={{ color:'#64748B' }}>두 금액이 다르면 가정이 다르기 때문입니다. 산출결과는 메인 화면의 DS 영업이익을, 현재 적용값은 연도별 시나리오 입력 또는 저장된 값을 씁니다.</span><br/>
               최근 이월/저장: {targetSpYear-1}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevOneSpNet)}</b>, {targetSpYear-2}년 <b style={{ color:'#FDE68A' }}>{fmtM(prevTwoSpNet)}</b><br/>
               조회 기준일: <b style={{ color:'#BAE6FD' }}>{todayLabel}</b> · 연봉저장값이 있으면 저장값 우선, 없으면 수동입력/현재 산출값을 사용합니다.
             </div>
@@ -4090,11 +4173,11 @@ function App() {
                 <button onClick={applyAutoPsuBasePrice} disabled={!vwapPrice} style={{ marginTop:6, width:'100%', background:vwapPrice?'rgba(167,139,250,.16)':'rgba(255,255,255,.05)', color:vwapPrice?'#DDD6FE':'#64748B', border:'1px solid rgba(167,139,250,.18)', borderRadius:9, padding:'7px 8px', fontSize:11, fontWeight:900 }}>현재 PSU 기준주가 재적용</button>
               </div>
               <div><label style={{ color:'#CBD5E1', fontSize:12 }}>예상 세율(%)</label><NumInput value={rsuTaxRate} onChange={v=>setRsuTaxRate(v||0)} color="#fff" size={14} min={0} max={100} /></div>
-              <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.16)', borderRadius:10, padding:'10px' }}><div style={{ color:'#DDD6FE', fontSize:12 }}>상승률 / 배수</div><div style={{ color:'#C4B5FD', fontWeight:900, fontSize:18 }}>{psuGrowthRate.toFixed(1)}% · {multiplierLabel}</div></div>
+              <div style={{ background:'rgba(167,139,250,.08)', border:'1px solid rgba(167,139,250,.16)', borderRadius:10, padding:'10px' }}><div style={{ color:'#DDD6FE', fontSize:12 }}>상승률 / 배수</div><div style={{ color:'#C4B5FD', fontWeight:900, fontSize:18 }}>{rsuFutureBasePrice > 0 ? `${psuGrowthRate.toFixed(1)}% · ${multiplierLabel}` : '기준주가 입력 필요'}</div></div>
             </div>
             <div style={{ color:'#94a3b8', fontSize:12, lineHeight:1.6 }}>
               CL1·CL2 기초 200주, CL3·CL4 기초 300주. 20% 미만 0배, 20~40% 0.5배, 40~60% 1배, 60~80% 1.3배, 80~100% 1.7배, 100% 이상 2배.<br/>
-              자동 기준주가: {vwapPrice ? <b style={{ color:'#C4B5FD' }}>{comma(vwapPrice)}원</b> : <b style={{ color:'#FCA5A5' }}>조회 대기/실패</b>} · 기준일 전일로부터 1주일, 1개월, 2개월 VWAP 산술평균 산식 기준
+              자동 기준주가: {vwapPrice ? <b style={{ color:'#C4B5FD' }}>{comma(vwapPrice)}원{vwapUpdatedAt ? ` (${fmtPriceTime(vwapUpdatedAt)} 기준)` : ''}</b> : (vwapLoading ? <b style={{ color:'#FCA5A5' }}>조회 중</b> : <b style={{ color:'#FCA5A5' }}>확인 불가 — 기준주가 입력 필요</b>)} · 기준일 전일로부터 1주일, 1개월, 2개월 VWAP 산술평균 산식 기준
             </div>
           </div>
         </div>
@@ -4303,7 +4386,7 @@ function App() {
 
   // ╔══════════════════════════════════════════════════════════════════╗
   // ║  화면 2/5: ResultPanel — 산출 결과 요약                            ║
-  // ║  주로 사용하는 state: profit, totalProfit, dsRatio, cnt*, rat*,    ║
+  // ║  주로 사용하는 state: profit, totalProfit, cnt*, rat*,              ║
   // ║  hynix*, samsungTaiRateH1/H2 (위 "회사 실적/부문/파라미터" 그룹들)  ║
   // ╚══════════════════════════════════════════════════════════════════╝
   /* ── 결과 패널 ── */
@@ -4312,16 +4395,14 @@ function App() {
       <div className="result-hero">
         <div>
           <div className="result-hero-kicker">Reward Reveal Dashboard</div>
-          <div className="result-hero-title">올해 예상 보상 결과</div>
+          <div className="result-hero-title">올해 총보상 결과</div>
           <div className="result-chip-row" style={{ display:"flex", flexWrap:"wrap", alignItems:"center" }}>
             <span style={{ background:"rgba(0,198,255,0.10)", border:"1px solid rgba(0,198,255,0.22)", color:"#20D4FF" }}>
               DS 영업이익 {profit}조
             </span>
-            {dsAutoMode && (
-              <span style={{ background:"rgba(143,163,191,0.10)", border:"1px solid rgba(143,163,191,0.16)", color:"#8FA3BF" }}>
-                전사 {totalProfit}조 × DS {dsRatio}% 자동환산
-              </span>
-            )}
+            <span style={{ background:"rgba(143,163,191,0.10)", border:"1px solid rgba(143,163,191,0.16)", color:"#8FA3BF" }}>
+              DS 비중 약 {dsRatioDerived.toFixed(0)}% (파생값 · DS {profit}조 / 전사 {totalProfit}조)
+            </span>
             <span className="result-positive-badge">🎉 예상 보상 확인 완료</span>
             <span style={{ background: r.isSpEligible ? "rgba(40,230,163,0.10)" : "rgba(255,92,115,0.08)", border:`1px solid ${r.isSpEligible ? "rgba(40,230,163,0.22)" : "rgba(255,92,115,0.18)"}`, color: r.isSpEligible ? "#28E6A3" : "#FF94A5" }}>
               지급 조건 {r.isSpEligible ? "충족" : "추가 달성 필요"} ({r.spThreshold}조)
@@ -4333,14 +4414,15 @@ function App() {
       <div className="reward-main-card">
         <div>
           <div className="reward-main-kicker">🏆 Reward Reveal</div>
-          <div className="reward-main-title">올해 예상 보상</div>
-          <div className="reward-main-amount">{fmtM(r.totalBonus)}</div>
+          <div className="reward-main-title">올해 총보상 (세전)</div>
+          <div className="reward-main-amount">{fmtM(r.totalComp)}</div>
           <div className="reward-main-caption">
-            올해 기준 예상 총 보상입니다. <strong>핵심 리워드를 먼저 공개</strong>하고, 아래에서 항목별 보상 구조를 확인할 수 있습니다.
+            총보상 = 올해 기준연봉 {fmtM(r.curSalary)} + OPI + TAI + 특별성과급 (세전)입니다. 연봉 제외 성과급 합계 {fmtM(r.totalBonus)} · 세후 추정 {fmtM(r.bonusNet)}
           </div>
           <div className="reward-main-badges">
-            <span className="reward-status-badge success">총 예상 보상 공개</span>
+            <span className="reward-status-badge success">올해 총보상 공개</span>
             <span className="reward-status-badge gold">기준연도 {simYear}</span>
+            <button onClick={resetToPreset} style={{ border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", borderRadius:999, padding:"6px 12px", fontSize:11, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>↩ 기본값으로 되돌리기</button>
           </div>
         </div>
         <div className="reward-main-side">
@@ -4363,6 +4445,14 @@ function App() {
         </div>
       </div>
 
+      {/* P0: 시나리오 배너 — 활성 프리셋의 출처·기준일·편차를 결과 바로 아래에 표시 */}
+      <div style={{ background:"rgba(0,198,255,0.07)", border:"1px solid rgba(0,198,255,0.25)", borderRadius:14, padding:"12px 16px", marginBottom:14, fontSize:12, lineHeight:1.6, color:"#CBD5E1" }}>
+        <div style={{ fontWeight:900, color:"#E2E8F0" }}>📊 시나리오: {activeScenario ? activeScenario.label : '직접 입력'} · DS {profit}조 / 전사 {totalProfit}조</div>
+        <div>출처: {activeScenario ? activeScenario.source : '직접 입력'} · 기준일: {activeScenario ? activeScenario.asOf : '-'}</div>
+        <div style={{ color:"#94A3B8" }}>{SCENARIO_DISPERSION_NOTE} · DS 영업이익 전망은 증권사·시점별로 크게 갈리므로, 위 숫자는 추정치입니다.</div>
+        {isSimModified && (<div style={{ marginTop:6, fontWeight:900, color:"#FBBF24" }}>⚠️ 시뮬레이션 적용 중 — 현재 입력값이 {activeScenario ? activeScenario.label : '기본'} 프리셋과 다릅니다.</div>)}
+      </div>
+
       {/* 상단 요약 반응형 그리드 */}
       <div className="summary-grid" style={{ gridTemplateColumns:`repeat(${numResultCols},1fr)` }}>
         {[
@@ -4371,9 +4461,9 @@ function App() {
           ...(r.samsungTaiAnnual>0?[{label:"예상 TAI 수령액",val:fmtM(r.taiNet),color:"#8B7CFF"}]:[]),
           ...(r.bizPerfBonus>0?[{label:"업무성과 보너스",val:fmtM(r.bizPerfBonus),color:"#28E6A3"}]:[]),
           ...(r.excessCash>0?[{label:"추가 현금보상",val:fmtM(r.excessCash),color:"#FF5C73"}]:[]),
-          {label:"총 예상 보상", val:fmtM(r.totalBonus), color:"#EAF2FF"},
+          {label:"올해 총보상 (세전)", val:fmtM(r.totalComp), color:"#EAF2FF"},
         ].map(item=>(
-          <div key={item.label} className={item.label === "총 예상 보상" ? "summary-card summary-card-total" : "summary-card"}>
+          <div key={item.label} className={item.label === "올해 총보상 (세전)" ? "summary-card summary-card-total" : "summary-card"}>
             <div className="summary-card-label">{item.label}</div>
             <div className="summary-card-value" style={{ color:item.color }}>{item.val}</div>
           </div>
@@ -4437,6 +4527,7 @@ function App() {
                 <span style={{ fontSize:11, color:"#00DC82" }}>
                   📈 현재 주가 (참고)
                   {priceSource && <span style={{ fontSize:10, color:"#4ade8066", marginLeft:5 }}>[{priceSource === "naver" ? "네이버" : "Yahoo"}]</span>}
+                  {priceUpdatedAt && <span style={{ fontSize:10, color:"#4ade8066", marginLeft:5 }}>{fmtPriceTime(priceUpdatedAt)} 기준</span>}
                 </span>
                 <span style={{ fontSize:14, fontWeight:800, color:"#00DC82" }}>{comma(currentPrice)}원</span>
               </div>
@@ -5513,7 +5604,7 @@ function App() {
 
   // ╔══════════════════════════════════════════════════════════════════╗
   // ║  화면 5/5: SettingsContent — 시뮬레이션 파라미터 설정              ║
-  // ║  ResultPanel이 쓰는 값들(profit, dsRatio, cnt*, rat* 등)을         ║
+  // ║  ResultPanel이 쓰는 값들(profit, totalProfit, cnt*, rat* 등)을     ║
   // ║  직접 편집하는 입력 폼입니다.                                      ║
   // ╚══════════════════════════════════════════════════════════════════╝
   /* ── 설정 패널 컨텐츠 ── */
@@ -5522,10 +5613,11 @@ function App() {
       {tab === 0 && (
         <>
           <div style={{ background:"linear-gradient(135deg,rgba(0,198,255,0.1),rgba(167,139,250,0.06))", border:"1px solid rgba(0,198,255,0.3)", borderRadius:18, padding:"18px 20px", marginBottom:14 }}>
-            <div style={{ fontSize:12, color:"#94A3B8", marginBottom:4 }}>한눈에 보기 — 올해 예상 총 수령액 (세전)</div>
+            <div style={{ fontSize:12, color:"#94A3B8", marginBottom:4 }}>한눈에 보기 — 올해 총보상 (세전)</div>
             <div style={{ fontSize:28, fontWeight:900, color:"#00C6FF", marginBottom:10 }}>
-              {fmtM(r.curSalary + r.opi + r.sp + r.samsungTaiAnnual)}
+              {fmtM(r.totalComp)}
             </div>
+            <div style={{ fontSize:10, color:"#64748B", marginBottom:10, lineHeight:1.5 }}>총보상 = 올해 기준연봉 {fmtM(r.curSalary)} + OPI + TAI + 특별성과급 (세전)</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:10 }}>
               <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>연봉</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.curSalary)}</div></div>
               <div style={{ textAlign:"center" }}><div style={{ fontSize:9, color:"#64748B" }}>OPI</div><div style={{ fontSize:11, fontWeight:800, color:"#E2E8F0" }}>{fmtM(r.opi)}</div></div>
@@ -5707,6 +5799,7 @@ function App() {
                 {priceSource && <span style={{ fontSize:10, color:"#4ade8088", marginLeft:6 }}>
                   [{priceSource === "naver" ? "네이버" : "Yahoo Finance"}]
                 </span>}
+                {priceUpdatedAt && <span style={{ fontSize:10, color:"#4ade8088", marginLeft:6 }}>{fmtPriceTime(priceUpdatedAt)} 기준</span>}
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:15, fontWeight:800, color:"#00DC82" }}>
@@ -5722,23 +5815,28 @@ function App() {
                 {vwapSource && <span style={{ fontSize:10, color:"#fbbf2488", marginLeft:6 }}>
                   [{vwapSource === "naver" ? "네이버" : "Yahoo Finance"}]
                 </span>}
+                {vwapUpdatedAt && <span style={{ fontSize:10, color:"#fbbf2488", marginLeft:6 }}>{fmtPriceTime(vwapUpdatedAt)} 기준</span>}
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:15, fontWeight:800, color:"#FFB400" }}>
-                  {vwapLoading ? "조회중..." : (vwapPrice ? comma(vwapPrice) + "원" : "연동 안됨")}
+                  {vwapLoading ? "조회중..." : (vwapPrice ? comma(vwapPrice) + "원" : "확인 불가 — 수동 입력 필요")}
                 </span>
                 <button onClick={fetchVwapPrice} title="새로고침" style={{ background:"none", border:"none", cursor:"pointer", padding:0, fontSize:15 }}>🔄</button>
               </div>
             </div>
             
-            <div style={{ opacity: vwapPrice ? 0.3 : 1, pointerEvents: vwapPrice ? "none" : "auto" }}>
-              <div style={{ ...sBase.row, background:"#0e1525", borderRadius:12, padding:"11px 14px", border: vwapPrice ? "1px solid rgba(255,180,0,0.15)" : "1px solid #FFB400", marginBottom:7 }}>
-                <span style={{ fontSize:13, color:"#94A3B8" }}>기준주가 (수동 입력)</span>
+            <div>
+              <div style={{ ...sBase.row, background:"#0e1525", borderRadius:12, padding:"11px 14px", border: manualPriceOverride ? "1px solid #FFB400" : "1px solid rgba(255,180,0,0.15)", marginBottom:7 }}>
+                <span style={{ fontSize:13, color:"#94A3B8" }}>기준주가 (수동 입력 · 자동 조회 대신 사용)</span>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <PriceInput val={manualBasePrice} set={setManualBasePrice}/>
                   <span style={{ fontSize:13, color:"#94A3B8" }}>원</span>
                 </div>
               </div>
+              <button onClick={() => setManualPriceOverride(!manualPriceOverride)} style={{ width:"100%", background: manualPriceOverride ? "rgba(255,180,0,0.16)" : "rgba(255,255,255,0.05)", color: manualPriceOverride ? "#FFD700" : "#CBD5E1", border:"1px solid rgba(255,180,0,0.3)", borderRadius:9, padding:"8px", fontSize:11, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>
+                {manualPriceOverride ? "✓ 수동 입력값으로 계산 중 — 클릭해 자동(VWAP)으로 되돌리기" : "수동 입력값으로 계산하기 (VWAP 자동 조회 대신 사용)"}
+              </button>
+              <div style={{ fontSize:11, color:"#94A3B8", marginTop:6, lineHeight:1.5 }}>현재 계산 기준주가: {comma(stockPrice.effective)}원 ({stockPrice.mode === 'manual-override' ? '수동 입력값' : stockPrice.mode === 'auto-vwap' ? `VWAP 자동 · ${stockPrice.sourceLabel}${stockPrice.updatedAt ? ' · ' + fmtPriceTime(stockPrice.updatedAt) + ' 기준' : ''}` : '수동 입력값 (VWAP 조회 실패 시 대체)'})</div>
             </div>
           </FieldBox>
 
@@ -5757,116 +5855,91 @@ function App() {
         <>
           {/* ── DS부문 영업이익 입력 섹션 ── */}
           <FieldBox label="DS 영업이익 설정 (성과급 산출 기준)" accent="rgba(0,198,255,0.3)">
-            {/* 입력 모드 토글 */}
+            {/* P0: 시나리오 프리셋 — DS/전사를 함께 설정 (슬라이더는 활성 프리셋 값에서 시작, 비중은 파생값) */}
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:8 }}>입력 방식 선택</div>
-              <div style={{ display:"flex", gap:7 }}>
-                {[
-                  { value:true,  label:"🔄 전사 영업이익 → DS 자동환산", color:"#00C6FF" },
-                  { value:false, label:"✏️ DS 영업이익 직접 입력",       color:"#FFD700" },
-                ].map(o => (
-                  <button key={String(o.value)} onClick={() => setDsAutoMode(o.value)} style={{
-                    flex:1, padding:"10px 4px", borderRadius:11, fontSize:12, fontWeight:700,
-                    border: dsAutoMode === o.value ? `1.5px solid ${o.color}` : "1.5px solid rgba(255,255,255,0.1)",
-                    background: dsAutoMode === o.value ? `${o.color}18` : "rgba(255,255,255,0.04)",
-                    color: dsAutoMode === o.value ? o.color : "#94A3B8",
-                    cursor:"pointer", transition:"all .18s", fontFamily:"inherit",
-                  }}>{o.label}</button>
+              <div style={{ fontSize:11, color:"#CBD5E1", marginBottom:8 }}>시나리오 프리셋 (출처·기준일과 함께 적용)</div>
+              <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
+                {Object.values(SCENARIOS).map(sc => (
+                  <button key={sc.id} onClick={() => applyScenario(sc.id)} style={{ flex:1, minWidth:90, padding:"10px 6px", borderRadius:11, fontSize:12, fontWeight:800, border: activeScenarioId === sc.id ? "1.5px solid #00C6FF" : "1.5px solid rgba(255,255,255,0.1)", background: activeScenarioId === sc.id ? "rgba(0,198,255,0.16)" : "rgba(255,255,255,0.04)", color: activeScenarioId === sc.id ? "#7DD3FC" : "#94A3B8", cursor:"pointer", fontFamily:"inherit" }}>{sc.label}<div style={{ fontSize:10, fontWeight:600, marginTop:2 }}>DS {sc.dsProfitJo}조</div></button>
                 ))}
               </div>
+              <div style={{ fontSize:11, color:"#94A3B8", marginTop:8, lineHeight:1.6 }}>
+                {activeScenario ? <>출처: {activeScenario.source} · 기준일: {activeScenario.asOf}</> : '직접 입력 상태입니다.'}<br/>{SCENARIO_DISPERSION_NOTE}
+              </div>
+              <div style={{ display:"flex", gap:8, marginTop:10, alignItems:"center", flexWrap:"wrap" }}>
+                <button onClick={resetToPreset} style={{ padding:"10px 14px", borderRadius:11, border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>↩ 기본값으로 되돌리기</button>
+                {isSimModified && <span style={{ fontSize:12, fontWeight:900, color:"#FBBF24" }}>⚠️ 시뮬레이션 적용 중</span>}
+              </div>
+            </div>
+            {/* P0 후속: DS·전사 영업이익은 독립 입력 — 한쪽을 바꿔도 다른 쪽이 바뀌지 않는다.
+                DS 비중은 파생 표시값일 뿐 입력이 아니다. (입력 방식 토글·자동환산·비중 슬라이더 제거) */}
+            <div style={{ fontSize:11, color:"#94A3B8", marginBottom:14, lineHeight:1.6 }}>
+              DS 영업이익과 전사 영업이익은 각각 직접 입력합니다. DS 비중은 두 값에서 자동 계산되는 파생값입니다.
             </div>
 
-            {/* 전사 영업이익 입력 모드 */}
-            {dsAutoMode && (
-              <>
-                <div style={{ ...sBase.row, marginBottom:8 }}>
-                  <span style={{ fontSize:13, color:"#E2E8F0" }}>삼성전자 전사 영업이익</span>
-                  <span style={{ fontSize:30, fontWeight:900, color:"#A0AEC0" }}>{totalProfit}조</span>
-                </div>
-                <Slider value={totalProfit} min={10} max={900} step={5} onChange={setTotalProfit} color="#A0AEC0"/>
-                <div style={{ ...sBase.row, marginTop:5, marginBottom:18 }}>
-                  <span style={{ fontSize:11, color:"#94A3B8" }}>10조</span>
-                  <span style={{ fontSize:11, color:"#94A3B8" }}>900조</span>
-                </div>
+            {/* 전사 영업이익 (독립 입력) */}
+            <div style={{ ...sBase.row, marginBottom:8 }}>
+              <span style={{ fontSize:13, color:"#E2E8F0" }}>삼성전자 전사 영업이익</span>
+              <span style={{ fontSize:30, fontWeight:900, color:"#A0AEC0" }}>{totalProfit}조</span>
+            </div>
+            <Slider value={totalProfit} min={10} max={900} step={5} onChange={setTotalProfit} color="#A0AEC0"/>
+            <div style={{ ...sBase.row, marginTop:5, marginBottom:18 }}>
+              <span style={{ fontSize:11, color:"#94A3B8" }}>10조</span>
+              <span style={{ fontSize:11, color:"#94A3B8" }}>900조</span>
+            </div>
 
-                {/* DS 비중 슬라이더 */}
-                <div style={{ ...sBase.row, marginBottom:6 }}>
-                  <span style={{ fontSize:13, color:"#CBD5E1" }}>
-                    DS 영업이익 비중
-                    <span style={{ marginLeft:6, fontSize:10, fontWeight:900, color:"#FDE68A", background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", borderRadius:6, padding:"2px 6px" }}>예측</span>
-                  </span>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ fontSize:26, fontWeight:900, color:"#00C6FF" }}>{dsRatio}%</span>
-                    <span style={{ fontSize:10, color:"#64748B", background:"rgba(0,198,255,0.1)", border:"1px solid rgba(0,198,255,0.2)", borderRadius:6, padding:"3px 6px" }}>
-                      {simYear}년 예측: {DS_RATIO_DEFAULTS[simYear]}%
-                    </span>
-                  </div>
+            {/* DS 영업이익 (독립 입력) */}
+            <div style={{ ...sBase.row, marginBottom:12, alignItems:"flex-end", gap:10 }}>
+              <div>
+                <span style={{ fontSize:13, color:"#E2E8F0" }}>DS부문 영업이익 (직접 입력)</span>
+                <div style={{ fontSize:11, color:"#94A3B8", marginTop:4 }}>슬라이더 또는 숫자 입력으로 조정</div>
+              </div>
+              <div style={{
+                minWidth:120,
+                background:"rgba(0,198,255,0.10)",
+                border:"1.5px solid rgba(0,198,255,0.35)",
+                borderRadius:13,
+                padding:"10px 12px",
+                display:"flex",
+                alignItems:"baseline",
+                justifyContent:"flex-end",
+                gap:4
+              }}>
+                <div style={{ width:72, textAlign:"right" }}>
+                  <NumInput value={profit} onChange={setProfit} step={0.1} min={-100} max={900} color="#00C6FF" size={28}/>
                 </div>
-                <Slider value={dsRatio} min={0} max={100} step={1} onChange={v => { setDsRatio(v); }} color="#00C6FF"/>
-                <div style={{ ...sBase.row, marginTop:5, marginBottom:14 }}>
-                  <span style={{ fontSize:11, color:"#94A3B8" }}>0%</span>
-                  <span style={{ fontSize:11, color:"#94A3B8" }}>50%</span>
-                  <span style={{ fontSize:11, color:"#00C6FF" }}>100%</span>
-                </div>
+                <span style={{ fontSize:18, fontWeight:900, color:"#00C6FF" }}>조</span>
+              </div>
+            </div>
+            <Slider value={profit} min={-100} max={900} step={5} onChange={setProfit} color="#00C6FF"/>
+            <div style={{ ...sBase.row, marginTop:7 }}>
+              <span style={{ fontSize:11, color:"#94A3B8" }}>-100조</span>
+              <span style={{ fontSize:11, color:"#FF6B6B" }}>허들 {r.spThreshold}조</span>
+              <span style={{ fontSize:11, color:"#94A3B8" }}>900조</span>
+            </div>
+            <div style={{ marginTop:8, fontSize:11, color:"#94A3B8", lineHeight:1.5 }}>
+              적자 연도처럼 DS 영업손실이 있는 경우에는 음수도 입력할 수 있습니다. 예: 2023년 DS -14.9조
+            </div>
 
-                {/* 계산된 DS 영업이익 */}
-                <div style={{ background:"rgba(0,198,255,0.12)", border:"1.5px solid rgba(0,198,255,0.4)", borderRadius:13, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div>
-                    <div style={{ fontSize:11, color:"#00C6FF", fontWeight:700, marginBottom:3 }}>🎯 DS부문 영업이익 (성과급 산출 기준)</div>
-                    <div style={{ fontSize:11, color:"#64748B" }}>{totalProfit}조 × {dsRatio}% 적용</div>
-                  </div>
-                  <span style={{ fontSize:30, fontWeight:900, color:"#00C6FF" }}>{profit}조</span>
-                </div>
+            {/* 파생 DS 비중 표시 (입력 아님) */}
+            <div style={{ marginTop:14, background:"rgba(0,198,255,0.12)", border:"1.5px solid rgba(0,198,255,0.4)", borderRadius:13, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ fontSize:11, color:"#00C6FF", fontWeight:700, marginBottom:3 }}>📊 DS 비중 (파생값 · 입력 아님)</div>
+                <div style={{ fontSize:11, color:"#64748B" }}>DS {profit}조 / 전사 {totalProfit}조 · 사이클 예측 {DS_RATIO_DEFAULTS[simYear]}%는 참고용이며 계산에 쓰이지 않습니다.</div>
+              </div>
+              <span style={{ fontSize:30, fontWeight:900, color:"#00C6FF" }}>약 {dsRatioDerived.toFixed(0)}%</span>
+            </div>
 
-                {/* 사이클 안내 */}
-                <div style={{ marginTop:10, fontSize:11, color:"#64748B", padding:"8px 10px", background:"rgba(255,255,255,0.03)", borderRadius:9 }}>
-                  📈 {simYear}년 시나리오: {
-                    simYear <= 2027 ? "AI 슈퍼사이클 → DS 비중 최고조 (HBM·DDR5 수요 폭증)" :
-                    simYear <= 2029 ? "사이클 정상화 및 하강 → DS 비중 감소 예상" :
-                    simYear <= 2031 ? "차기 사이클 회복·상승 → DS 비중 회복 예상" :
-                    simYear <= 2033 ? "차기 슈퍼사이클 호황 → DS 비중 재상승 예상" :
-                    "하강·회복 반복 구간"
-                  }
-                </div>
-              </>
-            )}
-
-            {/* DS 직접 입력 모드 */}
-            {!dsAutoMode && (
-              <>
-                <div style={{ ...sBase.row, marginBottom:12, alignItems:"flex-end", gap:10 }}>
-                  <div>
-                    <span style={{ fontSize:13, color:"#E2E8F0" }}>DS부문 영업이익 (직접 입력)</span>
-                    <div style={{ fontSize:11, color:"#94A3B8", marginTop:4 }}>슬라이더 또는 숫자 입력으로 조정</div>
-                  </div>
-                  <div style={{
-                    minWidth:120,
-                    background:"rgba(0,198,255,0.10)",
-                    border:"1.5px solid rgba(0,198,255,0.35)",
-                    borderRadius:13,
-                    padding:"10px 12px",
-                    display:"flex",
-                    alignItems:"baseline",
-                    justifyContent:"flex-end",
-                    gap:4
-                  }}>
-                    <div style={{ width:72, textAlign:"right" }}>
-                      <NumInput value={profit} onChange={setProfit} step={0.1} min={-100} max={900} color="#00C6FF" size={28}/>
-                    </div>
-                    <span style={{ fontSize:18, fontWeight:900, color:"#00C6FF" }}>조</span>
-                  </div>
-                </div>
-                <Slider value={profit} min={-100} max={900} step={5} onChange={setProfit} color="#00C6FF"/>
-                <div style={{ ...sBase.row, marginTop:7 }}>
-                  <span style={{ fontSize:11, color:"#94A3B8" }}>-100조</span>
-                  <span style={{ fontSize:11, color:"#FF6B6B" }}>허들 {r.spThreshold}조</span>
-                  <span style={{ fontSize:11, color:"#94A3B8" }}>900조</span>
-                </div>
-                <div style={{ marginTop:8, fontSize:11, color:"#94A3B8", lineHeight:1.5 }}>
-                  적자 연도처럼 DS 영업손실이 있는 경우에는 음수도 입력할 수 있습니다. 예: 2023년 DS -14.9조
-                </div>
-              </>
-            )}
+            {/* 사이클 안내 */}
+            <div style={{ marginTop:10, fontSize:11, color:"#64748B", padding:"8px 10px", background:"rgba(255,255,255,0.03)", borderRadius:9 }}>
+              📈 {simYear}년 시나리오: {
+                simYear <= 2027 ? "AI 슈퍼사이클 → DS 비중 최고조 (HBM·DDR5 수요 폭증)" :
+                simYear <= 2029 ? "사이클 정상화 및 하강 → DS 비중 감소 예상" :
+                simYear <= 2031 ? "차기 사이클 회복·상승 → DS 비중 회복 예상" :
+                simYear <= 2033 ? "차기 슈퍼사이클 호황 → DS 비중 재상승 예상" :
+                "하강·회복 반복 구간"
+              }
+            </div>
           </FieldBox>
 
           {/* 허들 경고 */}
@@ -6083,7 +6156,7 @@ function App() {
               </div>
               <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
                 <span style={{ background:"rgba(255,180,0,.14)", border:"1px solid rgba(255,180,0,.3)", color:"#FDE68A", borderRadius:8, padding:"4px 9px", fontSize:11, fontWeight:900 }}>예측</span>
-                <span style={{ color:"#94A3B8", fontSize:12 }}>미래 시뮬레이션을 위한 가정값 — DS 비중 전망(2026~2035) 등. 슬라이더/입력창에서 자유롭게 조정 가능합니다.</span>
+                <span style={{ color:"#94A3B8", fontSize:12 }}>미래 시뮬레이션 참고용 예측값 — DS 비중 전망(2026~2035) 등. 참고용이며 계산에 쓰이지 않습니다.</span>
               </div>
               <div style={{ color:"#64748B", fontSize:11, lineHeight:1.6 }}>
                 아래 표와 코드 내 상수(BASE_UP_HISTORY, PERFORMANCE_RAISE_HISTORY, DS_PS_HISTORY, SALARY_CAP_BY_CL)에 표시된 과거 수치는 실제 지급 데이터를 기준으로 하며, 향후 연도 전망치와는 구분됩니다.
@@ -6227,7 +6300,7 @@ function App() {
             </div>
             <div style={{ marginTop:10, fontSize:11, color:"#64748B", lineHeight:1.6 }}>
               * 예측치는 과거 반도체 사이클(약 3~4년 주기) 및 AI 수요 트렌드를 근거로 한 추정입니다.<br/>
-              * 시뮬레이션 탭에서 DS 비중 슬라이더로 직접 조정 가능합니다.
+              * 시뮬레이션 탭에서는 DS·전사 영업이익을 각각 직접 입력합니다. DS 비중은 두 값에서 자동 계산되는 파생 표시값입니다.
             </div>
           </FieldBox>
 
