@@ -1956,7 +1956,7 @@ function App() {
   const [spAbsentMonths, setSpAbsentMonths] = useState(0); // 비근무(병결·산재·무급 출산전후·보건휴가 등) 월할 차감 개월수
   const [spPayRateManual, setSpPayRateManual] = useState(0); // 사업부 지급률 직접입력(%) — '27.2월 공시 후 입력, 0 = 재원 기반 자동추정
   const [spAvgBase, setSpAvgBase] = useState(0); // 사업부 평균 기초금액(만) — 0 = 내 기초금액과 동일 가정
-  const [taxWithholdingPercent, setTaxWithholdingPercent] = useState(100); // 근로소득 조견표 비율 — 산출세액 × 80/100/120% 중 선택 반영
+  const [taxWithholdingPercent, setTaxWithholdingPercent] = useState(() => { const v = Number(localStorage.getItem('taxWithholdingPercent') || 100); return [80, 100, 120].includes(v) ? v : 100; }); // 세금공제기준(급여) — 근로소득 조견표 비율. 산출세액 × 80/100/120% 중 선택 반영 (localStorage에 저장)
   const [healthSettlementMonths, setHealthSettlementMonths] = useState(9); // 건보료 정산 분할납부 개월수 (법정 최대 12회, 회사 신청에 따라 다름)
 
   // ── 회사 실적 / 시뮬레이션 기준값 (ResultPanel, SettingsContent) ──────
@@ -2689,6 +2689,10 @@ function App() {
   }, [salaryManualJobFamily]);
 
   useEffect(() => {
+    localStorage.setItem('taxWithholdingPercent', String(taxWithholdingPercent));
+  }, [taxWithholdingPercent]);
+
+  useEffect(() => {
     if (salarySaveMode !== 'manual') return;
     const suggestion = getManualClYearSuggestion(salaryRecordYear, salaryManualCl);
     if (suggestion) setSalaryManualClYear(suggestion);
@@ -3331,6 +3335,9 @@ function App() {
     const trueFinalTaxWon = totalTax(curW + opiW + taiW);
     const incomeTaxSettlementWon = trueFinalTaxWon - alreadyWithheldWon;
     const incomeTaxSettlement = incomeTaxSettlementWon / MAN; // 양수: 추가납부 예상 / 음수: 환급 예상
+    // 조견표 비율별 연말정산 예상액 — 비율이 높을수록 연중 원천징수가 많아져 추가납부가 줄고(환급이 커지고), 낮을수록 반대.
+    // OPI·TAI 원천징수는 비율과 무관(각각 한계세율 스택·CL 고정세율)이라 그대로 둔다. 특별성과급은 '27년 소득이라 제외.
+    const settlementByRatioMan = (pct) => (trueFinalTaxWon - (taxBaseOnly * (pct / 100) + opiTaxWon + taiIncomeTaxWon + taiLocalTaxWon)) / MAN;
 
     const taxBaseMan = Math.max(0, totalIncW - workIncomeDeduction(totalIncW)) / MAN;
     // 부문분/사업부분 표시는 내 실지급액을 재원 구성비대로 나눠 보여줍니다.
@@ -3422,6 +3429,8 @@ function App() {
       spTotalPerLepan: spPerPerson[2],
       samsungBasePay, samsungTaiHalf1, samsungTaiHalf2, samsungTaiAnnual, taiTax, taiNet, taiTaxRate, taiRateH1Val, taiRateH2Val,
       taiIncomeTaxWon, taiLocalTaxWon, taiEmploymentWon, taiIncomeTaxRate, incomeTaxSettlement,
+      salaryWithheld: salaryWithheldWon / MAN, taiWithheld: (taiIncomeTaxWon + taiLocalTaxWon) / MAN, alreadyWithheld: alreadyWithheldWon / MAN,
+      settlementByRatio: { 80: settlementByRatioMan(80), 100: settlementByRatioMan(100), 120: settlementByRatioMan(120) },
       hynixBasePay, hynixContractSalary,
       hynixPsAmount, hynixPsThisYear, hynixTaiHalf, hynixTaiAnnual, hynixTotalThisYear, hynixTaiRate,
       hynixDcRate, hynixDcAmount, hynixCashAfterDc, hynixDcTaxSaving, hynixDcMarginalRate,
@@ -4990,6 +4999,17 @@ function App() {
             </div>
           </div>
         </div>
+        <div style={{ fontSize:13, color:"#B9C4D2", lineHeight:1.6, marginTop:10 }}>
+          연중 원천징수 합계 {fmtM(r.alreadyWithheld)} (연봉분 {fmtM(r.salaryWithheld)} · OPI분 {fmtM(r.opiTax)} · TAI분 {fmtM(r.taiWithheld)}) — 월 원천징수에 조견표 {taxWithholdingPercent}% 적용. OPI·TAI·특별성과급 원천징수는 고정세율이라 비율이 바뀌어도 그대로입니다.
+        </div>
+        <div style={{ display:"flex", gap:8, marginTop:10 }}>
+          {[80, 100, 120].map(pct => { const v = r.settlementByRatio[pct]; const cur = pct === taxWithholdingPercent; return (
+            <div key={pct} style={{ flex:1, background: cur ? "rgba(0,198,255,0.08)" : "rgba(255,255,255,0.03)", border:`1px solid ${cur ? "rgba(0,198,255,0.45)" : "rgba(255,255,255,0.08)"}`, borderRadius:10, padding:"8px 10px", textAlign:"center" }}>
+              <div style={{ fontSize:12, color:"#B9C4D2", marginBottom:3 }}>조견표 {pct}%{cur ? " (현재)" : ""}</div>
+              <div style={{ fontSize:14, fontWeight:900, color: v > 0 ? "#FF6B6B" : "#00DC82" }}>{v > 0 ? `+ ${fmtM(v)} 추가납부` : `${fmtM(v)} 환급`}</div>
+            </div>
+          ); })}
+        </div>
         <div style={{ fontSize:13, color:"#94A3B8", lineHeight:1.6, marginTop:10 }}>
           * 근로소득 조견표 비율(설정: {taxWithholdingPercent}%)이 낮을수록 연중 원천징수가 적어져 연말정산 추가납부가 커집니다. 실제 소득세는 정확한 간이세액표가 아닌 근사치로 계산되어 오차가 있을 수 있습니다.
         </div>
@@ -5007,16 +5027,7 @@ function App() {
         </div>
 
         <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px", marginBottom:14 }}>
-          <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:8, fontWeight:700 }}>⚙️ 근로소득 조견표 비율 — 산출세액 × 선택 비율로 원천징수</div>
-          <ChipGroup
-            options={[
-              { value:80, label:"80%" },
-              { value:100, label:"100%" },
-              { value:120, label:"120%" },
-            ]}
-            value={taxWithholdingPercent}
-            onChange={setTaxWithholdingPercent}
-          />
+          <div style={{ fontSize:13, color:"#D5DCE6", fontWeight:700 }}>⚙️ 근로소득 조견표 비율: {taxWithholdingPercent}% 적용 중 — 왼쪽 기본 정보 › 세금공제기준(급여)에서 변경할 수 있습니다.</div>
         </div>
 
         <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px", marginBottom:14 }}>
@@ -5742,6 +5753,22 @@ function App() {
                 {value:"common",label:"공통",color:"#FFD700"},
                 {value:"lepan",label:"르팡",color:"#FF6B6B"},
               ]}/>
+            </div>
+          </FieldBox>
+
+          <FieldBox label="세금공제기준(급여)" accent="rgba(125,211,252,0.3)">
+            <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:7 }}>근로소득 조견표 비율</div>
+            <ChipGroup
+              options={[
+                { value:80, label:"80%" },
+                { value:100, label:"100%" },
+                { value:120, label:"120%" },
+              ]}
+              value={taxWithholdingPercent}
+              onChange={setTaxWithholdingPercent}
+            />
+            <div style={{ fontSize:12, color:"#B9C4D2", marginTop:8, lineHeight:1.6 }}>
+              월 급여 원천징수 시 적용되는 간이세액표 비율입니다. 개인별로 다르게 설정되어 있을 수 있습니다. 비율이 높을수록 연중 원천징수가 많아져 연말정산 추가납부가 줄고, 낮을수록 추가납부가 커집니다. OPI·TAI·특별성과급에는 적용되지 않습니다 (각각 한계세율 스택·CL 고정세율·45% 단일세율 적용).
             </div>
           </FieldBox>
 
