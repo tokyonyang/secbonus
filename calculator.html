@@ -3215,9 +3215,13 @@ function App() {
     })();
   }, []);
 
+  // [특별성과급 지급 허들] 귀속연도별 DS 영업이익 하한 — 2026~2028년 200조, 2029년부터 100조.
+  // 당해 산출(calc)·연도별 시나리오(calcScenarioSpecial)·시나리오 카드·5년 표·현금흐름표가 모두 이 함수를 쓴다.
+  const spHurdleForYear = (year) => (Number(year) >= 2026 && Number(year) <= 2028) ? 200 : 100;
+
   const calc = useCallback(() => {
     const buPct = burate * 10, saPct = 100 - buPct;
-    const spThreshold = (simYear >= 2026 && simYear <= 2028) ? 200 : 100;
+    const spThreshold = spHurdleForYear(simYear);
     const isSpEligible = profit >= spThreshold;
     const appliedRerate = isSpEligible ? rerate : 10;
     const appliedSprate = isSpEligible ? sprate : 0;
@@ -3824,7 +3828,7 @@ function App() {
       const scenarioDiv = row.division || 'memory';
       const scenarioDeficit = (year >= 2027 && scenarioDiv === 'lepan') ? (row.deficit || 'none') : 'none';
       const scenarioRating = row.rating || 'MT';
-      const threshold = year >= 2026 ? 200 : 100;
+      const threshold = spHurdleForYear(year);
       if (scenarioProfit < threshold || scenarioSalary <= 0) return { gross: 0, net: 0 };
 
       const buPct = burate * 10;
@@ -4229,7 +4233,7 @@ function App() {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:10 }}>
             {scenarioSummaryRows.map(({year, row, spNet}) => {
-              const threshold = year >= 2026 ? 200 : 100;
+              const threshold = spHurdleForYear(year);
               const savedRec = findRecordByYear(salaryRecords, year);
               const effectiveRow = getEffectiveScenarioRow(year, row);
               const scenarioSalaryForRow = getScenarioEstimatedSalary(year, effectiveRow);
@@ -4355,7 +4359,7 @@ function App() {
             <div style={{ marginTop:12, background:'rgba(255,202,69,.06)', border:'1px solid rgba(255,202,69,.25)', borderRadius:12, padding:12 }}>
               <div style={{ fontSize:14, fontWeight:900, color:'#FACC15', marginBottom:4 }}>향후 5년 특별성과급 예상 (신규 부여분)</div>
               <div style={{ fontSize:12, color:'#B9C4D2', lineHeight:1.6, marginBottom:10 }}>
-                시뮬레이션 탭에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 4·5년차는 3년차 예상 영업이익을 그대로 이어받은 추정치입니다(별도 전망치가 아닙니다). 5년 합계는 매년 새로 부여되는 특별성과급의 합이며, 위의 3등분 현금화 일정(한 번 부여분의 3년간 분할)과는 별개입니다. 향후 5년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 허들(200조) 미달 연도는 미지급으로 표시됩니다.
+                시뮬레이션 탭에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 4·5년차는 3년차 예상 영업이익을 그대로 이어받은 추정치입니다(별도 전망치가 아닙니다). 5년 합계는 매년 새로 부여되는 특별성과급의 합이며, 위의 3등분 현금화 일정(한 번 부여분의 3년간 분할)과는 별개입니다. 향후 5년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조. 허들 미달 연도는 미지급으로 표시됩니다.
               </div>
               <div className="reward-table-wrap">
                 <table className="reward-table compact-mobile" style={{ minWidth:560 }}>
@@ -4373,13 +4377,15 @@ function App() {
                       const sp5 = calcScenarioSpecial(y, sp5ProfitForYear(y));
                       const prof5 = sp5ProfitForYear(y);
                       const isCarry = Number(y) > simYear + 3;
+                      const hurdle5 = spHurdleForYear(y);
+                      const note5 = (sp5.gross <= 0 && prof5 < hurdle5) ? `허들 ${hurdle5}조 미달` : (isCarry ? '3년차와 동일' : '—');
                       return (
                         <tr key={y} style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
                           <td style={{ textAlign:'left', color:'#E2E8F0', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{y}년</td>
                           <td style={{ textAlign:'right', color:'#D5DCE6', fontSize:13, padding:'9px 8px' }}>{prof5}조</td>
                           <td style={{ textAlign:'right', color:'#FACC15', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{sp5.gross > 0 ? fmtM(sp5.gross) : '미지급'}</td>
                           <td style={{ textAlign:'right', color:'#86EFAC', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{sp5.gross > 0 ? fmtM(sp5.net) : '—'}</td>
-                          <td style={{ textAlign:'right', color:isCarry ? '#FDE68A' : '#94A3B8', fontSize:12, padding:'9px 8px' }}>{isCarry ? '3년차와 동일' : '—'}</td>
+                          <td style={{ textAlign:'right', color:(sp5.gross <= 0 && prof5 < hurdle5) ? '#FF6B6B' : (isCarry ? '#FDE68A' : '#94A3B8'), fontSize:12, padding:'9px 8px' }}>{note5}</td>
                         </tr>
                       );
                     })}
@@ -4621,7 +4627,7 @@ function App() {
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:8 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#BBF7D0', marginBottom:6 }}>향후 5년 현금흐름 (수령연도 기준)</div>
-              <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.6 }}>그 해에 통장에 실제로 들어오는 금액 기준입니다. TAI는 당해 7월·12월에, OPI는 다음해 1월 31일에, 특별성과급은 귀속연도 부여분의 1/3씩 3년에 나눠 들어옵니다. 위 ‘향후 5년 특별성과급 예상’ 표는 귀속연도 기준(매년 새로 부여되는 금액)이라 연도별 숫자가 이 표와 다릅니다. 예: {cfYears[0]}년에 들어오는 특별성과급은 {cfYears[0]}년 귀속분이 아니라 {Number(simYear)}년 귀속분의 1/3(+ 이전 귀속분 이월분)이며, {cfYears[0]}년 귀속분 전액은 {cfYears[1]}~{cfYears[3]}년에 나눠 들어옵니다.</div>
+              <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.6 }}>그 해에 통장에 실제로 들어오는 금액 기준입니다. TAI는 당해 7월·12월에, OPI는 다음해 1월 31일에, 특별성과급은 귀속연도 부여분의 1/3씩 3년에 나눠 들어옵니다. 위 ‘향후 5년 특별성과급 예상’ 표는 귀속연도 기준(매년 새로 부여되는 금액)이라 연도별 숫자가 이 표와 다릅니다. 예: {cfYears[0]}년에 들어오는 특별성과급은 {cfYears[0]}년 귀속분이 아니라 {Number(simYear)}년 귀속분의 1/3(+ 이전 귀속분 이월분)이며, {cfYears[0]}년 귀속분 전액은 {cfYears[1]}~{cfYears[3]}년에 나눠 들어옵니다. 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조.</div>
             </div>
             <div style={{ color:'#86EFAC', fontSize:11, fontWeight:900, background:'rgba(34,197,94,.1)', border:'1px solid rgba(34,197,94,.18)', borderRadius:999, padding:'6px 10px', whiteSpace:'nowrap' }}>세후 수령액 · {cfYears[0]}~{cfYears[4]}년</div>
           </div>
