@@ -1270,6 +1270,19 @@
     .result-card-value-text { font-size: 25px !important; }
   }
 
+  /* ── 트렌드 차트 모바일 라벨 깨짐 방지: 480px 이하에서 막대를 넓히고 연도를 단축 ── */
+  /* 근거: Pretendard Variable 800체 12px 실측 — "3.5억" 28.0px, "2029년" 39.0px, "29년" 24.8px, Y축 "28,403" 39.5px */
+  /* 390px 기준 막대 너비: 기본 25.5px → 아래 보정 후 약 32.5px (라벨 28.0px 여유 있음) */
+  .trend-year-short { display: none; }
+  @media (max-width: 480px) {
+    .trend-card { padding: 12px !important; }
+    .trend-yaxis { width: 46px !important; }
+    .trend-main { gap: 4px !important; }
+    .trend-bars { gap: 4px !important; }
+    .trend-year-full { display: none !important; }
+    .trend-year-short { display: inline !important; }
+  }
+
   /* ── P1 가독성 개선 (2026-11-10) ── */
   /* 고정 로그인 배지가 헤더를 가리지 않게: 데스크톱은 우측 여백, 모바일은 헤더를 아래로 */
   @media (min-width:1181px) {
@@ -1366,6 +1379,15 @@ function calcSpDeductions(gross, donationPct) {
 
 function comma(n) { return Math.round(n).toLocaleString("ko-KR"); }
 function fmtM(n) { return comma(Math.round(n)) + "만원"; }
+// 만원 → 억원 (소수 둘째 자리, 표준 반올림): 24661만원 → "2.47억원"
+function fmtYiuk(n) { return (Math.round(Math.round(n) / 100) / 100).toFixed(2) + "억원"; }
+// 만원 → 억원 (소수 첫째 자리, 차트 막대 안 라벨용): 50010만원 → "5.0억"
+// 10억 이상은 정수로 표기 (110320만원 → "11억"): 막대 너비(약 32.5px @390px)에 들어가도록 자릿수를 제한한다.
+function fmtYiuk1(n) {
+  const m = Math.round(n);
+  if (m >= 100000) return Math.round(m / 10000) + "억";
+  return (Math.round(m / 1000) / 10).toFixed(1) + "억";
+}
 
 // ── P2 배치2: 공유 링크 파라미터 정의 ────────────────────────────────────
 // 로그인 토큰·연봉기록 ID·개인 식별정보는 절대 넣지 않는다. 입력값만 인코딩한다.
@@ -3556,9 +3578,9 @@ function App() {
       ctx.fillStyle = '#1F2937'; ctx.font = `800 34px ${font}`;
       ctx.fillText('특별성과급 합계 (수령분, 세전)', 64, 196);
       ctx.fillStyle = '#B45309'; ctx.font = `900 96px ${font}`;
-      ctx.fillText(fmtM(totalGross), 64, 300);
+      ctx.fillText(fmtYiuk(totalGross), 64, 300);
       ctx.fillStyle = '#4B5563'; ctx.font = `400 26px ${font}`;
-      ctx.fillText(`공제 후 합계 ${fmtM(totalNet)}`, 64, 344);
+      ctx.fillText(`공제 후 합계 ${fmtYiuk(totalNet)}`, 64, 344);
       let y = 420;
       rows.forEach((r) => {
         ctx.fillStyle = 'rgba(17,24,39,0.05)';
@@ -3567,9 +3589,9 @@ function App() {
         ctx.fillStyle = '#4B5563'; ctx.font = `700 28px ${font}`; ctx.textAlign = 'left';
         ctx.fillText(`${r.year}년`, 92, y + 37);
         ctx.fillStyle = '#B45309'; ctx.font = `800 28px ${font}`; ctx.textAlign = 'right';
-        ctx.fillText(r.gross > 0 ? fmtM(r.gross) : '—', W - 320, y + 37);
+        ctx.fillText(r.gross > 0 ? fmtYiuk(r.gross) : '—', W - 320, y + 37);
         ctx.fillStyle = '#0B7A55'; ctx.font = `800 28px ${font}`;
-        ctx.fillText(r.net > 0 ? fmtM(r.net) : '—', W - 92, y + 37);
+        ctx.fillText(r.net > 0 ? fmtYiuk(r.net) : '—', W - 92, y + 37);
         y += 62;
       });
       ctx.fillStyle = '#5F6B7A'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
@@ -5327,11 +5349,11 @@ function App() {
   /* ── 결과 패널 ── */
   // ── 연도별 성과급 트렌드 차트 — 계산기 탭과 특별 탭에서 공유 (PR #24 호이스트 계산 재사용) ──
   const YearlyTrendChart = () => (
-      <div style={{ background:'rgba(17,24,39,0.03)', border:'1px solid rgba(17,24,39,0.08)', borderRadius:16, padding:18, marginTop:20 }}>
+      <div className="trend-card" style={{ background:'rgba(17,24,39,0.03)', border:'1px solid rgba(17,24,39,0.08)', borderRadius:16, padding:18, marginTop:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, flexWrap:'wrap' }}>
           <div>
             <div style={{ fontSize:16, fontWeight:900, color:'#1F2937' }}>📊 연도별 성과급 트렌드 <span style={{ fontSize:12, fontWeight:400, color:'#4B5563' }}>{trendYears[0]}~{trendYears[7]}년 · 수령연도 기준</span></div>
-            <div style={{ fontSize:12, color:'#4B5563', marginTop:4 }}>{trendGross ? trendPeakYearGross : trendPeakYear}년에 가장 많이 들어와요 · {trendGross ? '세전' : '세후'} 수령액 · 연봉 제외 · 단위: 만원</div>
+            <div style={{ fontSize:12, color:'#4B5563', marginTop:4 }}>{trendGross ? trendPeakYearGross : trendPeakYear}년에 가장 많이 들어와요 · {trendGross ? '세전' : '세후'} 수령액 · 연봉 제외 · 단위: 만원 · 막대 안 금액은 억원</div>
           </div>
           <div style={{ display:'flex', border:'1px solid rgba(17,24,39,0.15)', borderRadius:999, overflow:'hidden', flexShrink:0 }}>
             <button onClick={() => setTrendGross(false)} style={{ border:'none', background: trendGross ? 'transparent' : '#1B4FD8', color: trendGross ? '#4B5563' : '#FFFFFF', fontSize:12, fontWeight:900, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}>세후</button>
@@ -5344,8 +5366,8 @@ function App() {
           <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:3, background:'#B45309', marginRight:4 }} />특별성과급</span>
           <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:3, background:'#0B7A55', marginRight:4 }} />RSU/PSU</span>
         </div>
-        <div style={{ display:'flex', gap:8, marginTop:12 }}>
-          <div style={{ width:58, flexShrink:0, marginTop:24, height:160, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
+        <div className="trend-main" style={{ display:'flex', gap:8, marginTop:12 }}>
+          <div className="trend-yaxis" style={{ width:58, flexShrink:0, marginTop:24, height:160, display:'flex', flexDirection:'column', justifyContent:'space-between' }}>
             {[1, 0.75, 0.5, 0.25, 0].map((f) => (
               <div key={f} style={{ fontSize:12, color:'#4B5563', textAlign:'right', lineHeight:1, transform:'translateY(-50%)' }}>{f === 0 ? '0' : comma(Math.round((trendGross ? trendMaxGross : trendMaxTotal) * f))}</div>
             ))}
@@ -5356,7 +5378,7 @@ function App() {
                 <div key={p} style={{ position:'absolute', left:0, right:0, bottom:`${p}%`, borderTop:'1px solid rgba(17,24,39,0.08)' }} />
               ))}
             </div>
-            <div style={{ display:'flex', alignItems:'flex-end', gap:8 }}>
+            <div className="trend-bars" style={{ display:'flex', alignItems:'flex-end', gap:8 }}>
               {trendRows.map((row) => {
             const total = trendGross ? row.totalGross : row.total;
             const max = trendGross ? trendMaxGross : trendMaxTotal;
@@ -5378,12 +5400,12 @@ function App() {
                     const segH = Math.max(1, (s.val / max) * 160);
                     return (
                       <div key={s.key} style={{ height:`${segH}px`, background:s.color, display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
-                        {segH >= 26 && <span style={{ fontSize:12, fontWeight:800, color: '#FFFFFF', whiteSpace:'nowrap' }}>{comma(s.val)}</span>}
+                        {segH >= 26 && <span style={{ fontSize:12, fontWeight:800, color: '#FFFFFF', whiteSpace:'nowrap' }}>{fmtYiuk1(s.val)}</span>}
                       </div>
                     );
                   })}
                 </div>
-                <div style={{ height:18, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight: isPeak ? 900 : 400, color: isPeak ? '#B45309' : '#4B5563', whiteSpace:'nowrap' }}>{row.year}년</div>
+                <div style={{ height:18, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight: isPeak ? 900 : 400, color: isPeak ? '#B45309' : '#4B5563', whiteSpace:'nowrap' }}><span className="trend-year-full">{row.year}년</span><span className="trend-year-short">{String(row.year).slice(2)}년</span></div>
               </div>
             );
           })}
@@ -7713,11 +7735,11 @@ function App() {
                       <div style={{ display:'flex', gap:28, flexWrap:'wrap', marginTop:8 }}>
                         <div>
                           <div style={{ fontSize:12, color:'#4B5563' }}>세전</div>
-                          <div style={{ fontSize:28, fontWeight:900, color:'#B45309', lineHeight:1.1 }}>{fmtM(spTabRows.reduce((s, r) => s + (r.gross || 0), 0))}</div>
+                          <div style={{ fontSize:28, fontWeight:900, color:'#B45309', lineHeight:1.1 }}>{fmtYiuk(spTabRows.reduce((s, r) => s + (r.gross || 0), 0))}</div>
                         </div>
                         <div>
                           <div style={{ fontSize:12, color:'#4B5563' }}>공제 후</div>
-                          <div style={{ fontSize:28, fontWeight:900, color:'#0B7A55', lineHeight:1.1 }}>{fmtM(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</div>
+                          <div style={{ fontSize:28, fontWeight:900, color:'#0B7A55', lineHeight:1.1 }}>{fmtYiuk(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</div>
                         </div>
                       </div>
                     </div>
@@ -7753,15 +7775,15 @@ function App() {
                             <tr key={r.year} style={{ borderBottom:'1px solid rgba(17,24,39,.06)', background: r.year === simYear ? 'rgba(180,83,9,.08)' : 'transparent' }}>
                               <td style={{ color:'#111827', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.year}년{r.year === simYear && <span style={{ fontSize:12, fontWeight:900, color:'#B45309', border:'1px solid rgba(180,83,9,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>기준연도</span>}</td>
                               <td style={{ color:'#1F2937', fontSize:12, padding:'9px 8px', lineHeight:1.5 }}>{r.year === simYear ? `${simYear}년 귀속분은 ${simYear + 1}년 4월부터 1/3씩 현금화` : (r.parts && r.parts.length > 0 ? r.parts.map(g => `${g}년 귀속분 1/3`).join(' + ') : '—')}</td>
-                              <td style={{ textAlign:'right', color:'#B45309', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.gross > 0 ? fmtM(r.gross) : '—'}</td>
-                              <td style={{ textAlign:'right', color:'#0B7A55', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.net > 0 ? fmtM(r.net) : '—'}</td>
+                              <td style={{ textAlign:'right', color:'#B45309', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.gross > 0 ? fmtYiuk(r.gross) : '—'}</td>
+                              <td style={{ textAlign:'right', color:'#0B7A55', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.net > 0 ? fmtYiuk(r.net) : '—'}</td>
                             </tr>
                           ))}
                           <tr style={{ borderTop:'1px solid rgba(180,83,9,.25)' }}>
                             <td style={{ color:'#1F2937', fontSize:14, fontWeight:900, padding:'9px 8px' }}>합계 (수령분 {simYear + 1}~{simYear + 5}년)</td>
                             <td style={{ padding:'9px 8px' }}></td>
-                            <td style={{ textAlign:'right', color:'#B45309', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(spTabRows.reduce((s, r) => s + (r.gross || 0), 0))}</td>
-                            <td style={{ textAlign:'right', color:'#0B7A55', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</td>
+                            <td style={{ textAlign:'right', color:'#B45309', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtYiuk(spTabRows.reduce((s, r) => s + (r.gross || 0), 0))}</td>
+                            <td style={{ textAlign:'right', color:'#0B7A55', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtYiuk(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -7777,17 +7799,17 @@ function App() {
                         <div key={r.year} style={{ background: r.year === simYear ? 'rgba(180,83,9,.08)' : 'rgba(17,24,39,.04)', border: r.year === simYear ? '1px solid rgba(180,83,9,.35)' : '1px solid rgba(17,24,39,.1)', borderRadius:16, padding:14 }}>
                           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
                             <div style={{ color:'#111827', fontWeight:900, fontSize:16 }}>{r.year}년{r.year === simYear && <span style={{ fontSize:12, fontWeight:900, color:'#B45309', border:'1px solid rgba(180,83,9,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>기준연도</span>}</div>
-                            <div style={{ color:'#0B7A55', fontWeight:900, fontSize:18 }}>{r.net > 0 ? fmtM(r.net) : '—'}</div>
+                            <div style={{ color:'#0B7A55', fontWeight:900, fontSize:18 }}>{r.net > 0 ? fmtYiuk(r.net) : '—'}</div>
                           </div>
                           <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8 }}>
                             <div style={{ background:'rgba(17,24,39,.04)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#4B5563', fontSize:12, fontWeight:900 }}>수령 구성</div><div style={{ color:'#111827', fontWeight:900, marginTop:3, fontSize:13, lineHeight:1.5 }}>{r.year === simYear ? `${simYear}년 귀속분은 ${simYear + 1}년 4월부터 1/3씩 현금화` : (r.parts && r.parts.length > 0 ? r.parts.map(g => `${g}년 귀속분 1/3`).join(' + ') : '—')}</div></div>
-                            <div style={{ background:'rgba(180,83,9,.08)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#B45309', fontSize:12, fontWeight:900 }}>수령액 (세전)</div><div style={{ color:'#111827', fontWeight:900, marginTop:3 }}>{r.gross > 0 ? fmtM(r.gross) : '—'}</div></div>
+                            <div style={{ background:'rgba(180,83,9,.08)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#B45309', fontSize:12, fontWeight:900 }}>수령액 (세전)</div><div style={{ color:'#111827', fontWeight:900, marginTop:3 }}>{r.gross > 0 ? fmtYiuk(r.gross) : '—'}</div></div>
                           </div>
                         </div>
                       ))}
                       <div style={{ background:'rgba(180,83,9,.08)', border:'1px solid rgba(180,83,9,.25)', borderRadius:16, padding:14, display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
                         <div style={{ color:'#1F2937', fontWeight:900 }}>합계 (수령분 · 공제 후)</div>
-                        <div style={{ color:'#0B7A55', fontWeight:900, fontSize:18 }}>{fmtM(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</div>
+                        <div style={{ color:'#0B7A55', fontWeight:900, fontSize:18 }}>{fmtYiuk(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</div>
                       </div>
                     </div>
                     <div style={{ color:'#4B5563', fontSize:12, lineHeight:1.6, marginTop:12, wordBreak:'keep-all' }}>각 연도 금액은 그 해 4월에 현금화 가능한 금액입니다. 특별성과급은 귀속연도 다음 해 4월에 자사주로 지급되며, 3년간 매년 1/3씩 매도할 수 있습니다. 예: {simYear}년 귀속분은 {simYear + 1}·{simYear + 2}·{simYear + 3}년 4월에 1/3씩 현금화됩니다. 2024·2025년에는 특별성과급 제도가 없어 부여분이 없습니다. 2026년 귀속분부터 지급됩니다.</div>
