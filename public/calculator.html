@@ -2212,6 +2212,17 @@ function App() {
   };
   // '3년 동일' 입력란의 임시값 — 버튼을 눌러야 3개년에 반영됩니다.
   const [spSame3Draft, setSpSame3Draft] = useState(370);
+  // [2029 이후 지급 가정] 체크박스 — 기본 OFF(2029년 귀속분부터 미지급 가정 유지).
+  // localStorage 키 'spAssumeGrantAfter2028'에 '1'/'0'으로 저장 (기기별, DB 변경 없음).
+  const loadSpAssumeGrantAfter2028 = () => {
+    try { return localStorage.getItem('spAssumeGrantAfter2028') === '1'; } catch (e) { return false; }
+  };
+  const [spAssumeGrantAfter2028, setSpAssumeGrantAfter2028] = useState(loadSpAssumeGrantAfter2028);
+  const setSpAssumeGrantAfter2028Stored = (v) => {
+    const next = !!v;
+    setSpAssumeGrantAfter2028(next);
+    try { localStorage.setItem('spAssumeGrantAfter2028', next ? '1' : '0'); } catch (e) {}
+  };
 
   // [연동] 기준연도 DS 영업이익 단일 소스 — 메인 profit과 시나리오 행을 일치시킨다.
   // 기준연도(조회 대상연도 targetSpYear, 기본 simYear) 행의 profit은 항상 메인
@@ -4149,6 +4160,8 @@ function App() {
     // 4·5년차는 3년차 입력값을 그대로 이어받습니다(별도 전망치가 아님).
     // 표 연도는 simYear 기준이라 입력 연도와 항상 일치합니다.
     const sp5ProfitForYear = (y) => (Number(y) > simYear + 3 ? getSpFutureProfit(simYear + 3) : getSpFutureProfit(y));
+    // [2029 이후 지급 가정] 5년 부여분 표 합계 대상 연도 — 체크 시 2027~2031년, 미체크 시 2027~2028년.
+    const sp5GrantSumYears = spAssumeGrantAfter2028 ? [simYear+1, simYear+2, simYear+3, simYear+4, simYear+5] : [simYear+1, simYear+2];
     // [P2-5yr] 기준주가 민감도 — 당해 특별성과급(공제 후)을 기준주가로 나눈 주식 수와
     // 현금화 시 주가 하락 시나리오(-10/-20/-30%)별 가치·손실액. 전부 추정치.
     // 주식 수는 기존 카드와 동일하게 공제 후 금액을 3등분해 각 1/3씩 기준주가로 나눈 값(r.sharesEach*3)이며,
@@ -4191,9 +4204,11 @@ function App() {
       return [first, second, third];
     };
     // [현금화 예정표] 특별성과급 현금화 예정 — 매년 새로 부여되는 특별성과급을
-    // 1/3씩 3년에 걸쳐 매도하는 겹침 구조. 부여분은 기준연도~기준연도+2년
-    // (기본 2026~2028년 귀속분)까지만 있고, 기준연도+3년(기본 2029년) 귀속분부터는
-    // 미지급 가정(2030년 특별성과급 없음 예상)이라 그 이후 부여분은 없다.
+    // 1/3씩 3년에 걸쳐 매도하는 겹침 구조. 기본(체크 해제)은 부여분이
+    // 기준연도~기준연도+2년(기본 2026~2028년 귀속분)까지만 있고,
+    // 기준연도+3년(기본 2029년) 귀속분부터는 미지급 가정(2030년 특별성과급
+    // 없음 예상)이라 그 이후 부여분은 없다. 체크박스(2029년 이후 지급 가정)
+    // 적용 시에는 2029~2031년 귀속분도 예상 영업이익으로 계산해 포함한다.
     // 기준연도 부여분은 specialNet(저장/수동/자동 적용값), 이후 2개년은
     // calcScenarioSpecial + sp5ProfitForYear(향후 3년 예상 DS 영업이익 입력과 동일 소스).
     // 날짜는 자사주 수령(3월말~4월초) 이후 매도 가능 시점인 매년 4월 기준이다
@@ -4201,15 +4216,22 @@ function App() {
     // 기본 시나리오(매년 31,416만원 부여)에서는 2027년 4월 10,472만원,
     // 2028년 4월 20,944만원, 2029년 4월 31,416만원, 2030년 4월 20,944만원,
     // 2031년 4월 10,472만원 — 사용자의 1/3·2/3·3/3·2/3·1/3 패턴과 같다.
+    // 체크 적용 시에는 2030년 4월 31,416만원, 2031년 4월 31,416만원,
+    // 2032년 4월 31,416만원, 2033년 4월 20,944만원, 2034년 4월 10,472만원이 추가된다.
     const spSaleBaseYear = targetSpYear + 1;
     const spNoGrantFromYear = targetSpYear + 3;
-    const spGrantYears = [targetSpYear, targetSpYear + 1, targetSpYear + 2];
+    // [2029 이후 지급 가정] 현금화 예정표의 마지막 수령연도·부여 마지막 연도.
+    const spSaleLastYear = spSaleBaseYear + (spAssumeGrantAfter2028 ? 7 : 4);
+    const spGrantLastYear = spAssumeGrantAfter2028 ? targetSpYear + 5 : targetSpYear + 2;
+    const spGrantYears = spAssumeGrantAfter2028
+      ? [targetSpYear, targetSpYear + 1, targetSpYear + 2, targetSpYear + 3, targetSpYear + 4, targetSpYear + 5]
+      : [targetSpYear, targetSpYear + 1, targetSpYear + 2];
     const spGrantNets = spGrantYears.map((g, gi) => {
       if (gi === 0) return Math.max(0, Number(specialNet) || 0);
       return Math.max(0, Number(calcScenarioSpecial(Number(g), sp5ProfitForYear(Number(g))).net) || 0);
     });
     const spGrantThirds = spGrantNets.map((n) => splitThirds(n));
-    const spSchedule = [1, 2, 3, 4, 5].map((d) => {
+    const spSchedule = (spAssumeGrantAfter2028 ? [1, 2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5]).map((d) => {
       const y = targetSpYear + d;
       const parts = [];
       let amount = 0;
@@ -4382,10 +4404,10 @@ function App() {
     // - 특별성과급: 수령연도 Y에 현금화되는 3분할분 합계. 귀속연도 g분의 3등분 중
     //   (Y-g)번째 조각이 Y년에 현금화됩니다. 귀속연도별 부여액은 spYearRefs(저장/수동/자동
     //   적용값, 기준연도 및 직전 2개년)와 동일하게, 그 이후 연도는 calcScenarioSpecial +
-    //   sp5ProfitForYear(3년차 입력값 이어받기)로 계산합니다. 단, 기준연도+3년
-    //   (기본 2029년) 귀속분부터는 미지급 가정(2030년 특별성과급 없음 예상)이라
+    //   sp5ProfitForYear(3년차 입력값 이어받기)로 계산합니다. 단, 체크 해제 시
+    //   기준연도+3년(기본 2029년) 귀속분부터는 미지급 가정(2030년 특별성과급 없음 예상)이라
     //   cfGrantNet이 0을 돌려주고, 이 표의 특별성과급 열은 위 현금화 예정표와
-    //   정확히 같은 숫자가 됩니다.
+    //   정확히 같은 숫자가 됩니다. 체크 시에는 2029년 이후 귀속분도 계산합니다.
     // - RSU/PSU: rsuSchedule의 지급 예정일 기준 세후 금액을 수령연도로 합산합니다.
     //   (향후 신규 RSU 부여분은 모델에 없어 2028~2030년 고정 일정만 반영됩니다.)
     // 전부 세후 수령액입니다. TAI/OPI 세후값은 연봉 기준 한계세율(누진) 적용 추정치로,
@@ -4394,8 +4416,8 @@ function App() {
       const ref = spYearRefs.find((r) => r.year === y);
       if (ref) return Number(ref.amount || 0);
       if (Number(y) <= 2025) return 0;
-      // [현금화 예정표] 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
-      if (Number(y) >= Number(targetSpYear) + 3) return 0;
+      // [2029 이후 지급 가정] 체크 해제 시에만 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
+      if (!spAssumeGrantAfter2028 && Number(y) >= Number(targetSpYear) + 3) return 0;
       return calcScenarioSpecial(Number(y), sp5ProfitForYear(Number(y))).net;
     };
     const cfYears = [-1, 0, 1, 2, 3, 4, 5].map((d) => Number(simYear) + d);
@@ -4473,7 +4495,7 @@ function App() {
     const multiplierLabel = psuGrowthRate < 20 ? '0배' : `${psuMultiplier}배`;
     const rows = [
       { label:'다음 지급연도 OPI-2', desc:`${spSaleBaseYear}년 4월 매도 가능액 · ${targetSpYear}년 부여분 1/3`, values:fmtM(spNextYearPayout) },
-      { label:'OPI-2 향후 매도 가능 합계', desc:`${spSaleBaseYear}~${spSaleBaseYear + 4}년 매도 가능 합계 · ${targetSpYear}~${targetSpYear + 2}년 부여분 (${spNoGrantFromYear}년 귀속분부터 미지급 가정)`, values:fmtM(spFuturePayoutTotal) },
+      { label:'OPI-2 향후 매도 가능 합계', desc:`${spSaleBaseYear}~${spSaleLastYear}년 매도 가능 합계 · ${targetSpYear}~${spGrantLastYear}년 부여분 (${spAssumeGrantAfter2028 ? '2029년 이후 지급 가정 적용 중' : `${spNoGrantFromYear}년 귀속분부터 미지급 가정`})`, values:fmtM(spFuturePayoutTotal) },
       { label:'RSU/PSU 지급 주식', desc:rsuEligible ? `${normalizeCl(myCl)} 기준 기초 ${baseShareCount}주 × ${multiplierLabel}` : '25.10.15 재직/약정 조건 미충족', values:`${comma(finalShareCount)}주 · 세전 ${fmtM(rsuGrossFutureMan)} · 세후 ${fmtM(rsuNetFutureMan)}` },
       { label:'지급 예상일 기준 현금화 가능액', desc:'OPI-2는 매도제한 제외분, RSU/PSU는 첫 지급 예정분만 반영', values:`OPI-2 ${fmtM(spExpectedPayoutCashableNet)} + RSU/PSU 1차 지급 세후 ${fmtM(rsuExpectedPayoutCashableNet)} = ${fmtM(totalExpectedPayoutCashableNet)}` },
       { label:'OPI-2 매도 제한 규모', desc:'RSU/PSU는 매도제한이 아니라 지급일자가 정해진 예정분입니다.', values:`OPI-2 제한 ${fmtM(spExpectedPayoutRestrictedNet)} · RSU/PSU 잔여 지급예정 세후 ${fmtM(rsuExpectedPayoutScheduledNet)} · 전체 예정 합계 ${fmtM(totalPayoutCheckNet)}` },
@@ -4636,15 +4658,16 @@ function App() {
               ))}
             </div>
             <div style={{ marginTop:12, background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.15)', borderRadius:12, padding:12, color:'#FDE68A', fontSize:12, lineHeight:1.6 }}>
-              <div style={{ fontSize:13, fontWeight:900, color:'#FACC15', marginBottom:2 }}>특별성과급 현금화 예정표 ({spSaleBaseYear}~{spSaleBaseYear + 4}년)</div>
-              <div style={{ color:'#B9C4D2', fontSize:11, lineHeight:1.55, marginBottom:8 }}>{spNoGrantFromYear}년 귀속분부터 미지급 가정 — 2030년 특별성과급 없음 예상. 매년 4월 매도 가능분 기준 (지급은 3월말~4월초 자사주 수령 기준).</div>
+              <div style={{ fontSize:13, fontWeight:900, color:'#FACC15', marginBottom:2 }}>특별성과급 현금화 예정표 ({spSaleBaseYear}~{spSaleLastYear}년)</div>
+              <div style={{ color:'#B9C4D2', fontSize:11, lineHeight:1.55, marginBottom:8 }}>{spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중 — 예상 영업이익으로 ${spNoGrantFromYear}~${spGrantLastYear}년 귀속분도 계산합니다.` : `${spNoGrantFromYear}년 귀속분부터 미지급 가정 — 2030년 특별성과급 없음 예상.`} 매년 4월 매도 가능분 기준 (지급은 3월말~4월초 자사주 수령 기준).</div>
               {spSchedule.map((x,i)=><div key={x.date}>{x.date} · {fmtM(x.amount)} <span style={{ color:isUnlockedAsOfToday(x.dateObj)?'#86EFAC':'#FCA5A5' }}>{isUnlockedAsOfToday(x.dateObj)?'현금화 가능':'매도 제한'}</span> <span style={{ color:'#B9C4D2' }}>({x.desc})</span></div>)}
-              <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid rgba(255,202,69,.25)', fontWeight:900, color:'#FACC15' }}>합계: {fmtM(spFuturePayoutTotal)} ({spSaleBaseYear}~{spSaleBaseYear + 4}년 매도 가능분)</div>
+              <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid rgba(255,202,69,.25)', fontWeight:900, color:'#FACC15' }}>합계: {fmtM(spFuturePayoutTotal)} ({spSaleBaseYear}~{spSaleLastYear}년 매도 가능분)</div>
             </div>
             <div style={{ marginTop:12, background:'rgba(255,202,69,.06)', border:'1px solid rgba(255,202,69,.25)', borderRadius:12, padding:12 }}>
+              <div style={{ fontSize:12, fontWeight:900, color: spAssumeGrantAfter2028 ? '#86EFAC' : '#B9C4D2', marginBottom:6 }}>{spAssumeGrantAfter2028 ? `✓ 2029년 이후 지급 가정 적용 중 — ${spNoGrantFromYear}~${spGrantLastYear}년 귀속분도 예상 영업이익으로 계산합니다` : `${spNoGrantFromYear}년 귀속분부터 미지급 가정`}</div>
               <div style={{ fontSize:14, fontWeight:900, color:'#FACC15', marginBottom:4 }}>향후 5년 특별성과급 예상 (신규 부여분)</div>
               <div style={{ fontSize:12, color:'#B9C4D2', lineHeight:1.6, marginBottom:10 }}>
-                '가정 더 바꾸기'에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 4·5년차는 3년차 예상 영업이익을 그대로 이어받은 추정치입니다(별도 전망치가 아닙니다). 특별성과급은 {Number(simYear)}~{Number(simYear) + 2}년 귀속분까지만 부여되는 것으로 가정합니다({spNoGrantFromYear}년 귀속분부터 미지급). 5년 합계는 지급 대상 연도({simYear + 1}~{simYear + 2}년 부여분)의 합이며, 위 ‘특별성과급 현금화 예정표’의 연도별 매도 가능액(1/3씩 3년 분할)과는 기준이 다릅니다. 향후 5년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조. 허들 미달 연도는 미지급으로 표시됩니다.
+                '가정 더 바꾸기'에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 4·5년차는 3년차 예상 영업이익을 그대로 이어받은 추정치입니다(별도 전망치가 아닙니다). {spAssumeGrantAfter2028 ? `특별성과급은 ${Number(simYear)}~${Number(simYear) + 5}년 귀속분까지 부여되는 것으로 가정합니다(2029년 이후 지급 가정 적용 중). 5년 합계는 ${simYear + 1}~${simYear + 5}년 부여분의 합이며, ` : `특별성과급은 ${Number(simYear)}~${Number(simYear) + 2}년 귀속분까지만 부여되는 것으로 가정합니다(${spNoGrantFromYear}년 귀속분부터 미지급). 5년 합계는 지급 대상 연도(${simYear + 1}~${simYear + 2}년 부여분)의 합이며, `}위 ‘특별성과급 현금화 예정표’의 연도별 매도 가능액(1/3씩 3년 분할)과는 기준이 다릅니다. 향후 5년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조. 허들 미달 연도는 미지급으로 표시됩니다.
               </div>
               <div className="reward-table-wrap">
                 <table className="reward-table compact-mobile" style={{ minWidth:560 }}>
@@ -4663,8 +4686,8 @@ function App() {
                       const prof5 = sp5ProfitForYear(y);
                       const isCarry = Number(y) > simYear + 3;
                       const hurdle5 = spHurdleForYear(y);
-                      // [현금화 예정표] 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
-                      const isNoGrant = Number(y) >= simYear + 3;
+                      // [2029 이후 지급 가정] 체크 해제 시에만 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
+                      const isNoGrant = !spAssumeGrantAfter2028 && Number(y) >= simYear + 3;
                       const note5 = isNoGrant ? `${simYear + 3}년 귀속분부터 미지급 가정` : ((sp5.gross <= 0 && prof5 < hurdle5) ? `허들 ${hurdle5}조 미달` : (isCarry ? '3년차와 동일' : '—'));
                       return (
                         <tr key={y} style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
@@ -4677,10 +4700,10 @@ function App() {
                       );
                     })}
                     <tr>
-                      <td style={{ textAlign:'left', color:'#E2E8F0', fontSize:13, fontWeight:900, padding:'9px 8px' }}>합계 ({simYear + 1}~{simYear + 2}년 부여분)</td>
+                      <td style={{ textAlign:'left', color:'#E2E8F0', fontSize:13, fontWeight:900, padding:'9px 8px' }}>합계 ({simYear + 1}~{spAssumeGrantAfter2028 ? simYear + 5 : simYear + 2}년 부여분)</td>
                       <td style={{ textAlign:'right', color:'#94A3B8', fontSize:13, padding:'9px 8px' }}>—</td>
-                      <td style={{ textAlign:'right', color:'#FACC15', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM([simYear+1, simYear+2].reduce((s,y)=>s+calcScenarioSpecial(y, sp5ProfitForYear(y)).gross,0))}</td>
-                      <td style={{ textAlign:'right', color:'#86EFAC', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM([simYear+1, simYear+2].reduce((s,y)=>s+calcScenarioSpecial(y, sp5ProfitForYear(y)).net,0))}</td>
+                      <td style={{ textAlign:'right', color:'#FACC15', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+calcScenarioSpecial(y, sp5ProfitForYear(y)).gross,0))}</td>
+                      <td style={{ textAlign:'right', color:'#86EFAC', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+calcScenarioSpecial(y, sp5ProfitForYear(y)).net,0))}</td>
                       <td style={{ textAlign:'right', color:'#94A3B8', fontSize:12, padding:'9px 8px' }}>—</td>
                     </tr>
                   </tbody>
@@ -4752,8 +4775,8 @@ function App() {
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:14 }} className="summary-grid sp-rsu-summary-grid">
-          <div style={{ background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.22)', borderRadius:15, padding:14 }}><div style={{ color:'#A7F3D0', fontSize:12, fontWeight:800 }}>총 지급 예상 세전</div><div style={{ color:'#34D399', fontSize:24, fontWeight:900 }}>{fmtM(totalGross)}</div><div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.45, marginTop:5 }}>{targetSpYear}~{targetSpYear + 2}년 부여분 합계 {fmtM(spFuturePayoutTotal)} + RSU {fmtM(rsuGrossFutureMan)}</div></div>
-          <div style={{ background:'rgba(0,198,255,.08)', border:'1px solid rgba(0,198,255,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800 }}>총 지급 예상 세후</div><div style={{ color:'#38BDF8', fontSize:24, fontWeight:900 }}>{fmtM(totalNet)}</div><div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.45, marginTop:5 }}>특별성과급 합계 {fmtM(spFuturePayoutTotal)} · {targetSpYear}~{targetSpYear + 2}년 부여분 ({spNoGrantFromYear}년 귀속분부터 미지급 가정)</div></div>
+          <div style={{ background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.22)', borderRadius:15, padding:14 }}><div style={{ color:'#A7F3D0', fontSize:12, fontWeight:800 }}>총 지급 예상 세전</div><div style={{ color:'#34D399', fontSize:24, fontWeight:900 }}>{fmtM(totalGross)}</div><div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.45, marginTop:5 }}>{targetSpYear}~{spGrantLastYear}년 부여분 합계 {fmtM(spFuturePayoutTotal)} + RSU {fmtM(rsuGrossFutureMan)}</div></div>
+          <div style={{ background:'rgba(0,198,255,.08)', border:'1px solid rgba(0,198,255,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BAE6FD', fontSize:12, fontWeight:800 }}>총 지급 예상 세후</div><div style={{ color:'#38BDF8', fontSize:24, fontWeight:900 }}>{fmtM(totalNet)}</div><div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.45, marginTop:5 }}>특별성과급 합계 {fmtM(spFuturePayoutTotal)} · {targetSpYear}~{spGrantLastYear}년 부여분 ({spAssumeGrantAfter2028 ? '2029년 이후 지급 가정 적용 중' : `${spNoGrantFromYear}년 귀속분부터 미지급 가정`})</div></div>
           <div style={{ background:'rgba(34,197,94,.08)', border:'1px solid rgba(34,197,94,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#BBF7D0', fontSize:12, fontWeight:800 }}>지급 예상일 기준 현금화 가능액</div><div style={{ color:'#86EFAC', fontSize:18, fontWeight:900 }}>{fmtM(totalExpectedPayoutCashableNet)}</div><div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.45, marginTop:5 }}>OPI-2 매도제한 제외 {fmtM(spExpectedPayoutCashableNet)} + RSU/PSU 1차 지급 {fmtM(rsuExpectedPayoutCashableNet)}</div></div>
           <div style={{ background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FECACA', fontSize:12, fontWeight:800 }}>OPI-2 매도 제한액</div><div style={{ color:'#FCA5A5', fontSize:18, fontWeight:900 }}>{fmtM(totalRestrictedNet)}</div><div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.45, marginTop:5 }}>RSU/PSU 제외 · OPI-2 잔여 제한분만 반영</div></div>
           <div style={{ background:'rgba(255,180,0,.08)', border:'1px solid rgba(255,180,0,.18)', borderRadius:15, padding:14 }}><div style={{ color:'#FDE68A', fontSize:12, fontWeight:800 }}>{spSaleBaseYear}년 4월 매도 가능액</div><div style={{ color:'#FACC15', fontSize:18, fontWeight:900 }}>{fmtM(spNextYearPayout)}</div></div>
@@ -4914,7 +4937,7 @@ function App() {
           <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:8 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:900, color:'#BBF7D0', marginBottom:6 }}>7개년 수령액 ({cfYears[0]}~{cfYears[6]}년, 수령연도 기준)</div>
-              <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.6 }}>그 해에 통장에 실제로 들어오는 금액 기준입니다. TAI는 당해 7월·12월에, OPI는 다음해 1월 31일에, 특별성과급은 귀속연도 부여분의 1/3씩 3년에 나눠 들어옵니다(매년 4월 매도 가능분 기준). 위 ‘향후 5년 특별성과급 예상’ 표는 귀속연도 기준(매년 새로 부여되는 금액)이라 연도별 숫자가 이 표와 다릅니다. 예: {Number(simYear) + 1}년에 들어오는 특별성과급은 {Number(simYear)}년 귀속분의 1/3이며, {Number(simYear) + 2}년에는 {Number(simYear)}년분 1/3 + {Number(simYear) + 1}년 귀속분 1/3이 들어옵니다. 특별성과급은 {Number(simYear)}~{Number(simYear) + 2}년 귀속분까지만 부여되는 것으로 가정합니다({spNoGrantFromYear}년 귀속분부터 미지급). 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조.</div>
+              <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.6 }}>그 해에 통장에 실제로 들어오는 금액 기준입니다. TAI는 당해 7월·12월에, OPI는 다음해 1월 31일에, 특별성과급은 귀속연도 부여분의 1/3씩 3년에 나눠 들어옵니다(매년 4월 매도 가능분 기준). 위 ‘향후 5년 특별성과급 예상’ 표는 귀속연도 기준(매년 새로 부여되는 금액)이라 연도별 숫자가 이 표와 다릅니다. 예: {Number(simYear) + 1}년에 들어오는 특별성과급은 {Number(simYear)}년 귀속분의 1/3이며, {Number(simYear) + 2}년에는 {Number(simYear)}년분 1/3 + {Number(simYear) + 1}년 귀속분 1/3이 들어옵니다. {spAssumeGrantAfter2028 ? `특별성과급은 ${Number(simYear)}~${Number(simYear) + 5}년 귀속분까지 부여되는 것으로 가정합니다(2029년 이후 지급 가정 적용 중).` : `특별성과급은 ${Number(simYear)}~${Number(simYear) + 2}년 귀속분까지만 부여되는 것으로 가정합니다(${spNoGrantFromYear}년 귀속분부터 미지급).`} 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조.</div>
             </div>
             <div style={{ color:'#86EFAC', fontSize:11, fontWeight:900, background:'rgba(34,197,94,.1)', border:'1px solid rgba(34,197,94,.18)', borderRadius:999, padding:'6px 10px', whiteSpace:'nowrap' }}>세후 수령액 · {cfYears[0]}~{cfYears[6]}년</div>
           </div>
@@ -6667,6 +6690,13 @@ function App() {
                 <span style={{ fontSize:12, color:"#B9C4D2", lineHeight:1.5 }}>연도별 예상액은 OPI-2/RSU 탭의 ‘향후 5년 특별성과급 예상’ 표에서 확인하세요. 입력값은 이 브라우저에 저장됩니다.</span>
                 <button onClick={() => {[simYear+1, simYear+2, simYear+3].forEach(y=>updateSpFutureProfit(y, Number(scenarios?.consensus?.dsProfitJo) || 370));}} style={{ border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.06)", color:"#E2E8F0", borderRadius:999, padding:"6px 12px", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>↩ 컨센서스 기본값으로 되돌리기</button>
               </div>
+              <label style={{ display:"flex", alignItems:"flex-start", gap:10, marginTop:14, background:"rgba(255,202,69,0.08)", border:"1px solid rgba(255,202,69,0.3)", borderRadius:12, padding:"12px 14px", cursor:"pointer" }}>
+                <input type="checkbox" checked={spAssumeGrantAfter2028} onChange={(e)=>setSpAssumeGrantAfter2028Stored(e.target.checked)} style={{ width:20, height:20, marginTop:2, accentColor:"#FFCA45", cursor:"pointer", flexShrink:0 }} />
+                <span>
+                  <span style={{ display:"block", fontSize:14, fontWeight:900, color:"#FDE68A" }}>2029년 이후 특별성과급도 지급되는 것으로 가정</span>
+                  <span style={{ display:"block", fontSize:12, color:"#B9C4D2", lineHeight:1.6, marginTop:3 }}>체크하면 위에서 입력한 예상 DS 영업이익으로 2029~2031년 귀속분도 계산해 ‘향후 5년 특별성과급 예상’ 표·현금화 예정표·7개년 수령액 표에 표시합니다. 2030·2031년은 2029년 입력값을 이어받습니다. 2029년부터는 허들 100조가 적용되어, 입력 영업이익이 100조 미만이면 해당 연도는 미지급으로 표시됩니다. 체크 해제 시 2029년 귀속분부터 미지급 가정으로 돌아갑니다.</span>
+                </span>
+              </label>
             </FieldBox>
 
             {/* 파생 DS 비중 표시 (입력 아님) */}
