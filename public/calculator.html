@@ -1993,7 +1993,9 @@ function App() {
   const [forceSpRsuOpen, setForceSpRsuOpen] = useState(false);
 
   // ── 내 정보 / 연봉 / 인상률 입력 (SalaryContent, CoreInputs/MoreAssumptions) ─────
-  const [simYear, setSimYear] = useState(2026);
+  // 기준연도는 달력 연도를 기본값으로 쓴다 (2026~2035 클램프). 내년에 다시 열면
+  // 2027년이 기준이 된다. 수동 select·공유 링크 y 오버라이드는 그대로 유지된다.
+  const [simYear, setSimYear] = useState(() => Math.min(2035, Math.max(2026, new Date().getFullYear())));
   const [myDiv, setMyDiv] = useState("memory");
   const [myCl, setMyCl] = useState("CL3");
   const [mySalary, setMySalary] = useState(8000);
@@ -2014,19 +2016,29 @@ function App() {
   // 탭 입력은 계산기 본문과 독립이다. 직급은 CL3·고과는 MT로 고정하고,
   // 연봉 인상률은 베이스업 3% + 성과 1%(연 4%)로 이어받는다.
   const MS_SP_PROFIT_BY_YEAR = { 2026: 395, 2027: 685, 2028: 687 };
+  // [기준연도 이월] 추정치가 없는 연도는 빈 값으로 둔다 (전년도 값 이어받기·370 폴백 금지).
+  // MS 추정치가 있는 연도만 기본값으로 채우고, 없는 연도는 사용자가 직접 입력한다.
+  const spDefaultProfitsForYear = (baseY) => {
+    const out = {};
+    [0, 1, 2].forEach(k => {
+      const v = MS_SP_PROFIT_BY_YEAR[Number(baseY) + k];
+      if (v !== undefined) out[k] = v;
+    });
+    return out;
+  };
   const [spTabSalary, setSpTabSalary] = useState(() => mySalary);
   const [spTabDiv, setSpTabDiv] = useState("memory");
   const [spTabDeficit, setSpTabDeficit] = useState("none"); // 'none' | 'lepan'
-  const [spTabProfits, setSpTabProfits] = useState(() => ({
-    0: MS_SP_PROFIT_BY_YEAR[simYear] ?? 370,
-    1: MS_SP_PROFIT_BY_YEAR[simYear + 1] ?? 370,
-    2: MS_SP_PROFIT_BY_YEAR[simYear + 2] ?? 370,
-  }));
+  const [spTabProfits, setSpTabProfits] = useState(() => spDefaultProfitsForYear(simYear));
   const [spTabQueried, setSpTabQueried] = useState(false);
   const [spTabRows, setSpTabRows] = useState(null);
   // 특별 인센티브 탭 조회 — 기존 calcScenarioSpecial을 그대로 재사용한다.
   // 연봉은 기본 모델에서 금액에 직접 반영되지 않는다(1인당 재원 기준이라 연봉이 달라도
   // 금액이 같다). 연봉이 금액에 쓰이는 경우는 소속 '그외' + 적자(2027년 이후 24% 고정)뿐이다.
+  // [이월 수령분] y0~y0+2년은 입력 영업이익 기준 신규 부여분, y0+3~y0+5년은 신규 부여가
+  // 아니라 앞 3년 부여분이 1/3씩 3년에 걸쳐 현금화되어 들어오는 이월 수령분이다.
+  // 공제 후는 현금화 예정표·7개년 수령액 표와 같은 공식(splitThirds)으로 계산한다.
+  // 입력이 빈 연도의 부여분은 0으로 취급하되, 표에서는 0원이 아니라 '—'로 표시한다.
   const runSpTabQuery = (overrides, baseYear) => {
     const y0 = Number(baseYear ?? simYear) || simYear;
     const salary0 = Number(overrides?.salary ?? spTabSalary) || 0;
@@ -2034,15 +2046,31 @@ function App() {
     const deficit = overrides?.deficit || spTabDeficit;
     const profits = overrides?.profits || spTabProfits;
     const rows = [];
+    const grantByYear = {};
     let sal = salary0;
     for (let y = y0 - 2; y <= y0 + 5; y++) {
-      if (y < y0) { rows.push({ year: y, profit: 0, salary: 0, gross: 0, net: 0 }); continue; }
+      if (y < y0) { rows.push({ year: y, profit: null, salary: 0, gross: 0, net: 0, isCarry: false, hasInput: true }); continue; }
       if (y > y0) sal = Math.round(sal * 1.04); // 인상률 기본값 베이스업 3% + 성과 1%
-      const off = Math.min(y - y0, 2);
-      const profit = Number(profits[off] ?? 0) || 0;
-      const rowOverride = { salary: sal, cl: 'CL3', division: div, deficit, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 };
-      const { gross, net } = calcScenarioSpecial(y, profit, rowOverride);
-      rows.push({ year: y, profit, salary: sal, gross, net });
+      if (y <= y0 + 2) {
+        const off = y - y0;
+        const raw = profits[off];
+        const hasInput = raw !== undefined && raw !== null && raw !== '' && Number.isFinite(Number(raw));
+        const profit = hasInput ? Number(raw) : 0;
+        const rowOverride = { salary: sal, cl: 'CL3', division: div, deficit, rating: 'MT', baseUpRaise: 3, performanceRaise: 1.0 };
+        const { gross, net } = hasInput ? calcScenarioSpecial(y, profit, rowOverride) : { gross: 0, net: 0 };
+        grantByYear[y] = { gross, net };
+        rows.push({ year: y, profit: hasInput ? profit : null, salary: sal, gross, net, isCarry: false, hasInput });
+      } else {
+        let gross = 0, net = 0;
+        for (let g = y - 3; g <= y - 1; g++) {
+          const gg = grantByYear[g] || { gross: 0, net: 0 };
+          const tG = splitThirds(gg.gross);
+          const tN = splitThirds(gg.net);
+          gross += tG[y - g - 1] || 0;
+          net += tN[y - g - 1] || 0;
+        }
+        rows.push({ year: y, profit: null, salary: sal, gross, net, isCarry: true, hasInput: true });
+      }
     }
     setSpTabRows(rows);
     setSpTabQueried(true);
@@ -2163,7 +2191,8 @@ function App() {
   // '가정 더 바꾸기'의 입력이 spRsuScenarioRows[연도].profit을 직접 갱신합니다.
   // OPI-2/RSU 탭의 calcScenarioSpecial이 같은 값을 쓰므로 단일 소스입니다.
   // 기본값은 Morgan Stanley 2026-11-09 추정치(DS 2026년 395조·2027년 685조·2028년 687조,
-  // 전사 397.0/688.0/690.4조 × 99.5% 추산)이며, 2029·2030년 시드는 2028년 값 이어받기입니다.
+  // 전사 397.0/688.0/690.4조 × 99.5% 추산)이다. 2029·2030년은 추정치가 없어 시드를 두지
+  // 않는다 (빈 값 — 사용자가 직접 입력해야 한다. 2028년 값 이어받기 금지).
   // 2025년 시드(200조)는 과거 실적이라 그대로 둡니다.
   // [연동] 2026년 시드는 메인 DS 영업이익(profit) 기본값 395조와 같습니다.
   // 기준연도 행의 profit은 아래 동기화 effect가 항상 메인 profit과 일치시키므로,
@@ -2191,19 +2220,25 @@ function App() {
       2026: mk(395),
       2027: mk(saved[2027] ?? 685),
       2028: mk(saved[2028] ?? 687),
-      2029: mk(saved[2029] ?? 687),
-      2030: mk(saved[2030] ?? 687),
     };
+    // 2029·2030년은 MS 추정치가 없어 영업이익 시드를 채우지 않는다 (profit 빈 값).
+    // 단, 행 자체는 만든다 — 인상률 기본값(baseUpRaise 3%·성과 1%)이 없으면
+    // getScenarioEstimatedSalary가 인상률을 0%로 계산해 2029년 이후 TAI/OPI가
+    // 2028년 수준에 멈추기 때문이다. 저장값이 있으면 그 값을 쓴다 (지우지 않는다).
+    rows[2029] = mk(saved[2029]);
+    rows[2030] = mk(saved[2030]);
     Object.keys(saved).forEach(k => {
       const y = Number(k);
       if (!rows[y]) rows[y] = { ...mk(370), profit: saved[y] };
     });
     return rows;
   });
-  // 향후 연도 예상 DS 영업이익 조회 — 행이 없으면 컨센서스 기본값(370조)을 쓴다.
+  // 향후 연도 예상 DS 영업이익 조회 — 값이 없으면 빈 값(undefined)을 돌려준다.
+  // 추정치가 없는 연도를 컨센서스(370조)로 메우지 않는다. 호출처에서 빈 값을
+  // '—'(미입력)으로 표시하고 부여액을 만들지 않는다.
   const getSpFutureProfit = (year) => {
     const v = spRsuScenarioRows[Number(year)]?.profit;
-    return Number.isFinite(Number(v)) ? Number(v) : (Number(scenarios?.consensus?.dsProfitJo) || 370);
+    return Number.isFinite(Number(v)) ? Number(v) : undefined;
   };
   // 향후 연도 예상 DS 영업이익 변경 — spRsuScenarioRows와 localStorage에 함께 저장한다.
   const updateSpFutureProfit = (year, v) => {
@@ -3346,9 +3381,11 @@ function App() {
     p.set('dsp', String(profit));
     p.set('tp', String(totalProfit));
     p.set('sc', activeScenarioId);
+    // 추정치가 없는 연도(빈 값)는 공유 링크에 넣지 않는다 — 받는 쪽에서 370으로 채우지 않게 한다.
     const fp = [simYear + 1, simYear + 2, simYear + 3]
-      .map(y => `${y}:${Math.round(Number((spRsuScenarioRows[y] || {}).profit ?? 370))}`).join(',');
-    p.set('fp', fp);
+      .filter(y => { const v = (spRsuScenarioRows[y] || {}).profit; return v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v)); })
+      .map(y => `${y}:${Math.round(Number((spRsuScenarioRows[y] || {}).profit))}`).join(',');
+    if (fp) p.set('fp', fp);
     if (taxWithholdingPercent !== 100) p.set('tw', String(taxWithholdingPercent));
     if (isPartTime) p.set('pt', '1');
     if (cl1BasePay > 0) p.set('cb', String(cl1BasePay));
@@ -3412,21 +3449,25 @@ function App() {
       Object.keys(sp.fp).forEach(y => { updateSpFutureProfit(Number(y), sp.fp[y]); applied = true; });
     }
     // 특별 인센티브 탭 공유 링크 — 탭 입력값을 적용하고 바로 조회한다.
-    if (sp.spt) {
+    // 기준연도(y)만 바꿔 들어온 경우에도 특별 탭 조회가 기준연도를 따라가도록
+    // y가 있으면 spt 없이도 기준연도 기본값으로 조회한다. 탭 전환은 spt가
+    // 있을 때만 한다 (계산기 탭 공유 링크가 특별 탭으로 튀지 않도록).
+    if (sp.spt || sp.y !== undefined) {
       const baseY = sp.y ?? simYear;
       if (sp.sps !== undefined) setSpTabSalary(sp.sps);
       if (sp.spd) setSpTabDiv(sp.spd);
       if (sp.spdf) setSpTabDeficit(sp.spdf);
-      const profits = { ...spTabProfits };
+      // spp에 없는 연도는 기준연도 기본값(추정치 있는 연도만, 없는 연도는 빈 값)으로 복원한다.
+      const profits = spDefaultProfitsForYear(baseY);
       if (sp.spp) {
         Object.keys(sp.spp).forEach(ys => {
           const off = Number(ys) - baseY;
           if (off >= 0 && off <= 2) profits[off] = sp.spp[ys];
         });
-        setSpTabProfits(profits);
       }
+      setSpTabProfits(profits);
       runSpTabQuery({ salary: sp.sps, division: sp.spd, deficit: sp.spdf, profits }, baseY);
-      setTab(0);
+      if (sp.spt) setTab(0);
       applied = true;
     }
     if (applied) setSharedLinkApplied(true);
@@ -3499,11 +3540,12 @@ function App() {
       ctx.fillStyle = '#FFCA45'; ctx.font = `800 30px ${font}`; ctx.textAlign = 'left';
       ctx.fillText('secbonus · 특별 인센티브 예상', 64, 84);
       ctx.fillStyle = '#B9C4D2'; ctx.font = `400 26px ${font}`;
-      ctx.fillText(`연봉 ${comma(Math.round(Number(spTabSalary) || 0))}만원 · ${spTabDiv === 'memory' ? '메모리' : spTabDiv === 'common' ? '공통' : '그외(르팡)'}${spTabDiv === 'lepan' && spTabDeficit !== 'none' ? ' · 적자' : ''} · DS 영업이익 ${simYear}년 ${spTabProfits[0]}조 / ${simYear + 1}년 ${spTabProfits[1]}조 / ${simYear + 2}년 ${spTabProfits[2]}조`, 64, 126);
-      const totalGross = rows.reduce((s, r) => s + (r.gross || 0), 0);
-      const totalNet = rows.reduce((s, r) => s + (r.net || 0), 0);
+      const spProfitLabel = (k) => { const v = spTabProfits[k]; return (v === undefined || v === null || v === '') ? '미입력' : `${v}조`; };
+      ctx.fillText(`연봉 ${comma(Math.round(Number(spTabSalary) || 0))}만원 · ${spTabDiv === 'memory' ? '메모리' : spTabDiv === 'common' ? '공통' : '그외(르팡)'}${spTabDiv === 'lepan' && spTabDeficit !== 'none' ? ' · 적자' : ''} · DS 영업이익 ${simYear}년 ${spProfitLabel(0)} / ${simYear + 1}년 ${spProfitLabel(1)} / ${simYear + 2}년 ${spProfitLabel(2)}`, 64, 126);
+      const totalGross = rows.filter(r => !r.isCarry).reduce((s, r) => s + (r.gross || 0), 0);
+      const totalNet = rows.filter(r => !r.isCarry).reduce((s, r) => s + (r.net || 0), 0);
       ctx.fillStyle = '#D5DCE6'; ctx.font = `800 34px ${font}`;
-      ctx.fillText('특별성과급 합계 (세전)', 64, 196);
+      ctx.fillText('특별성과급 합계 (부여분, 세전)', 64, 196);
       ctx.fillStyle = '#FFCA45'; ctx.font = `900 96px ${font}`;
       ctx.fillText(fmtM(totalGross), 64, 300);
       ctx.fillStyle = '#B9C4D2'; ctx.font = `400 26px ${font}`;
@@ -3514,7 +3556,7 @@ function App() {
         if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(64, y, W - 128, 54, 14); ctx.fill(); }
         else ctx.fillRect(64, y, W - 128, 54);
         ctx.fillStyle = '#B9C4D2'; ctx.font = `700 28px ${font}`; ctx.textAlign = 'left';
-        ctx.fillText(`${r.year}년`, 92, y + 37);
+        ctx.fillText(`${r.year}년${r.isCarry ? ' (이월)' : ''}`, 92, y + 37);
         ctx.fillStyle = '#FFCA45'; ctx.font = `800 28px ${font}`; ctx.textAlign = 'right';
         ctx.fillText(r.gross > 0 ? fmtM(r.gross) : '—', W - 320, y + 37);
         ctx.fillStyle = '#00DC82'; ctx.font = `800 28px ${font}`;
@@ -3538,7 +3580,8 @@ function App() {
     q.set('sps', String(Math.round(Number(spTabSalary) || 0)));
     q.set('spd', spTabDiv);
     q.set('spdf', spTabDeficit);
-    q.set('spp', [0, 1, 2].map(k => `${simYear + k}:${Math.round(Number(spTabProfits[k] ?? 0))}`).join(','));
+    const sppPairs = [0, 1, 2].filter(k => { const v = spTabProfits[k]; return v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v)); }).map(k => `${simYear + k}:${Math.round(Number(spTabProfits[k]))}`);
+    if (sppPairs.length > 0) q.set('spp', sppPairs.join(','));
     return `${window.location.origin}${window.location.pathname}?${q.toString()}`;
   };
   const copySpTabShareLink = async () => {
@@ -4267,6 +4310,14 @@ function App() {
   // 4·5년차는 3년차 입력값을 그대로 이어받습니다(별도 전망치가 아님).
   // 표 연도는 simYear 기준이라 입력 연도와 항상 일치합니다.
   const sp5ProfitForYear = (y) => (Number(y) > simYear + 3 ? getSpFutureProfit(simYear + 3) : getSpFutureProfit(y));
+  // [미입력 연도 가드] 향후 영업이익 입력이 빈 연도는 부여액을 만들지 않는다.
+  // calcScenarioSpecial은 profitOverride가 undefined면 내부에서 컨센서스(370조)로
+  // 메우므로, 빈 값은 여기서 0원으로 바꿔서 넘긴다 (소비처 공통 가드).
+  const sp5GrantForYear = (y) => {
+    const p = sp5ProfitForYear(y);
+    if (p === undefined || p === null || !Number.isFinite(Number(p))) return { gross: 0, net: 0 };
+    return calcScenarioSpecial(Number(y), p);
+  };
   // [2029 이후 지급 가정] 5년 부여분 표 합계 대상 연도 — 체크 시 2027~2031년, 미체크 시 2027~2028년.
   const sp5GrantSumYears = spAssumeGrantAfter2028 ? [simYear+1, simYear+2, simYear+3, simYear+4, simYear+5] : [simYear+1, simYear+2];
   // [P2-5yr] 기준주가 민감도 — 당해 특별성과급(공제 후)을 기준주가로 나눈 주식 수와
@@ -4335,7 +4386,7 @@ function App() {
     : [targetSpYear, targetSpYear + 1, targetSpYear + 2];
   const spGrantNets = spGrantYears.map((g, gi) => {
     if (gi === 0) return Math.max(0, Number(specialNet) || 0);
-    return Math.max(0, Number(calcScenarioSpecial(Number(g), sp5ProfitForYear(Number(g))).net) || 0);
+    return Math.max(0, Number(sp5GrantForYear(Number(g)).net) || 0);
   });
   const spGrantThirds = spGrantNets.map((n) => splitThirds(n));
   const spSchedule = (spAssumeGrantAfter2028 ? [1, 2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5]).map((d) => {
@@ -4539,7 +4590,7 @@ function App() {
     if (Number(y) <= 2025) return 0;
     // [2029 이후 지급 가정] 체크 해제 시에만 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
     if (!spAssumeGrantAfter2028 && Number(y) >= Number(targetSpYear) + 3) return 0;
-    return calcScenarioSpecial(Number(y), sp5ProfitForYear(Number(y))).net;
+    return sp5GrantForYear(Number(y)).net;
   };
   const cfYears = [-1, 0, 1, 2, 3, 4, 5].map((d) => Number(simYear) + d);
   // 7개년 표 구분: 기준연도(simYear)까지는 과거 수령분, 그 이후는 예상 수령분.
@@ -4571,7 +4622,7 @@ function App() {
     }
     if (Number(y) <= 2025) return 0;
     if (!spAssumeGrantAfter2028 && Number(y) >= Number(targetSpYear) + 3) return 0;
-    return calcScenarioSpecial(Number(y), sp5ProfitForYear(Number(y))).gross;
+    return sp5GrantForYear(Number(y)).gross;
   };
   const trendYears = [-2, -1, 0, 1, 2, 3, 4, 5].map((d) => Number(simYear) + d);
   const trendRows = trendYears.map((y) => {
@@ -4829,7 +4880,7 @@ function App() {
               <div style={{ fontSize:12, fontWeight:900, color: spAssumeGrantAfter2028 ? '#00DC82' : '#B9C4D2', marginBottom:6 }}>{spAssumeGrantAfter2028 ? `✓ 2029년 이후 지급 가정 적용 중 — ${spNoGrantFromYear}~${spGrantLastYear}년 귀속분도 예상 영업이익으로 계산합니다` : `${spNoGrantFromYear}년 귀속분부터 미지급 가정`}</div>
               <div style={{ fontSize:16, fontWeight:900, color:'#FFCA45', marginBottom:4 }}>향후 5년 특별성과급 예상 (신규 부여분)</div>
               <div style={{ fontSize:12, color:'#B9C4D2', lineHeight:1.6, marginBottom:10 }}>
-                '가정 더 바꾸기'의 향후 3년 예상 DS 영업이익으로 계산합니다(4·5년차는 3년차 이어받기 추정치). {spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중입니다.` : `2029년 귀속분부터 미지급 가정 — 계산기 탭 ‘가정 더 바꾸기’의 체크박스에서 바꿀 수 있습니다.`} 현금화 예정표(매도 가능액)와는 기준이 다릅니다. 허들 200조(2026~2028년)·100조(2029년부터), 미달 연도는 미지급. 추정치이며 실제 지급액은 실적·주가에 따라 달라집니다.
+                '가정 더 바꾸기'의 향후 3년 예상 DS 영업이익으로 계산합니다(4·5년차는 3년차 입력값을 그대로 이어받습니다). {spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중입니다.` : `2029년 귀속분부터 미지급 가정 — 계산기 탭 ‘가정 더 바꾸기’의 체크박스에서 바꿀 수 있습니다.`} 현금화 예정표(매도 가능액)와는 기준이 다릅니다. 허들 200조(2026~2028년)·100조(2029년부터), 미달 연도는 미지급. 입력이 비어 있는 연도는 미입력으로 표시됩니다. 추정치이며 실제 지급액은 실적·주가에 따라 달라집니다.
               </div>
               <div className="reward-table-wrap yearly-bonus-desktop">
                 <table className="reward-table compact-mobile" style={{ minWidth:560 }}>
@@ -4844,28 +4895,29 @@ function App() {
                   </thead>
                   <tbody>
                     {[simYear+1, simYear+2, simYear+3, simYear+4, simYear+5].map((y) => {
-                      const sp5 = calcScenarioSpecial(y, sp5ProfitForYear(y));
+                      const sp5 = sp5GrantForYear(y);
                       const prof5 = sp5ProfitForYear(y);
                       const isCarry = Number(y) > simYear + 3;
                       const hurdle5 = spHurdleForYear(y);
                       // [2029 이후 지급 가정] 체크 해제 시에만 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
                       const isNoGrant = !spAssumeGrantAfter2028 && Number(y) >= simYear + 3;
-                      const note5 = isNoGrant ? `${simYear + 3}년 귀속분부터 미지급 가정` : ((sp5.gross <= 0 && prof5 < hurdle5) ? `허들 ${hurdle5}조 미달` : (isCarry ? '3년차와 동일' : '—'));
+                      const isNoInput = prof5 === undefined || prof5 === null;
+                      const note5 = isNoGrant ? `${simYear + 3}년 귀속분부터 미지급 가정` : (isNoInput ? '영업이익 미입력' : ((sp5.gross <= 0 && prof5 < hurdle5) ? `허들 ${hurdle5}조 미달` : (isCarry ? '3년차와 동일' : '—')));
                       return (
                         <tr key={y} style={{ borderBottom:'1px solid rgba(255,255,255,.06)' }}>
                           <td style={{ textAlign:'left', color:'#D5DCE6', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{y}년</td>
-                          <td style={{ textAlign:'right', color:'#D5DCE6', fontSize:13, padding:'9px 8px' }}>{isNoGrant ? '—' : `${prof5}조`}</td>
-                          <td style={{ textAlign:'right', color:'#FFCA45', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{isNoGrant ? '미지급' : (sp5.gross > 0 ? fmtM(sp5.gross) : '미지급')}</td>
-                          <td style={{ textAlign:'right', color:'#00DC82', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{isNoGrant ? '—' : (sp5.gross > 0 ? fmtM(sp5.net) : '—')}</td>
-                          <td style={{ textAlign:'right', color:isNoGrant ? '#94A3B8' : ((sp5.gross <= 0 && prof5 < hurdle5) ? '#FF6B6B' : (isCarry ? '#FFCA45' : '#94A3B8')), fontSize:12, padding:'9px 8px' }}>{note5}</td>
+                          <td style={{ textAlign:'right', color:'#D5DCE6', fontSize:13, padding:'9px 8px' }}>{isNoGrant || isNoInput ? '—' : `${prof5}조`}</td>
+                          <td style={{ textAlign:'right', color:'#FFCA45', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{isNoGrant || isNoInput ? '미지급' : (sp5.gross > 0 ? fmtM(sp5.gross) : '미지급')}</td>
+                          <td style={{ textAlign:'right', color:'#00DC82', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{isNoGrant || isNoInput ? '—' : (sp5.gross > 0 ? fmtM(sp5.net) : '—')}</td>
+                          <td style={{ textAlign:'right', color:(isNoGrant || isNoInput) ? '#94A3B8' : ((sp5.gross <= 0 && prof5 < hurdle5) ? '#FF6B6B' : (isCarry ? '#FFCA45' : '#94A3B8')), fontSize:12, padding:'9px 8px' }}>{note5}</td>
                         </tr>
                       );
                     })}
                     <tr>
                       <td style={{ textAlign:'left', color:'#D5DCE6', fontSize:13, fontWeight:900, padding:'9px 8px' }}>합계 ({simYear + 1}~{spAssumeGrantAfter2028 ? simYear + 5 : simYear + 2}년 부여분)</td>
                       <td style={{ textAlign:'right', color:'#94A3B8', fontSize:13, padding:'9px 8px' }}>—</td>
-                      <td style={{ textAlign:'right', color:'#FFCA45', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+calcScenarioSpecial(y, sp5ProfitForYear(y)).gross,0))}</td>
-                      <td style={{ textAlign:'right', color:'#00DC82', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+calcScenarioSpecial(y, sp5ProfitForYear(y)).net,0))}</td>
+                      <td style={{ textAlign:'right', color:'#FFCA45', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+sp5GrantForYear(y).gross,0))}</td>
+                      <td style={{ textAlign:'right', color:'#00DC82', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+sp5GrantForYear(y).net,0))}</td>
                       <td style={{ textAlign:'right', color:'#94A3B8', fontSize:12, padding:'9px 8px' }}>—</td>
                     </tr>
                   </tbody>
@@ -4873,21 +4925,22 @@ function App() {
               </div>
               <div className="mobile-bonus-cards">
                 {[simYear+1, simYear+2, simYear+3, simYear+4, simYear+5].map((y) => {
-                  const sp5c = calcScenarioSpecial(y, sp5ProfitForYear(y));
+                  const sp5c = sp5GrantForYear(y);
                   const prof5c = sp5ProfitForYear(y);
                   const isCarryC = Number(y) > simYear + 3;
                   const hurdle5c = spHurdleForYear(y);
                   const isNoGrantC = !spAssumeGrantAfter2028 && Number(y) >= simYear + 3;
-                  const note5c = isNoGrantC ? `${simYear + 3}년 귀속분부터 미지급 가정` : ((sp5c.gross <= 0 && prof5c < hurdle5c) ? `허들 ${hurdle5c}조 미달` : (isCarryC ? '3년차와 동일' : '—'));
+                  const isNoInputC = prof5c === undefined || prof5c === null;
+                  const note5c = isNoGrantC ? `${simYear + 3}년 귀속분부터 미지급 가정` : (isNoInputC ? '영업이익 미입력' : ((sp5c.gross <= 0 && prof5c < hurdle5c) ? `허들 ${hurdle5c}조 미달` : (isCarryC ? '3년차와 동일' : '—')));
                   return (
                     <div key={`grant-card-${y}`} style={{ background:'rgba(255,255,255,.045)', border:'1px solid rgba(255,255,255,.1)', borderRadius:16, padding:18 }}>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:10, marginBottom:10 }}>
                         <div style={{ color:'#fff', fontWeight:900, fontSize:16 }}>{y}년 귀속</div>
-                        <div style={{ color:'#00DC82', fontWeight:900, fontSize:18 }}>{isNoGrantC ? '미지급' : (sp5c.gross > 0 ? fmtM(sp5c.net) : '미지급')}</div>
+                        <div style={{ color:'#00DC82', fontWeight:900, fontSize:18 }}>{isNoGrantC || isNoInputC ? '미지급' : (sp5c.gross > 0 ? fmtM(sp5c.net) : '미지급')}</div>
                       </div>
                       <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8 }}>
-                        <div style={{ background:'rgba(255,255,255,.04)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#B9C4D2', fontSize:12, fontWeight:900 }}>예상 DS 영업이익</div><div style={{ color:'#fff', fontWeight:900, marginTop:3 }}>{isNoGrantC ? '—' : `${prof5c}조`}</div></div>
-                        <div style={{ background:'rgba(255,202,69,.08)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#FFCA45', fontSize:12, fontWeight:900 }}>특별성과급 (세전)</div><div style={{ color:'#fff', fontWeight:900, marginTop:3 }}>{isNoGrantC ? '미지급' : (sp5c.gross > 0 ? fmtM(sp5c.gross) : '미지급')}</div></div>
+                        <div style={{ background:'rgba(255,255,255,.04)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#B9C4D2', fontSize:12, fontWeight:900 }}>예상 DS 영업이익</div><div style={{ color:'#fff', fontWeight:900, marginTop:3 }}>{isNoGrantC || isNoInputC ? '—' : `${prof5c}조`}</div></div>
+                        <div style={{ background:'rgba(255,202,69,.08)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#FFCA45', fontSize:12, fontWeight:900 }}>특별성과급 (세전)</div><div style={{ color:'#fff', fontWeight:900, marginTop:3 }}>{isNoGrantC || isNoInputC ? '미지급' : (sp5c.gross > 0 ? fmtM(sp5c.gross) : '미지급')}</div></div>
                       </div>
                       <div style={{ color:'#94A3B8', fontSize:12, marginTop:8 }}>{note5c}</div>
                     </div>
@@ -4895,7 +4948,7 @@ function App() {
                 })}
                 <div style={{ background:'rgba(255,202,69,.08)', border:'1px solid rgba(255,202,69,.25)', borderRadius:16, padding:18, display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
                   <div style={{ color:'#D5DCE6', fontWeight:900 }}>합계 ({simYear + 1}~{spAssumeGrantAfter2028 ? simYear + 5 : simYear + 2}년 부여분)</div>
-                  <div style={{ color:'#00DC82', fontWeight:900, fontSize:18 }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+calcScenarioSpecial(y, sp5ProfitForYear(y)).net,0))}</div>
+                  <div style={{ color:'#00DC82', fontWeight:900, fontSize:18 }}>{fmtM(sp5GrantSumYears.reduce((s,y)=>s+sp5GrantForYear(y).net,0))}</div>
                 </div>
               </div>
               {r.sp > 0 && spSensBasePrice > 0 && spSensShares > 0 ? (
@@ -6921,7 +6974,7 @@ function App() {
             {/* [P2-5yr UX] 연도별 슬라이더+숫자 입력 동기화, 연도별 프리셋 칩, 3년 모두 한 번에, 3년 동일, 기본값/변경됨 표시. 숫자 입력은 기존 NumInput(blur 확정·모바일 키보드 유지)을 그대로 쓴다. 슬라이더는 0~500조(step 5)이며, 적자 연도처럼 음수는 숫자 입력으로 -100조까지 넣을 수 있다. */}
             <FieldBox label="향후 3년 예상 DS 영업이익 — 특별성과급 예상용" accent="rgba(255,202,69,0.2)">
               <div style={{ fontSize:13, color:"#D5DCE6", marginBottom:12, lineHeight:1.6 }}>
-                특별성과급은 매년 새로 부여되어 3년에 걸쳐 현금화됩니다. 향후 3년의 예상 DS 영업이익을 넣으면 OPI-2/RSU 탭의 ‘향후 5년 특별성과급 예상’ 표에서 연도별 예상액을 계산합니다. 기본값은 Morgan Stanley 2026-11-09 추정치(2027년 685조·2028년 687조·2029년 이후 687조 이어받기)와 동일합니다.
+                특별성과급은 매년 새로 부여되어 3년에 걸쳐 현금화됩니다. 향후 3년의 예상 DS 영업이익을 넣으면 OPI-2/RSU 탭의 ‘향후 5년 특별성과급 예상’ 표에서 연도별 예상액을 계산합니다. 기본값은 Morgan Stanley 2026-11-09 추정치(2027년 685조·2028년 687조)와 동일합니다. 2029년은 추정치가 없어 비워 두었습니다 — 직접 입력해주세요. 입력이 비어 있는 연도는 부여분이 계산되지 않습니다.
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:12 }}>
                 <span style={{ fontSize:13, fontWeight:800, color:"#D5DCE6" }}>3년 모두 한 번에</span>
@@ -6940,13 +6993,14 @@ function App() {
               {[simYear+1, simYear+2, simYear+3].map((y) => {
                 const curV = getSpFutureProfit(y);
                 const defV = Number(scenarios?.consensus?.dsProfitJo) || 370;
-                const isDefault = curV === defV;
-                const sliderV = Math.max(0, Math.min(500, curV));
+                const isNoInput = curV === undefined || curV === null;
+                const isDefault = !isNoInput && curV === defV;
+                const sliderV = isNoInput ? 0 : Math.max(0, Math.min(500, curV));
                 return (
                 <div key={y} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:16, padding:"12px 12px 8px", marginBottom:10 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:6 }}>
                     <span style={{ fontSize:14, fontWeight:800, color:"#D5DCE6" }}>{y}년 예상 DS 영업이익</span>
-                    <span style={{ fontSize:12, fontWeight:900, color:isDefault ? "#00DC82" : "#FFCA45", background:isDefault ? "rgba(0,220,130,0.15)" : "rgba(255,202,69,0.15)", border:`1px solid ${isDefault ? "rgba(0,220,130,0.35)" : "rgba(255,202,69,0.4)"}`, borderRadius:999, padding:"3px 9px" }}>{isDefault ? "기본값" : "변경됨"}</span>
+                    <span style={{ fontSize:12, fontWeight:900, color:isNoInput ? "#94A3B8" : (isDefault ? "#00DC82" : "#FFCA45"), background:isNoInput ? "rgba(148,163,184,0.15)" : (isDefault ? "rgba(0,220,130,0.15)" : "rgba(255,202,69,0.15)"), border:`1px solid ${isNoInput ? "rgba(148,163,184,0.4)" : (isDefault ? "rgba(0,220,130,0.35)" : "rgba(255,202,69,0.4)")}`, borderRadius:999, padding:"3px 9px" }}>{isNoInput ? "미입력" : (isDefault ? "기본값" : "변경됨")}</span>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
                     <span style={{ display:"flex", alignItems:"baseline", gap:4, minWidth:120 }}>
@@ -6976,7 +7030,7 @@ function App() {
                 <input type="checkbox" checked={spAssumeGrantAfter2028} onChange={(e)=>setSpAssumeGrantAfter2028Stored(e.target.checked)} style={{ width:20, height:20, marginTop:2, accentColor:"#FFCA45", cursor:"pointer", flexShrink:0 }} />
                 <span>
                   <span style={{ display:"block", fontSize:14, fontWeight:900, color:"#FFCA45" }}>2029년 이후 특별성과급도 지급되는 것으로 가정</span>
-                  <span style={{ display:"block", fontSize:12, color:"#B9C4D2", lineHeight:1.6, marginTop:3 }}>체크하면 위에서 입력한 예상 DS 영업이익으로 2029~2031년 귀속분도 계산해 ‘향후 5년 특별성과급 예상’ 표·현금화 예정표·7개년 수령액 표에 표시합니다. 2030·2031년은 2029년 입력값을 이어받습니다. 2029년부터는 허들 100조가 적용되어, 입력 영업이익이 100조 미만이면 해당 연도는 미지급으로 표시됩니다. 체크 해제 시 2029년 귀속분부터 미지급 가정으로 돌아갑니다.</span>
+                  <span style={{ display:"block", fontSize:12, color:"#B9C4D2", lineHeight:1.6, marginTop:3 }}>체크하면 위에서 입력한 예상 DS 영업이익으로 2029~2031년 귀속분도 계산해 ‘향후 5년 특별성과급 예상’ 표·현금화 예정표·7개년 수령액 표에 표시합니다. 2030·2031년은 2029년 입력값을 이어받습니다. 2029년 입력이 비어 있으면 2029~2031년 귀속분은 미지급으로 표시됩니다. 2029년부터는 허들 100조가 적용되어, 입력 영업이익이 100조 미만이면 해당 연도는 미지급으로 표시됩니다. 체크 해제 시 2029년 귀속분부터 미지급 가정으로 돌아갑니다.</span>
                 </span>
               </label>
             </FieldBox>
@@ -7628,13 +7682,13 @@ function App() {
                       {[0, 1, 2].map(k => (
                         <div key={k}>
                           <label style={{ display:'block', color:'#B9C4D2', fontSize:12, fontWeight:900, marginBottom:4 }}>{simYear + k}년</label>
-                          <DraftNumberInput inputMode="decimal" value={spTabProfits[k] ?? ''} onCommit={v=>setSpTabProfits(prev=>({ ...prev, [k]: v }))} placeholder="395" style={{ width:'100%', background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
+                          <DraftNumberInput inputMode="decimal" value={spTabProfits[k] ?? ''} onCommit={v=>setSpTabProfits(prev=>({ ...prev, [k]: v }))} placeholder="직접 입력" style={{ width:'100%', background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
                         </div>
                       ))}
                     </div>
                     <details style={{ marginTop:6 }}>
                       <summary style={{ cursor:'pointer', color:'#B9C4D2', fontSize:12, fontWeight:800 }}>출처: Morgan Stanley 2026-11-09 · 자세히</summary>
-                      <div style={{ fontSize:12, color:'#B9C4D2', marginTop:6, lineHeight:1.8, wordBreak:'keep-all' }}>기본값은 Morgan Stanley 2026-11-09 추정치(2026년 395조·2027년 685조·2028년 687조)입니다. {simYear + 3}년 이후는 3년차 값을 이어받습니다.</div>
+                      <div style={{ fontSize:12, color:'#B9C4D2', marginTop:6, lineHeight:1.8, wordBreak:'keep-all' }}>기본값은 Morgan Stanley 2026-11-09 추정치입니다. 추정치가 없는 연도는 비워 두었습니다 — 직접 입력해주세요. {simYear + 3}~{simYear + 5}년은 신규 부여가 아니라 {simYear}~{simYear + 2}년 부여분의 이월 수령분으로 표시됩니다.</div>
                     </details>
                   </div>
                   <button onClick={() => runSpTabQuery()} style={{ marginTop:16, width:'100%', background:'#FFCA45', color:'#0B1220', border:0, borderRadius:16, padding:'14px', fontSize:16, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>🔍 특별 인센티브 조회</button>
@@ -7646,15 +7700,15 @@ function App() {
                 <div className="calc-side-pad">
                   <div style={{ background:'rgba(11,18,32,.72)', border:'1px solid rgba(255,202,69,.25)', borderRadius:16, padding:18 }}>
                     <div style={{ background:'linear-gradient(135deg, rgba(255,202,69,.14), rgba(255,202,69,.04))', border:'1px solid rgba(255,202,69,.35)', borderRadius:16, padding:'16px 18px', marginBottom:14 }}>
-                      <div style={{ fontSize:12, fontWeight:900, color:'#FFCA45' }}>특별성과급 합계 ({simYear}~{simYear + 5}년)</div>
+                      <div style={{ fontSize:12, fontWeight:900, color:'#FFCA45' }}>특별성과급 합계 (부여분 {simYear}~{simYear + 2}년)</div>
                       <div style={{ display:'flex', gap:28, flexWrap:'wrap', marginTop:8 }}>
                         <div>
                           <div style={{ fontSize:12, color:'#B9C4D2' }}>세전</div>
-                          <div style={{ fontSize:28, fontWeight:900, color:'#FFCA45', lineHeight:1.1 }}>{fmtM(spTabRows.reduce((s, r) => s + (r.gross || 0), 0))}</div>
+                          <div style={{ fontSize:28, fontWeight:900, color:'#FFCA45', lineHeight:1.1 }}>{fmtM(spTabRows.filter(r => !r.isCarry).reduce((s, r) => s + (r.gross || 0), 0))}</div>
                         </div>
                         <div>
                           <div style={{ fontSize:12, color:'#B9C4D2' }}>공제 후</div>
-                          <div style={{ fontSize:28, fontWeight:900, color:'#00DC82', lineHeight:1.1 }}>{fmtM(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</div>
+                          <div style={{ fontSize:28, fontWeight:900, color:'#00DC82', lineHeight:1.1 }}>{fmtM(spTabRows.filter(r => !r.isCarry).reduce((s, r) => s + (r.net || 0), 0))}</div>
                         </div>
                       </div>
                     </div>
@@ -7667,7 +7721,7 @@ function App() {
                     </div>
                     <details style={{ marginBottom:12 }}>
                       <summary style={{ cursor:'pointer', color:'#B9C4D2', fontSize:12, fontWeight:800 }}>입력값 보기</summary>
-                      <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.8, marginTop:6, wordBreak:'keep-all' }}>연봉 {comma(Math.round(Number(spTabSalary) || 0))}만원 · {spTabDiv === 'memory' ? '메모리' : spTabDiv === 'common' ? '공통' : '그외(르팡)'}{spTabDiv === 'lepan' && spTabDeficit !== 'none' ? ' · 적자' : ''} · DS 영업이익 {simYear}년 {spTabProfits[0]}조 / {simYear + 1}년 {spTabProfits[1]}조 / {simYear + 2}년 {spTabProfits[2]}조 기준. 세전 금액과 공제 후(소득세 49.5% + 4대보험 4.967% + 기부금) 금액을 함께 보여줍니다.</div>
+                      <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.8, marginTop:6, wordBreak:'keep-all' }}>연봉 {comma(Math.round(Number(spTabSalary) || 0))}만원 · {spTabDiv === 'memory' ? '메모리' : spTabDiv === 'common' ? '공통' : '그외(르팡)'}{spTabDiv === 'lepan' && spTabDeficit !== 'none' ? ' · 적자' : ''} · DS 영업이익 {[0, 1, 2].map(k => `${simYear + k}년 ${spTabProfits[k] === undefined || spTabProfits[k] === null || spTabProfits[k] === '' ? '미입력' : `${spTabProfits[k]}조`}`).join(' / ')} 기준. 세전 금액과 공제 후(소득세 49.5% + 4대보험 4.967% + 기부금) 금액을 함께 보여줍니다.</div>
                     </details>
                     <div className="reward-table-wrap yearly-bonus-desktop">
                       <table className="reward-table compact-mobile" style={{ minWidth:560 }}>
@@ -7681,50 +7735,51 @@ function App() {
                         </thead>
                         <tbody>
                           {spTabRows.filter(r => r.year < simYear).length > 0 && (
-                            <tr><td colSpan={4} style={{ color:'#94A3B8', fontSize:12, padding:'9px 8px' }}>{simYear - 2}·{simYear - 1}년은 특별성과급 지급 전이라 0원입니다.</td></tr>
+                            <tr><td colSpan={4} style={{ color:'#94A3B8', fontSize:12, padding:'9px 8px' }}>{simYear - 2}·{simYear - 1}년은 이 탭의 조회 대상이 아니라 0원입니다.</td></tr>
                           )}
                           {spTabRows.filter(r => r.year >= simYear).map(r => (
                             <tr key={r.year} style={{ borderBottom:'1px solid rgba(255,255,255,.06)', background: r.year === simYear ? 'rgba(255,202,69,.08)' : 'transparent' }}>
-                              <td style={{ color:'#fff', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.year}년{r.year === simYear && <span style={{ fontSize:12, fontWeight:900, color:'#FFCA45', border:'1px solid rgba(255,202,69,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>기준연도</span>}</td>
-                              <td style={{ textAlign:'right', color:'#D5DCE6', fontSize:13, padding:'9px 8px' }}>{r.year < simYear ? '—' : `${r.profit}조`}</td>
+                              <td style={{ color:'#fff', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.year}년{r.year === simYear && <span style={{ fontSize:12, fontWeight:900, color:'#FFCA45', border:'1px solid rgba(255,202,69,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>기준연도</span>}{r.isCarry && <span style={{ fontSize:12, fontWeight:900, color:'#00DC82', border:'1px solid rgba(0,220,130,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>이월</span>}{!r.hasInput && !r.isCarry && <span style={{ fontSize:12, fontWeight:900, color:'#FFCA45', border:'1px solid rgba(255,202,69,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>입력 필요</span>}</td>
+                              <td style={{ textAlign:'right', color:'#D5DCE6', fontSize:13, padding:'9px 8px' }}>{r.profit == null ? '—' : `${r.profit}조`}</td>
                               <td style={{ textAlign:'right', color:'#FFCA45', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.gross > 0 ? fmtM(r.gross) : '—'}</td>
                               <td style={{ textAlign:'right', color:'#00DC82', fontSize:13, fontWeight:800, padding:'9px 8px' }}>{r.net > 0 ? fmtM(r.net) : '—'}</td>
                             </tr>
                           ))}
                           <tr style={{ borderTop:'1px solid rgba(255,202,69,.25)' }}>
-                            <td style={{ color:'#D5DCE6', fontSize:14, fontWeight:900, padding:'9px 8px' }}>합계</td>
+                            <td style={{ color:'#D5DCE6', fontSize:14, fontWeight:900, padding:'9px 8px' }}>합계 (부여분 {simYear}~{simYear + 2}년)</td>
                             <td style={{ padding:'9px 8px' }}></td>
-                            <td style={{ textAlign:'right', color:'#FFCA45', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(spTabRows.reduce((s, r) => s + (r.gross || 0), 0))}</td>
-                            <td style={{ textAlign:'right', color:'#00DC82', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</td>
+                            <td style={{ textAlign:'right', color:'#FFCA45', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(spTabRows.filter(r => !r.isCarry).reduce((s, r) => s + (r.gross || 0), 0))}</td>
+                            <td style={{ textAlign:'right', color:'#00DC82', fontSize:14, fontWeight:900, padding:'9px 8px' }}>{fmtM(spTabRows.filter(r => !r.isCarry).reduce((s, r) => s + (r.net || 0), 0))}</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
                     <div className="mobile-bonus-cards">
                       {spTabRows.filter(r => r.year < simYear).length > 0 && (
-                        <div style={{ color:'#94A3B8', fontSize:12, padding:'4px 2px' }}>{simYear - 2}·{simYear - 1}년은 특별성과급 지급 전이라 0원입니다.</div>
+                        <div style={{ color:'#94A3B8', fontSize:12, padding:'4px 2px' }}>{simYear - 2}·{simYear - 1}년은 이 탭의 조회 대상이 아니라 0원입니다.</div>
                       )}
                       {spTabRows.filter(r => r.year >= simYear).map(r => (
                         <div key={r.year} style={{ background: r.year === simYear ? 'rgba(255,202,69,.08)' : 'rgba(255,255,255,.04)', border: r.year === simYear ? '1px solid rgba(255,202,69,.35)' : '1px solid rgba(255,255,255,.1)', borderRadius:16, padding:14 }}>
                           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
-                            <div style={{ color:'#fff', fontWeight:900, fontSize:16 }}>{r.year}년{r.year === simYear && <span style={{ fontSize:12, fontWeight:900, color:'#FFCA45', border:'1px solid rgba(255,202,69,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>기준연도</span>}</div>
+                            <div style={{ color:'#fff', fontWeight:900, fontSize:16 }}>{r.year}년{r.year === simYear && <span style={{ fontSize:12, fontWeight:900, color:'#FFCA45', border:'1px solid rgba(255,202,69,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>기준연도</span>}{r.isCarry && <span style={{ fontSize:12, fontWeight:900, color:'#00DC82', border:'1px solid rgba(0,220,130,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>이월</span>}{!r.hasInput && !r.isCarry && <span style={{ fontSize:12, fontWeight:900, color:'#FFCA45', border:'1px solid rgba(255,202,69,.35)', borderRadius:999, padding:'1px 6px', marginLeft:6 }}>입력 필요</span>}</div>
                             <div style={{ color:'#00DC82', fontWeight:900, fontSize:18 }}>{r.net > 0 ? fmtM(r.net) : '—'}</div>
                           </div>
                           <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:8 }}>
-                            <div style={{ background:'rgba(255,255,255,.04)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#B9C4D2', fontSize:12, fontWeight:900 }}>DS 영업이익</div><div style={{ color:'#fff', fontWeight:900, marginTop:3 }}>{r.year < simYear ? '—' : `${r.profit}조`}</div></div>
+                            <div style={{ background:'rgba(255,255,255,.04)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#B9C4D2', fontSize:12, fontWeight:900 }}>DS 영업이익</div><div style={{ color:'#fff', fontWeight:900, marginTop:3 }}>{r.profit == null ? '—' : `${r.profit}조`}</div></div>
                             <div style={{ background:'rgba(255,202,69,.08)', borderRadius:12, padding:'8px 9px' }}><div style={{ color:'#FFCA45', fontSize:12, fontWeight:900 }}>특별성과급 (세전)</div><div style={{ color:'#fff', fontWeight:900, marginTop:3 }}>{r.gross > 0 ? fmtM(r.gross) : '—'}</div></div>
                           </div>
                         </div>
                       ))}
                       <div style={{ background:'rgba(255,202,69,.08)', border:'1px solid rgba(255,202,69,.25)', borderRadius:16, padding:14, display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
-                        <div style={{ color:'#D5DCE6', fontWeight:900 }}>합계 (공제 후)</div>
-                        <div style={{ color:'#00DC82', fontWeight:900, fontSize:18 }}>{fmtM(spTabRows.reduce((s, r) => s + (r.net || 0), 0))}</div>
+                        <div style={{ color:'#D5DCE6', fontWeight:900 }}>합계 (부여분 · 공제 후)</div>
+                        <div style={{ color:'#00DC82', fontWeight:900, fontSize:18 }}>{fmtM(spTabRows.filter(r => !r.isCarry).reduce((s, r) => s + (r.net || 0), 0))}</div>
                       </div>
                     </div>
+                    <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.6, marginTop:12, wordBreak:'keep-all' }}>{simYear + 3}~{simYear + 5}년은 신규 부여가 아니라 {simYear}~{simYear + 2}년 부여분이 1/3씩 3년에 걸쳐 현금화되어 들어오는 이월 수령분입니다. 합계에는 포함되지 않습니다.</div>
                     <details style={{ marginTop:12 }}>
                       <summary style={{ cursor:'pointer', color:'#B9C4D2', fontSize:12, fontWeight:800 }}>허들·공제·가정 자세히</summary>
                       <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.8, marginTop:6, wordBreak:'keep-all' }}>
-                      {simYear - 2}·{simYear - 1}년은 특별성과급 지급 전이라 0원입니다(2026년 성과부터 지급). 지급 허들은 DS 영업이익 {simYear}~{simYear + 2}년 200조, {simYear + 3}년부터 100조이며, 허들 미달 연도는 미지급입니다. {simYear + 3}년 귀속분부터는 계산기 탭 '가정 더 바꾸기'의 2029년 이후 지급 가정 체크박스가 켜져 있을 때만 지급되는 것으로 봅니다 — 이 탭은 입력한 영업이익 기준 예상액을 표시합니다. 특별성과급은 DS 영업이익 × 10.5% 재원을 인원수로 나눈 1인당 금액 기준이라, 연봉이 달라도 금액이 같습니다(평균 기초금액 미입력 가정). 연봉은 소속이 '그외'이고 적자인 경우(2027년 이후 고정 24% 지급률)에만 금액에 반영됩니다. 직급 CL3·고과 MT·인상률 연 4%(베이스업 3% + 성과 1%) 가정이며, 실제 지급액은 실적·주가에 따라 달라집니다. 출처: Morgan Stanley "Memory: Key Debate Post Mid-terms" 2026-11-09.
+                      {simYear - 2}·{simYear - 1}년은 이 탭의 조회 대상이 아니라 0원입니다(특별성과급은 2026년 성과부터 지급). {simYear}~{simYear + 2}년은 입력한 DS 영업이익 기준 신규 부여분입니다. {simYear + 3}~{simYear + 5}년은 신규 부여가 아니라, {simYear}~{simYear + 2}년 부여분이 1/3씩 3년에 걸쳐 현금화되어 들어오는 이월 수령분입니다(매년 4월 매도 가능분 기준 — 현금화 예정표와 같은 계산). 합계는 신규 부여분({simYear}~{simYear + 2}년)만 합산합니다. 지급 허들은 DS 영업이익 {simYear}~{simYear + 2}년 200조이며, 허들 미달 연도는 미지급입니다. 영업이익 입력이 비어 있는 연도는 부여분이 없고 '—'로 표시되며, 합계에도 들어가지 않습니다. 이 탭은 계산기 탭 '가정 더 바꾸기'의 2029년 이후 지급 가정 체크박스와 무관합니다. 특별성과급은 DS 영업이익 × 10.5% 재원을 인원수로 나눈 1인당 금액 기준이라, 연봉이 달라도 금액이 같습니다(평균 기초금액 미입력 가정). 연봉은 소속이 '그외'이고 적자인 경우(2027년 이후 고정 24% 지급률)에만 금액에 반영됩니다. 직급 CL3·고과 MT·인상률 연 4%(베이스업 3% + 성과 1%) 가정이며, 실제 지급액은 실적·주가에 따라 달라집니다. 출처: Morgan Stanley "Memory: Key Debate Post Mid-terms" 2026-11-09.
                       </div>
                     </details>
                   </div>
