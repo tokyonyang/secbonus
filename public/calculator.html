@@ -2041,6 +2041,7 @@ function App() {
 
   // ── UI 네비게이션 ────────────────────────────────────────────────────
   const [tab, setTab] = useState(0); // Phase 1: 0 계산기, 1 성과급 상세, 2 내 연봉, 3 더보기
+  const [assumptionsOpen, setAssumptionsOpen] = useState(false); // '가정 더 바꾸기' 펼침 상태 — App 레벨에 두어 탭 이동 시에도 유지 (기본은 접힘)
   const [forceSpRsuOpen, setForceSpRsuOpen] = useState(false);
 
   // ── 내 정보 / 연봉 / 인상률 입력 (SalaryContent, CoreInputs/MoreAssumptions) ─────
@@ -4261,6 +4262,10 @@ function App() {
   });
   const spNextYearPayout = spSchedule[0]?.amount || 0;
   const spFuturePayoutTotal = spSchedule.reduce((sum, x) => sum + x.amount, 0);
+  // [표시] 현금화 예정표에는 매도 가능분이 0원인 해는 표시하지 않는다.
+  // 합계(spFuturePayoutTotal)는 전체 행 기준이라 그대로 유지된다.
+  const spVisibleSchedule = spSchedule.filter(x => x.amount > 0);
+  const spVisibleLastYear = spVisibleSchedule.length ? spVisibleSchedule[spVisibleSchedule.length - 1].dateObj.getFullYear() : spSaleBaseYear;
 
   const psuInitialBasePrice = 85385;
   const futureBasePrice = Math.max(0, Number(rsuFutureBasePrice) || 0);
@@ -4715,16 +4720,16 @@ function App() {
               ))}
             </div>
             <div style={{ marginTop:12, background:'rgba(255,202,69,.08)', border:'1px solid rgba(255,202,69,.15)', borderRadius:16, padding:12, color:'#FFCA45', fontSize:12, lineHeight:1.6 }}>
-              <div style={{ fontSize:13, fontWeight:900, color:'#FFCA45', marginBottom:2 }}>특별성과급 현금화 예정표 ({spSaleBaseYear}~{spSaleLastYear}년)</div>
-              <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.55, marginBottom:8 }}>{spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중 — 예상 영업이익으로 ${spNoGrantFromYear}~${spGrantLastYear}년 귀속분도 계산합니다.` : `${spNoGrantFromYear}년 귀속분부터 미지급 가정 — 2030년 특별성과급 없음 예상.`} 매년 4월 매도 가능분 기준 (지급은 3월말~4월초 자사주 수령 기준).</div>
-              {spSchedule.map((x,i)=><div key={x.date}>{x.date} · {fmtM(x.amount)} <span style={{ color:isUnlockedAsOfToday(x.dateObj)?'#00DC82':'#FF6B6B' }}>{isUnlockedAsOfToday(x.dateObj)?'현금화 가능':'매도 제한'}</span> <span style={{ color:'#B9C4D2' }}>({x.desc})</span></div>)}
-              <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid rgba(255,202,69,.25)', fontWeight:900, color:'#FFCA45' }}>합계: {fmtM(spFuturePayoutTotal)} ({spSaleBaseYear}~{spSaleLastYear}년 매도 가능분)</div>
+              <div style={{ fontSize:13, fontWeight:900, color:'#FFCA45', marginBottom:2 }}>특별성과급 현금화 예정표 ({spSaleBaseYear}~{spVisibleLastYear}년)</div>
+              <div style={{ color:'#B9C4D2', fontSize:12, lineHeight:1.55, marginBottom:8 }}>{spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중 — 예상 영업이익으로 ${spNoGrantFromYear}~${spGrantLastYear}년 귀속분도 계산합니다.` : `${spNoGrantFromYear}년 귀속분부터 미지급 가정 — 2030년 특별성과급 없음 예상.`} 매년 4월 매도 가능분 기준 (지급은 3월말~4월초 자사주 수령 기준).{spVisibleSchedule.length < spSchedule.length ? ' 매도 가능분이 0원인 해는 표시하지 않습니다.' : ''}</div>
+              {spVisibleSchedule.map((x,i)=><div key={x.date}>{x.date} · {fmtM(x.amount)} <span style={{ color:isUnlockedAsOfToday(x.dateObj)?'#00DC82':'#FF6B6B' }}>{isUnlockedAsOfToday(x.dateObj)?'현금화 가능':'매도 제한'}</span> <span style={{ color:'#B9C4D2' }}>({x.desc})</span></div>)}
+              <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid rgba(255,202,69,.25)', fontWeight:900, color:'#FFCA45' }}>합계: {fmtM(spFuturePayoutTotal)} ({spSaleBaseYear}~{spVisibleLastYear}년 매도 가능분)</div>
             </div>
             <div style={{ marginTop:12, background:'rgba(255,202,69,.06)', border:'1px solid rgba(255,202,69,.25)', borderRadius:16, padding:12 }}>
               <div style={{ fontSize:12, fontWeight:900, color: spAssumeGrantAfter2028 ? '#00DC82' : '#B9C4D2', marginBottom:6 }}>{spAssumeGrantAfter2028 ? `✓ 2029년 이후 지급 가정 적용 중 — ${spNoGrantFromYear}~${spGrantLastYear}년 귀속분도 예상 영업이익으로 계산합니다` : `${spNoGrantFromYear}년 귀속분부터 미지급 가정`}</div>
               <div style={{ fontSize:16, fontWeight:900, color:'#FFCA45', marginBottom:4 }}>향후 5년 특별성과급 예상 (신규 부여분)</div>
               <div style={{ fontSize:12, color:'#B9C4D2', lineHeight:1.6, marginBottom:10 }}>
-                '가정 더 바꾸기'에서 입력한 향후 3년 예상 DS 영업이익으로 계산합니다. 4·5년차는 3년차 예상 영업이익을 그대로 이어받은 추정치입니다(별도 전망치가 아닙니다). {spAssumeGrantAfter2028 ? `특별성과급은 ${Number(simYear)}~${Number(simYear) + 5}년 귀속분까지 부여되는 것으로 가정합니다(2029년 이후 지급 가정 적용 중). 5년 합계는 ${simYear + 1}~${simYear + 5}년 부여분의 합이며, ` : `특별성과급은 ${Number(simYear)}~${Number(simYear) + 2}년 귀속분까지만 부여되는 것으로 가정합니다(${spNoGrantFromYear}년 귀속분부터 미지급). 5년 합계는 지급 대상 연도(${simYear + 1}~${simYear + 2}년 부여분)의 합이며, `}위 ‘특별성과급 현금화 예정표’의 연도별 매도 가능액(1/3씩 3년 분할)과는 기준이 다릅니다. 향후 5년 예상 영업이익 기준 추정치 — 실제 지급액은 해당 연도 실적·주가에 따라 달라집니다. 특별성과급 지급 허들: 2026~2028년 DS 영업이익 200조, 2029년부터 100조. 허들 미달 연도는 미지급으로 표시됩니다.
+                '가정 더 바꾸기'의 향후 3년 예상 DS 영업이익으로 계산합니다(4·5년차는 3년차 이어받기 추정치). {spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중입니다.` : `2029년 귀속분부터 미지급 가정 — 계산기 탭 ‘가정 더 바꾸기’의 체크박스에서 바꿀 수 있습니다.`} 현금화 예정표(매도 가능액)와는 기준이 다릅니다. 허들 200조(2026~2028년)·100조(2029년부터), 미달 연도는 미지급. 추정치이며 실제 지급액은 실적·주가에 따라 달라집니다.
               </div>
               <div className="reward-table-wrap yearly-bonus-desktop">
                 <table className="reward-table compact-mobile" style={{ minWidth:560 }}>
@@ -5473,10 +5478,10 @@ function App() {
               </div>
             ))}
           </div>
-          <div style={{ background:"rgba(255,202,69,0.07)", border:"1px solid rgba(255,202,69,0.25)", borderRadius:16, padding:"10px 12px", marginBottom:10, fontSize:12, color:"#D5DCE6", lineHeight:1.7 }}>
-            <div>💡 세금 45%(지방소득세 포함 49.5%)는 연말정산 시 과다추징 예방을 위해 법정 최고세율을 일괄 적용합니다.</div>
-            <div>💡 4대보험 4.967%는 월급여 일괄 납부 방지를 위해 선제 징수합니다. '27년 법정보험료율 인상 시 인상된 보험료율 적용.</div>
-            <div>💡 지급일({simYear+1}년 3월말~4월초) 기준 {simYear+1}년 소득으로 신고합니다. 지급일 종가 확정 전이므로 위 금액은 현재 주가 기준 추정치입니다.</div>
+          <div style={{ background:"rgba(255,202,69,0.07)", border:"1px solid rgba(255,202,69,0.25)", borderRadius:16, padding:"10px 12px", marginBottom:10, fontSize:12, color:"#D5DCE6", lineHeight:1.7, wordBreak:"keep-all" }}>
+            <div>💡 세금 45%(지방세 포함 49.5%) — 연말정산 과다추징 예방을 위해 법정 최고세율을 일괄 적용합니다.</div>
+            <div>💡 4대보험 4.967% — 월급여 일괄 납부 방지를 위해 선제 징수합니다. '27년 보험료율 인상 시 인상분 적용.</div>
+            <div>💡 지급일({simYear+1}년 3월말~4월초) 기준 {simYear+1}년 소득으로 신고합니다. 종가 확정 전이라 현재 주가 기준 추정치입니다.</div>
           </div>
           <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:16, padding:"10px 12px", marginBottom:10 }}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
@@ -6556,7 +6561,7 @@ function App() {
 
   /* ── Phase 1 리디자인: 가정 더 바꾸기 (접은 설정 — 기존 내 정보/시뮬레이션 나머지 전부) ── */
   const MoreAssumptions = () => (
-    <details style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:16, padding:"14px 16px" }}>
+    <details open={assumptionsOpen} onToggle={(e) => setAssumptionsOpen(e.currentTarget.open)} style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:16, padding:"14px 16px" }}>
       <summary style={{ cursor:"pointer", fontSize:14, fontWeight:900, color:"#D5DCE6" }}>⚙️ 가정 더 바꾸기</summary>
       <div style={{ display:"flex", flexDirection:"column", gap:20, marginTop:14 }}>
         <>
