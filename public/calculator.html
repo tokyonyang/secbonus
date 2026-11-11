@@ -2592,7 +2592,12 @@ function App() {
     const prevRec = findRecordByYear(records, prevYear);
     if (!prevRec) return null;
     const prevSalary = Math.round(Number(prevRec.contract_salary_man) || 0);
-    const psRate = getEffectiveDsPsRateForRecord(prevRec);
+    // [OPI-1 50% 규칙] PR #25와 동일 — 전년도 기록에 실제 지급률이 아직 없는 경우
+    // (2026년처럼 실적 확정 전)에도 허들을 넘으면 50% 추정값을 쓴다. 실제 기록된
+    // 지급률(2025년 47% 등)이나 적자 해 0%(2023년)는 그대로 유지된다.
+    const prevSpForYear = getRecordSpecialSpNet(prevYear) || calcScenarioSpecialNet(prevYear);
+    const savedRate = getEffectiveDsPsRateForRecord(prevRec);
+    const psRate = savedRate > 0 ? savedRate : (prevSpForYear > 0 ? 50 : Number(getHistoricalDsPs(prevYear) ?? 0));
     const psMan = calcPsAmountMan(prevSalary, psRate);
     const piRateNum = Number(piRate) || 0;
     const piMan = calcPiAmountMan(prevSalary, piRateNum);
