@@ -2011,6 +2011,7 @@ function App() {
   const sharedParams = sharedParamsRef.current;
   const [sharedLinkApplied, setSharedLinkApplied] = useState(false);
   const [shareMsg, setShareMsg] = useState("");
+  const shareMsgTimerRef = React.useRef(null);
 
   // ── UI 네비게이션 ────────────────────────────────────────────────────
   const [tab, setTab] = useState(0); // 0 특별 인센티브, 1 계산기, 2 성과급 상세, 3 내 연봉, 4 더보기
@@ -3429,8 +3430,62 @@ function App() {
     return `${window.location.origin}${window.location.pathname}?${p.toString()}`;
   };
   const flashShareMsg = (msg) => {
+    if (shareMsgTimerRef.current) clearTimeout(shareMsgTimerRef.current);
     setShareMsg(msg);
-    setTimeout(() => setShareMsg(''), 3000);
+    shareMsgTimerRef.current = setTimeout(() => setShareMsg(''), 3000);
+  };
+  // ── 이미지 저장·링크 복사: iOS 사파리 대응 ─────────────────────────────
+  // iOS 사파리는 DOM에 없는 앵커의 프로그래밍 클릭을 무시하고 data URL을 다운로드 대신 이동으로 처리한다.
+  // 그래서 Blob URL + DOM 부착 앵커를 쓰고, 공유가 가능하면 네이티브 공유 시트를 우선 사용한다.
+  const anchorDownload = (url, filename) => {
+    const a = document.createElement('a');
+    a.download = filename;
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+  const saveCanvasJpeg = async (cv, filename) => {
+    let blob = null;
+    if (typeof cv.toBlob === 'function') {
+      blob = await new Promise((resolve) => { try { cv.toBlob(resolve, 'image/jpeg', 0.92); } catch (e) { resolve(null); } });
+    }
+    if (blob) {
+      try {
+        const file = new File([blob], filename, { type: 'image/jpeg' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file] });
+            flashShareMsg('이미지를 저장했습니다 ✓');
+            return;
+          } catch (e) {
+            if (e && e.name === 'AbortError') return; // 사용자가 공유 시트에서 취소 — 실패가 아님
+          }
+        }
+      } catch (e) { /* File/canShare 미지원 — 앵커 다운로드로 폴백 */ }
+      const url = URL.createObjectURL(blob);
+      anchorDownload(url, filename);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      flashShareMsg('이미지를 저장했습니다 ✓');
+      return;
+    }
+    // toBlob 실패 시 기존 data URL 방식으로 폴백
+    anchorDownload(cv.toDataURL('image/jpeg', 0.92), filename);
+    flashShareMsg('이미지를 저장했습니다 ✓');
+  };
+  // 클립보드 API가 막힌 환경용 textarea 폴백. iOS에서는 focus + setSelectionRange가 필요하다.
+  // 반환값이 true일 때만 복사가 된 것이다.
+  const copyTextFallback = (text) => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    ta.readOnly = true; // iOS에서 포커스 시 키보드가 뜨지 않게
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.setSelectionRange(0, ta.value.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
   };
   const copyShareLink = async () => {
     const url = buildShareUrl();
@@ -3438,13 +3493,10 @@ function App() {
       await navigator.clipboard.writeText(url);
       flashShareMsg('공유 링크를 복사했습니다 ✓');
     } catch (e) {
-      // 클립보드 API가 막힌 환경용 폴백
+      // 클립보드 API가 막힌 환경용 폴백 (iOS에서는 focus + setSelectionRange 필요)
       try {
-        const ta = document.createElement('textarea');
-        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select();
-        document.execCommand('copy'); document.body.removeChild(ta);
-        flashShareMsg('공유 링크를 복사했습니다 ✓');
+        if (copyTextFallback(url)) flashShareMsg('공유 링크를 복사했습니다 ✓');
+        else flashShareMsg('복사에 실패했습니다. 주소창 URL을 직접 복사해 주세요.');
       } catch (e2) { flashShareMsg('복사에 실패했습니다. 주소창 URL을 직접 복사해 주세요.'); }
     }
   };
@@ -3505,7 +3557,7 @@ function App() {
   };
   // ── P2 배치2: 이미지로 저장 — 요약 카드 이미지를 캔버스로 그려 PNG 다운로드한다.
   // 외부 라이브러리 없이 순수 캔버스 텍스트로 그린다. 개인 식별정보는 포함하지 않는다.
-  const downloadSummaryImage = () => {
+  const downloadSummaryImage = async () => {
     try {
       const W = 1080, H = 780;
       const cv = document.createElement('canvas');
@@ -3545,17 +3597,13 @@ function App() {
       });
       ctx.fillStyle = '#5F6B7A'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
       ctx.fillText('추정치 · secbonus.vercel.app', 64, H - 36);
-      const a = document.createElement('a');
-      a.download = `secbonus-총보상-${simYear}.jpg`;
-      a.href = cv.toDataURL('image/jpeg', 0.92);
-      a.click();
-      flashShareMsg('이미지를 저장했습니다 ✓');
+      await saveCanvasJpeg(cv, `secbonus-총보상-${simYear}.jpg`);
     } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
   };
 
   // ── 특별 인센티브 탭: 결과 이미지로 저장 + 공유 링크 복사 ───────────────
   // downloadSummaryImage와 같은 방식(순수 캔버스, 외부 라이브러리 없음)으로 그린다.
-  const downloadSpTabImage = () => {
+  const downloadSpTabImage = async () => {
     try {
       const rows = spTabRows || [];
       if (!rows.length) { flashShareMsg('먼저 조회 버튼을 눌러주세요.'); return; }
@@ -3596,11 +3644,7 @@ function App() {
       });
       ctx.fillStyle = '#5F6B7A'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
       ctx.fillText('수령액 기준 · 세전(금색) · 공제 후(초록) · 출처: Morgan Stanley 2026-11-09', 64, H - 36);
-      const a = document.createElement('a');
-      a.download = `secbonus-특별인센티브-${simYear}.jpg`;
-      a.href = cv.toDataURL('image/jpeg', 0.92);
-      a.click();
-      flashShareMsg('이미지를 저장했습니다 ✓');
+      await saveCanvasJpeg(cv, `secbonus-특별인센티브-${simYear}.jpg`);
     } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
   };
   // 특별 인센티브 탭 공유 링크 — 탭 입력값을 URL 파라미터로 인코딩한다.
@@ -3618,11 +3662,12 @@ function App() {
   const copySpTabShareLink = async () => {
     try {
       const url = buildSpTabShareUrl();
-      if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(url); flashShareMsg('공유 링크를 복사했습니다 ✓'); return; }
-      const ta = document.createElement('textarea');
-      ta.value = url; document.body.appendChild(ta); ta.select();
-      document.execCommand('copy'); document.body.removeChild(ta);
-      flashShareMsg('공유 링크를 복사했습니다 ✓');
+      if (navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(url); flashShareMsg('공유 링크를 복사했습니다 ✓'); return; }
+        catch (e) { /* 클립보드 API 실패 — textarea 폴백으로 */ }
+      }
+      if (copyTextFallback(url)) flashShareMsg('공유 링크를 복사했습니다 ✓');
+      else flashShareMsg('링크 복사에 실패했습니다.');
     } catch (e) { flashShareMsg('링크 복사에 실패했습니다.'); }
   };
 
@@ -7748,6 +7793,7 @@ function App() {
                       <div style={{ display:'flex', gap:8 }}>
                         <button onClick={downloadSpTabImage} style={{ border:"1px solid rgba(17,24,39,0.25)", background:"rgba(17,24,39,0.06)", color:"#1F2937", borderRadius:999, padding:"6px 12px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>🖼️ 이미지로 저장</button>
                         <button onClick={copySpTabShareLink} style={{ border:"1px solid rgba(17,24,39,0.25)", background:"rgba(17,24,39,0.06)", color:"#1F2937", borderRadius:999, padding:"6px 12px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>🔗 링크 복사</button>
+                        {shareMsg && <span style={{ fontSize:13, fontWeight:800, color:"#0B7A55" }}>{shareMsg}</span>}
                       </div>
                     </div>
                     <details style={{ marginBottom:12 }}>
