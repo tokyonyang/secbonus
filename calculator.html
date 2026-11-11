@@ -4366,7 +4366,14 @@ function App() {
     if (salary <= 0) return { piAmount:0, psAmount:0, piGross:0, psGross:0, psRate:0, piRate:0 };
     const piRate = Number(saved?.withholding_pi_rate ?? ((parseFloat(samsungTaiRateH1) + parseFloat(samsungTaiRateH2)) / 2 * 100) ?? 100) || 0;
     const spForYear = getRecordSpecialSpNet(y) || calcScenarioSpecialNet(y);
-    const psRate = saved ? getEffectiveDsPsRateForRecord(saved) : (spForYear > 0 ? 50 : Number(getHistoricalDsPs(y) ?? 0));
+    // [OPI-1 50% 규칙] 허들(특별성과급 지급 기준 영업이익)을 넘으면 OPI-1은 무조건 연봉의 50%.
+    // 저장된 기록에 실제 지급률이 아직 없는 당해 연도(2026년처럼 실적 확정 전)도 예외가 아니다.
+    // getEffectiveDsPsRateForRecord는 기록된 특별·과거 지급률이 없을 때 0을 돌려주므로,
+    // 그 경우에만 시나리오 특별(허들 통과 여부)으로 50% 추정값을 쓴다. 실제 기록된 지급률
+    // (2025년 47% 등)이나 적자 해 0%(2023년)는 그대로 유지된다 — 특별이 0원인 해는
+    // spForYear가 0이라 과거 지급률(0%)로 떨어진다.
+    const savedRate = saved ? getEffectiveDsPsRateForRecord(saved) : 0;
+    const psRate = savedRate > 0 ? savedRate : (spForYear > 0 ? 50 : Number(getHistoricalDsPs(y) ?? 0));
     const piGross = Math.max(0, calcPiAmountMan(salary, piRate));
     const psGross = Math.max(0, calcPsAmountMan(salary, psRate));
     const grossTotal = piGross + psGross;
