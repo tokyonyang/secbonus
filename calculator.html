@@ -1858,11 +1858,11 @@ function CommentBoard({ salaryUser, salaryToken, onLoginClick }) {
           <div style={{ background: salaryUser ? 'rgba(0,220,130,.1)' : 'rgba(255,202,69,.1)', border: salaryUser ? '1px solid rgba(0,220,130,.25)' : '1px solid rgba(255,202,69,.25)', color: salaryUser ? '#00DC82' : '#FFCA45', borderRadius:16, padding:'12px 13px', fontSize:13, lineHeight:1.6 }}>
             {salaryUser ? <>작성 계정: <b>{salaryUser.display_name || salaryUser.login_id}</b> <span style={{ color:'#B9C4D2' }}>({salaryUser.login_id})</span></> : <>게시글 작성은 개인 연봉저장 계정 로그인이 필요합니다. <button onClick={onLoginClick} style={{ marginLeft:8, background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)', color:'#fff', borderRadius:8, padding:'5px 8px', fontWeight:800 }}>연봉저장 로그인으로 이동</button></>}
           </div>
-          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="문의 제목" disabled={!salaryUser} style={{ background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, outline:'none', opacity: salaryUser ? 1 : .55 }} />
-          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="문의 내용을 입력해주세요." rows={5} disabled={!salaryUser} style={{ resize:'vertical', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, outline:'none', fontFamily:'inherit', lineHeight:1.6 }} />
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="문의 제목" disabled={!salaryUser} style={{ background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, outline:'none', opacity: salaryUser ? 1 : .55 }} />
+          <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="문의 내용을 입력해주세요." rows={5} disabled={!salaryUser} style={{ resize:'vertical', background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, outline:'none', fontFamily:'inherit', lineHeight:1.6 }} />
           {errMsg && <div style={{ color:'#FF6B6B', background:'rgba(255,107,107,.1)', border:'1px solid rgba(255,107,107,.25)', borderRadius:16, padding:'9px 11px', fontSize:13 }}>{errMsg}</div>}
           {successMsg && <div style={{ color:'#00DC82', background:'rgba(0,220,130,.1)', border:'1px solid rgba(0,220,130,.25)', borderRadius:16, padding:'9px 11px', fontSize:13 }}>{successMsg}</div>}
-          <button disabled={submitting || !salaryUser} onClick={submitComment} style={{ border:0, borderRadius:16, padding:'13px 16px', color:'#0b1220', background:'linear-gradient(90deg,#00C6FF,#00DC82)', fontWeight:900, fontSize:15, cursor:(submitting || !salaryUser)?'not-allowed':'pointer', opacity:(submitting || !salaryUser)?.7:1 }}>
+          <button disabled={submitting || !salaryUser} onClick={submitComment} style={{ border:0, borderRadius:16, padding:'13px 16px', color:'#0B1220', background:'linear-gradient(90deg,#00C6FF,#00DC82)', fontWeight:900, fontSize:15, cursor:(submitting || !salaryUser)?'not-allowed':'pointer', opacity:(submitting || !salaryUser)?.7:1 }}>
             {submitting ? '등록 중...' : (salaryUser ? '문의 등록하기' : '로그인 후 작성 가능')}
           </button>
         </div>
@@ -1981,7 +1981,7 @@ function LiveChatPopup({ salaryUser, salaryToken, onLoginClick }) {
   return (
     <>
       {!open && (
-        <button onClick={() => setOpen(true)} style={{ position:'fixed', right:18, bottom:18, zIndex:2000, border:0, borderRadius:999, padding:'13px 16px', background:'linear-gradient(135deg,#00DC82,#00C6FF)', color:'#0b1220', fontWeight:950, boxShadow:'0 18px 45px rgba(0,0,0,.36)', cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
+        <button onClick={() => setOpen(true)} style={{ position:'fixed', right:18, bottom:18, zIndex:2000, border:0, borderRadius:999, padding:'13px 16px', background:'linear-gradient(135deg,#00DC82,#00C6FF)', color:'#0B1220', fontWeight:950, boxShadow:'0 18px 45px rgba(0,0,0,.36)', cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ fontSize:16 }}>💬</span> 실시간 채팅
         </button>
       )}
@@ -2000,7 +2000,7 @@ function LiveChatPopup({ salaryUser, salaryToken, onLoginClick }) {
               {canViewHistory ? <>참여 계정: <b>{salaryUser.display_name || salaryUser.login_id}</b></> : <>비회원도 메시지 작성은 가능합니다. 단, 이전 대화 내용은 가입자 로그인 후 확인할 수 있습니다. <button onClick={onLoginClick} style={{ marginLeft:6, background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.15)', color:'#fff', borderRadius:8, padding:'4px 7px', fontWeight:800, fontSize:12 }}>로그인</button></>}
             </div>
 
-            <div ref={listRef} style={{ height:310, overflowY:'auto', border:'1px solid rgba(255,255,255,.08)', borderRadius:16, padding:10, background:'#0b1220', display:'flex', flexDirection:'column', gap:9 }}>
+            <div ref={listRef} style={{ height:310, overflowY:'auto', border:'1px solid rgba(255,255,255,.08)', borderRadius:16, padding:10, background:'#0B1220', display:'flex', flexDirection:'column', gap:9 }}>
               {loading ? <div style={{ color:'#B9C4D2', textAlign:'center', padding:26 }}>불러오는 중...</div> : visibleMessages.length === 0 ? <div style={{ color:'#B9C4D2', textAlign:'center', padding:26, lineHeight:1.6 }}>{canViewHistory ? '아직 메시지가 없습니다.' : '이전 채팅은 가입자만 볼 수 있습니다. 메시지를 남기면 현재 창에서만 확인됩니다.'}</div> : visibleMessages.map(m => {
                 const mine = salaryUser ? m.user_id === salaryUser.id : !m.user_id;
                 return <div key={m.id || m.created_at} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth:'84%' }}>
@@ -2012,10 +2012,10 @@ function LiveChatPopup({ salaryUser, salaryToken, onLoginClick }) {
 
             {errMsg && <div style={{ color:'#FF6B6B', background:'rgba(255,107,107,.1)', border:'1px solid rgba(255,107,107,.25)', borderRadius:16, padding:'8px 10px', fontSize:12, marginTop:9 }}>{errMsg}</div>}
 
-            {!canViewHistory && <input value={guestNick} onChange={e=>setGuestNick(e.target.value)} placeholder="닉네임" maxLength={30} style={{ width:'100%', boxSizing:'border-box', marginTop:10, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'10px 11px', fontSize:13, outline:'none' }} />}
+            {!canViewHistory && <input value={guestNick} onChange={e=>setGuestNick(e.target.value)} placeholder="닉네임" maxLength={30} style={{ width:'100%', boxSizing:'border-box', marginTop:10, background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'10px 11px', fontSize:13, outline:'none' }} />}
             <div style={{ display:'flex', gap:8, marginTop:10 }}>
-              <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); submit(); } }} placeholder="메시지를 입력하세요" style={{ flex:1, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'11px 12px', fontSize:13, outline:'none' }} />
-              <button onClick={submit} disabled={sending} style={{ border:0, borderRadius:16, padding:'0 15px', color:'#0b1220', background:'linear-gradient(90deg,#00DC82,#00C6FF)', fontWeight:900, cursor:sending?'wait':'pointer', opacity:sending?.65:1 }}>{sending ? '전송중' : '전송'}</button>
+              <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); submit(); } }} placeholder="메시지를 입력하세요" style={{ flex:1, background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'11px 12px', fontSize:13, outline:'none' }} />
+              <button onClick={submit} disabled={sending} style={{ border:0, borderRadius:16, padding:'0 15px', color:'#0B1220', background:'linear-gradient(90deg,#00DC82,#00C6FF)', fontWeight:900, cursor:sending?'wait':'pointer', opacity:sending?.65:1 }}>{sending ? '전송중' : '전송'}</button>
             </div>
           </div>
         </div>
@@ -4006,439 +4006,482 @@ function App() {
   // ║  주로 사용하는 state: rsuTaxRate, spRsuScenarioRows,               ║
   // ║  recentSp*, rsuFutureBasePrice 등 (위 "RSU/SP 시나리오" 그룹)      ║
   // ╚══════════════════════════════════════════════════════════════════╝
+  // [연도별 트렌드] 아래 계산 블록은 EquityRewardSimContent 안에서 App 레벨로 끌어올린 것이다.
+  // 계산식·순서는 그대로이며, 첫 페이지(ResultPanelTop)의 연도별 트렌드 차트와
+  // 성과급 상세(OPI-2/RSU) 탭이 같은 함수를 공유하게 하기 위함이다. 동작 변경 없음.
+  const parseManInput = (value) => Math.max(0, Math.round(Number(String(value ?? '').replace(/,/g,'')) || 0));
+  const parseTargetYear = (value) => {
+    const n = Math.round(Number(String(value ?? '').replace(/[^0-9]/g,'')) || 0);
+    return Math.min(2035, Math.max(2026, n || Number(simYear || 2026)));
+  };
+  const targetSpYear = spTargetYearManualMode ? parseTargetYear(spTargetYearDraft) : Number(simYear || 2026);
+  const spBaseNet = Math.round(Number(r.spNet || 0));
+  const getScenarioPerformanceDefault = (year, cl='CL3') => {
+    const c = normalizeCl(cl || 'CL3');
+    const byYear = getPerformanceRaiseReference(year, c, 'MT', 2);
+    if (byYear !== null && byYear !== undefined) return Number(byYear);
+    const latest = getPerformanceRaiseReference(2026, c, 'MT', 2);
+    if (latest !== null && latest !== undefined) return Number(latest);
+    return c === 'CL4' ? 0.0 : c === 'CL2' ? 1.5 : 1.0;
+  };
+  const normalizeScenarioNumber = (value, fallback=0) => {
+    const n = Number(String(value ?? '').replace(/,/g,''));
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const updateSpRsuScenarioRow = (year, patch) => {
+    // [연동] 기준연도 행의 DS 영업이익을 고치면 메인 profit도 함께 바꾼다(양방향).
+    // 메인→행 방향은 App의 동기화 effect가 맡는다. 과거 연도 행은 메인에 연동하지 않는다.
+    if (Number(year) === Number(targetSpYear) && Object.prototype.hasOwnProperty.call(patch, 'profit')) {
+      const v = Number(patch.profit);
+      if (Number.isFinite(v)) setProfit(Math.max(-100, Math.min(900, v)));
+    }
+    setSpRsuScenarioRows(prev => {
+      const before = { salary:'', cl:'CL3', division:'memory', deficit:'none', profit:200, rating:'MT', baseUpRaise:3, performanceRaise:getScenarioPerformanceDefault(year, 'CL3'), ...(prev[year] || {}) };
+      const nextPatch = { ...patch };
+      if (Object.prototype.hasOwnProperty.call(patch, 'cl') && !Object.prototype.hasOwnProperty.call(patch, 'performanceRaise')) {
+        nextPatch.performanceRaise = getScenarioPerformanceDefault(year, patch.cl);
+      }
+      return { ...prev, [year]: { ...before, ...nextPatch } };
+    });
+  };
+  const divisionName = (division) => division === 'memory' ? '메모리' : division === 'common' ? '공통' : '르팡';
+  const getSavedScenarioRecordRow = (year) => {
+    const rec = findRecordByYear(salaryRecords, year);
+    if (!rec) return null;
+    const savedCl = normalizeCl(rec.cl || 'CL3');
+    return {
+      salary: Math.round(Number(rec.contract_salary_man || 0) || 0),
+      cl: savedCl || 'CL3',
+      division: rec.division || 'memory',
+      baseUpRaise: Number(rec.base_up_raise_rate ?? rec.baseUpRaiseRate ?? 3) || 0,
+      performanceRaise: Number(rec.performance_raise_rate ?? rec.performanceRaiseRate ?? getScenarioPerformanceDefault(year, savedCl)) || 0,
+      dsPsRate: Number(rec.ds_ps_rate ?? 0) || 0,
+      specialSpNet: Math.round(Number(rec.special_sp_net_man || 0) || 0),
+      source: 'saved',
+    };
+  };
+  const getLatestSavedScenarioDivision = () => {
+    const latest = getHighestYearSalaryRecord(salaryRecords || []);
+    return latest?.division || myDiv || 'memory';
+  };
+  const getEffectiveScenarioRow = (year, row={}) => {
+    const saved = getSavedScenarioRecordRow(year);
+    if (saved && saved.salary > 0) {
+      return { ...row, ...saved, profit: row.profit ?? 200, deficit: row.deficit ?? 'none', rating: row.rating ?? 'MT', source:'saved' };
+    }
+    // 사업부는 변경되는 경우가 드물기 때문에, 저장값이 없는 예상연도는
+    // 가장 최근 연봉정보의 사업부를 기본값으로 사용합니다. 단, 사용자가 해당 연도에서
+    // 사업부를 직접 바꾼 경우에는 그 값을 우선합니다.
+    const latestDivision = getLatestSavedScenarioDivision();
+    const division = row?.divisionManual ? (row.division || latestDivision) : latestDivision;
+    return { ...(row || {}), division };
+  };
+  const getScenarioRaiseRates = (year, row={}) => {
+    const effectiveRow = getEffectiveScenarioRow(year, row);
+    const cl = normalizeCl(effectiveRow.cl || 'CL3');
+    const base = normalizeScenarioNumber(effectiveRow.baseUpRaise, 3);
+    const perf = normalizeScenarioNumber(effectiveRow.performanceRaise, getScenarioPerformanceDefault(year, cl));
+    return { base, perf, total: base + perf };
+  };
+  const getScenarioEstimatedSalary = (year, row={}, visited=new Set()) => {
+    const saved = getSavedScenarioRecordRow(year);
+    if (saved && saved.salary > 0) return saved.salary;
+    const direct = normalizeScenarioNumber(row.salary, 0);
+    if (direct > 0) return direct;
+    // 2026년부터 OPI-2 자동추정을 시작하므로, 2025년 이전으로 내려가면
+    // 더 이상 과거 연도를 재귀 호출하지 않고 현재 입력 연봉을 기준값으로 사용합니다.
+    // 이 방어 로직이 없으면 OPI-2/RSU 탭 최초 진입 시 2025→2024→... 무한 재귀가 발생합니다.
+    if (Number(year) <= 2025) {
+      return normalizeScenarioNumber(mySalary, 0) || normalizeScenarioNumber(r.curSalary, 0) || 0;
+    }
+    if (visited.has(year)) return normalizeScenarioNumber(mySalary, 0) || 0;
+    visited.add(year);
+    const prev = spRsuScenarioRows[year - 1] || {};
+    const prevSalary = getScenarioEstimatedSalary(year - 1, prev, visited);
+    if (prevSalary <= 0) return 0;
+    const rates = getScenarioRaiseRates(year, row);
+    return Math.round(prevSalary * (1 + rates.total / 100));
+  };
+  // [P2] 연도별 특별성과급 예상 — 세전 총액과 공제 후 자사주 지급액을 함께 반환한다.
+  // 기존 calcScenarioSpecialNet은 이 함수의 net만 돌려주는 래퍼로 남겨둔다.
+  // [P2-5yr] profitOverride를 주면 해당 연도의 행 profit 대신 그 값을 씁니다.
+  // 5년 예상표의 4·5년차는 3년차 입력값을 그대로 이어받기 위해 이 인자를 씁니다.
+  const calcScenarioSpecial = (year, profitOverride) => {
+    // 특별경영성과급은 2026년도 성과부터 지급합니다. 2025년까지는 모두 0원입니다.
+    if (Number(year) <= 2025) return { gross: 0, net: 0 };
+    const rawRow = spRsuScenarioRows[year] || {};
+    const row = getEffectiveScenarioRow(year, rawRow);
+    if (!row) return { gross: 0, net: 0 };
+    // 향후 연도는 행이 없어도 컨센서스 기본값(370조)을 쓴다 ('가정 더 바꾸기' 입력 기본값과 동일).
+    const scenarioProfit = Number(profitOverride ?? row.profit ?? (Number(year) > targetSpYear ? (Number(scenarios?.consensus?.dsProfitJo) || 370) : 0)) || 0;
+    const scenarioSalary = getScenarioEstimatedSalary(year, row);
+    const scenarioCl = normalizeCl(row.cl || 'CL3');
+    const scenarioDiv = row.division || 'memory';
+    const scenarioDeficit = (year >= 2027 && scenarioDiv === 'lepan') ? (row.deficit || 'none') : 'none';
+    const scenarioRating = row.rating || 'MT';
+    const threshold = spHurdleForYear(year);
+    if (scenarioProfit < threshold || scenarioSalary <= 0) return { gross: 0, net: 0 };
+
+    const buPct = burate * 10;
+    const saPct = 100 - buPct;
+    const totalCount = cntMemory + cntCommon + cntLepan;
+    const fund = scenarioProfit * 1e12 * (sprate / 100);
+    let perMemory, perCommon, perLepan;
+    if (spDistribMode === "flat") {
+      // [회사 공지 문구 그대로] 차등배분 없이 공통 = 메모리 × ratCommon 그대로
+      const denom = cntMemory + ratCommon * cntCommon + (buPct / 100) * cntLepan;
+      perMemory = denom > 0 ? (fund / denom) / MAN : 0;
+      perCommon = perMemory * ratCommon;
+      perLepan  = perMemory * (buPct / 100);
+    } else {
+      // [언론보도 기준, 기본값] 부문(균등) buPct% + 사업부(차등) saPct% 2단계 배분 (본문 계산과 동일 로직)
+      const equalPoolFund = fund * (buPct / 100);
+      const diffPoolFund  = fund * (saPct / 100);
+      const equalPerPerson = totalCount > 0 ? equalPoolFund / totalCount : 0;
+      const diffDenom = cntMemory + ratCommon * cntCommon;
+      const diffPerMemory = diffDenom > 0 ? diffPoolFund / diffDenom : 0;
+      const diffPerCommon = diffPerMemory * ratCommon;
+      perMemory = (equalPerPerson + diffPerMemory) / MAN;
+      perCommon = (equalPerPerson + diffPerCommon) / MAN;
+      perLepan = equalPerPerson / MAN;
+    }
+    const baseByDiv = scenarioDiv === 'memory' ? perMemory : scenarioDiv === 'common' ? perCommon : perLepan;
+    const capInfo = splitSalaryByCap(scenarioCl, scenarioSalary);
+    const baseSalary = capInfo.baseSalary || scenarioSalary;
+    // [회사 규정안] CL4 고과가급: EM 1.4 · ES 1.2 · MT 1.0 · MS 0.9 · NM 0.8
+    const perf = getSpGradeMult(scenarioCl, scenarioRating);
+    // [회사 규정안] 지급액 = 기초금액 × 지급률. 시나리오 표에는 업무성과급 입력이 없어 기준연봉을 기초금액으로 사용합니다.
+    const rateDenom = (scenarioCl !== 'CL1' && spAvgBase > 0) ? spAvgBase : baseSalary;
+    let spGross = 0;
+    if (scenarioDiv === 'lepan' && year >= 2027 && scenarioDeficit !== 'none') spGross = (baseSalary * 0.24) * perf;
+    else spGross = baseSalary * (rateDenom > 0 ? baseByDiv / rateDenom : 0) * perf;
+
+    // [회사 규정안] 소득세 49.5%(지방세 포함) + 4대보험 4.967% + 기부금 공제 후 자사주 지급
+    return { gross: Math.round(spGross), net: Math.round(calcSpDeductions(spGross, spDonationPct).net) };
+  };
+  const calcScenarioSpecialNet = (year) => calcScenarioSpecial(year).net;
+  // [P2-5yr] 5년 예상표가 쓰는 연도별 예상 DS 영업이익. 1~3년차는 입력값,
+  // 4·5년차는 3년차 입력값을 그대로 이어받습니다(별도 전망치가 아님).
+  // 표 연도는 simYear 기준이라 입력 연도와 항상 일치합니다.
+  const sp5ProfitForYear = (y) => (Number(y) > simYear + 3 ? getSpFutureProfit(simYear + 3) : getSpFutureProfit(y));
+  // [2029 이후 지급 가정] 5년 부여분 표 합계 대상 연도 — 체크 시 2027~2031년, 미체크 시 2027~2028년.
+  const sp5GrantSumYears = spAssumeGrantAfter2028 ? [simYear+1, simYear+2, simYear+3, simYear+4, simYear+5] : [simYear+1, simYear+2];
+  // [P2-5yr] 기준주가 민감도 — 당해 특별성과급(공제 후)을 기준주가로 나눈 주식 수와
+  // 현금화 시 주가 하락 시나리오(-10/-20/-30%)별 가치·손실액. 전부 추정치.
+  // 주식 수는 기존 카드와 동일하게 공제 후 금액을 3등분해 각 1/3씩 기준주가로 나눈 값(r.sharesEach*3)이며,
+  // 기준주가는 주가 단일 소스(stockPrice.effective: 수동 오버라이드 > VWAP 자동 > 수동 입력)이다.
+  // 지급일 종가는 지급 당일에야 확정되므로 현재 주가는 그 대용 추정치라는 한계를 함께 표시한다.
+  const spSensShares = Math.max(0, Number(r.sharesEach || 0) * 3);
+  const spSensBasePrice = Math.max(0, Number(r.usePrice || 0));
+  const spSensBaseValue = Math.round(spSensShares * spSensBasePrice / 10000);
+  const spSensRows = [-10, -20, -30].map(drop => {
+    const priceAt = Math.round(spSensBasePrice * (1 + drop / 100));
+    const valueAt = Math.round(spSensShares * priceAt / 10000);
+    return { drop, priceAt, valueAt, loss: Math.max(0, spSensBaseValue - valueAt) };
+  });
+  const getAutoSpForYear = (year) => calcScenarioSpecialNet(year);
+  const currentSavedSpNet = getRecordSpecialSpNet(targetSpYear);
+  const prevOneSavedSpNet = getRecordSpecialSpNet(targetSpYear - 1);
+  const prevTwoSavedSpNet = getRecordSpecialSpNet(targetSpYear - 2);
+  const currentAutoSpNet = getAutoSpForYear(targetSpYear);
+  const prevOneAutoSpNet = getAutoSpForYear(targetSpYear - 1);
+  const prevTwoAutoSpNet = getAutoSpForYear(targetSpYear - 2);
+  const manualSpecialNet = Number(specialCashOverrideMan) > 0 ? Math.round(Number(specialCashOverrideMan)) : 0;
+  const specialNet = manualSpecialNet || currentSavedSpNet || currentAutoSpNet || spBaseNet;
+  const prevOneSpNet = prevOneSavedSpNet || prevOneAutoSpNet || Math.round(Number(recentSpOneYearMan) || 0);
+  const prevTwoSpNet = prevTwoSavedSpNet || prevTwoAutoSpNet || Math.round(Number(recentSpTwoYearMan) || 0);
+  const spYearRefs = [
+    { year: targetSpYear, amount: specialNet, saved: currentSavedSpNet, auto: currentAutoSpNet, manual: manualSpecialNet, fallback: spBaseNet, status: getSpecialSpStatusForYear(targetSpYear) },
+    { year: targetSpYear - 1, amount: prevOneSpNet, saved: prevOneSavedSpNet, auto: prevOneAutoSpNet, fallback: Math.round(Number(recentSpOneYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 1) },
+    { year: targetSpYear - 2, amount: prevTwoSpNet, saved: prevTwoSavedSpNet, auto: prevTwoAutoSpNet, fallback: Math.round(Number(recentSpTwoYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 2) },
+  ];
+  const scenarioYears = [targetSpYear - 2, targetSpYear - 1, targetSpYear].filter(year => year >= 2025);
+  const scenarioSummaryRows = scenarioYears.map(year => {
+    const row = spRsuScenarioRows[year] || {};
+    return { year, row, spNet: calcScenarioSpecialNet(year) };
+  });
+
+  const splitThirds = (amount) => {
+    const first = Math.round(amount / 3);
+    const second = Math.round(amount / 3);
+    const third = Math.max(0, Math.round(amount - first - second));
+    return [first, second, third];
+  };
+  // [현금화 예정표] 특별성과급 현금화 예정 — 매년 새로 부여되는 특별성과급을
+  // 1/3씩 3년에 걸쳐 매도하는 겹침 구조. 기본(체크 해제)은 부여분이
+  // 기준연도~기준연도+2년(기본 2026~2028년 귀속분)까지만 있고,
+  // 기준연도+3년(기본 2029년) 귀속분부터는 미지급 가정(2030년 특별성과급
+  // 없음 예상)이라 그 이후 부여분은 없다. 체크박스(2029년 이후 지급 가정)
+  // 적용 시에는 2029~2031년 귀속분도 예상 영업이익으로 계산해 포함한다.
+  // 기준연도 부여분은 specialNet(저장/수동/자동 적용값), 이후 2개년은
+  // calcScenarioSpecial + sp5ProfitForYear(향후 3년 예상 DS 영업이익 입력과 동일 소스).
+  // 날짜는 자사주 수령(3월말~4월초) 이후 매도 가능 시점인 매년 4월 기준이다
+  // (기존 1월 31일은 OPI 지급일이라 특별성과급과 맞지 않았다).
+  // 기본 시나리오(매년 31,416만원 부여)에서는 2027년 4월 10,472만원,
+  // 2028년 4월 20,944만원, 2029년 4월 31,416만원, 2030년 4월 20,944만원,
+  // 2031년 4월 10,472만원 — 사용자의 1/3·2/3·3/3·2/3·1/3 패턴과 같다.
+  // 체크 적용 시에는 2030년 4월 31,416만원, 2031년 4월 31,416만원,
+  // 2032년 4월 31,416만원, 2033년 4월 20,944만원, 2034년 4월 10,472만원이 추가된다.
+  const spSaleBaseYear = targetSpYear + 1;
+  const spNoGrantFromYear = targetSpYear + 3;
+  // [2029 이후 지급 가정] 현금화 예정표의 마지막 수령연도·부여 마지막 연도.
+  const spSaleLastYear = spSaleBaseYear + (spAssumeGrantAfter2028 ? 7 : 4);
+  const spGrantLastYear = spAssumeGrantAfter2028 ? targetSpYear + 5 : targetSpYear + 2;
+  const spGrantYears = spAssumeGrantAfter2028
+    ? [targetSpYear, targetSpYear + 1, targetSpYear + 2, targetSpYear + 3, targetSpYear + 4, targetSpYear + 5]
+    : [targetSpYear, targetSpYear + 1, targetSpYear + 2];
+  const spGrantNets = spGrantYears.map((g, gi) => {
+    if (gi === 0) return Math.max(0, Number(specialNet) || 0);
+    return Math.max(0, Number(calcScenarioSpecial(Number(g), sp5ProfitForYear(Number(g))).net) || 0);
+  });
+  const spGrantThirds = spGrantNets.map((n) => splitThirds(n));
+  const spSchedule = (spAssumeGrantAfter2028 ? [1, 2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5]).map((d) => {
+    const y = targetSpYear + d;
+    const parts = [];
+    let amount = 0;
+    spGrantYears.forEach((g, gi) => {
+      const idx = y - g - 1;
+      if (idx >= 0 && idx <= 2) {
+        const a = Number(spGrantThirds[gi][idx] || 0);
+        amount += a;
+        if (a > 0) parts.push(`${g}년분 1/3`);
+      }
+    });
+    return {
+      date: `${y}년 4월`,
+      dateObj: new Date(y, 3, 1),
+      amount,
+      desc: parts.length ? parts.join(' + ') : '매도 가능분 없음',
+    };
+  });
+  const spNextYearPayout = spSchedule[0]?.amount || 0;
+  const spFuturePayoutTotal = spSchedule.reduce((sum, x) => sum + x.amount, 0);
+
+  const psuInitialBasePrice = 85385;
+  const futureBasePrice = Math.max(0, Number(rsuFutureBasePrice) || 0);
+  const psuGrowthRate = psuInitialBasePrice > 0 ? ((futureBasePrice / psuInitialBasePrice) - 1) * 100 : 0;
+  const getPsuMultiplier = (growthPct) => {
+    if (growthPct < 20) return 0;
+    if (growthPct < 40) return 0.5;
+    if (growthPct < 60) return 1;
+    if (growthPct < 80) return 1.3;
+    if (growthPct < 100) return 1.7;
+    return 2;
+  };
+  const rsuEligible = !!rsuEligibleOnGrantDate && !!rsuAgreementSigned;
+  const baseShareCount = ['CL3','CL4'].includes(normalizeCl(myCl)) ? 300 : 200;
+  const psuMultiplier = rsuEligible ? getPsuMultiplier(psuGrowthRate) : 0;
+  const finalShareCount = Math.round(baseShareCount * psuMultiplier * 100) / 100;
+  const rsuGrossFutureWon = Math.round(finalShareCount * futureBasePrice);
+  const rsuGrossFutureMan = Math.round(rsuGrossFutureWon / 10000);
+  const rsuNetFutureMan = Math.round(rsuGrossFutureMan * (1 - (Number(rsuTaxRate) || 0) / 100));
+  const rsuThirdShares = Math.round((finalShareCount / 3) * 100) / 100;
+  const rsuSchedule = [
+    { date:'2028년 10월 13일', dateObj:new Date(2028, 9, 13), shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
+    { date:'2029년 10월 15일', dateObj:new Date(2029, 9, 15), shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
+    { date:'2030년 10월 15일', dateObj:new Date(2030, 9, 15), shares:Math.round((finalShareCount - rsuThirdShares * 2) * 100) / 100, amount:Math.round(((finalShareCount - rsuThirdShares * 2) * futureBasePrice) / 10000) },
+  ].map(x => ({ ...x, netAmount:Math.round(x.amount * (1 - (Number(rsuTaxRate) || 0) / 100)) }));
+  const isUnlockedAsOfToday = (dateObj) => todayDate >= dateObj;
+  const rsuPaidGrossToday = rsuSchedule.filter(x => isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
+  const rsuScheduledGrossFuture = rsuSchedule.filter(x => !isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
+
+  // 지급 예상일 기준 현금화 가능액은 OPI-2 매도제한 물량을 제외한 금액에,
+  // RSU/PSU의 첫 지급 예정분을 더해 산출합니다.
+  // RSU/PSU는 매도제한 물량이 아니라 지급일자가 정해진 예정분이므로
+  // 자사주 매도 제한액에는 포함하지 않고 지급 예정 잔여분으로 별도 표시합니다.
+  const spExpectedPayoutCashableNet = spNextYearPayout;
+  const spExpectedPayoutRestrictedNet = Math.max(0, spFuturePayoutTotal - spExpectedPayoutCashableNet);
+  const rsuExpectedPayoutCashableNet = rsuSchedule[0]?.netAmount || 0;
+  const rsuExpectedPayoutScheduledNet = Math.max(0, rsuNetFutureMan - rsuExpectedPayoutCashableNet);
+  const rsuExpectedPayoutCashableGross = rsuSchedule[0]?.amount || 0;
+  const rsuExpectedPayoutScheduledGross = Math.max(0, rsuGrossFutureMan - rsuExpectedPayoutCashableGross);
+  const totalExpectedPayoutCashableNet = spExpectedPayoutCashableNet + rsuExpectedPayoutCashableNet;
+  const totalRestrictedNet = spExpectedPayoutRestrictedNet;
+  const totalRestrictedGross = spExpectedPayoutRestrictedNet;
+  const totalNet = spFuturePayoutTotal + rsuNetFutureMan;
+  const totalGross = spFuturePayoutTotal + rsuGrossFutureMan;
+  const totalPayoutCheckNet = totalExpectedPayoutCashableNet + totalRestrictedNet + rsuExpectedPayoutScheduledNet;
+
+  // 총 수령액 기준 테이블: OPI-2는 귀속연도별 3분할 지급액을 실제 현금화 연도로 재집계하고,
+  // PSU/RSU는 각 지급 예정일의 세후 주식가치를 같은 연도 기준으로 합산합니다.
+  const addPayoutTableItem = (map, item) => {
+    if (!item || !item.dateObj || !Number(item.amount || 0)) return;
+    const payYear = item.dateObj.getFullYear();
+    const key = String(payYear);
+    const existing = map.get(key) || {
+      key,
+      dateObj:new Date(payYear, 0, 1),
+      dateLabel:`${payYear}년`,
+      piAmount:0,
+      psAmount:0,
+      spAmount:0,
+      psuAmount:0,
+      totalAmount:0,
+      piDetails:[],
+      psDetails:[],
+      spDetails:[],
+      psuDetails:[],
+    };
+    if (item.type === 'SP') {
+      existing.spAmount += item.amount;
+      existing.spDetails.push(item.detail);
+    } else {
+      existing.psuAmount += item.amount;
+      existing.psuDetails.push(item.detail);
+    }
+    existing.totalAmount += item.amount;
+    map.set(key, existing);
+  };
+  const spAwardRowsForPayoutTable = [...spYearRefs]
+    .sort((a,b)=>a.year-b.year)
+    .filter(item => item.year >= 2026 && Number(item.amount || 0) > 0);
+  const spPayoutDetailRows = spAwardRowsForPayoutTable.flatMap(item => {
+    const thirds = splitThirds(item.amount);
+    return thirds.map((amount, idx) => ({
+      type:'SP',
+      dateObj:new Date(item.year + idx + 1, 3, 1),
+      amount,
+      detail:`${item.year}년 OPI-2 ${idx+1}/3 ${fmtM(amount)}`,
+    }));
+  });
+  const psuPayoutDetailRows = rsuSchedule
+    .filter(item => Number(item.netAmount || 0) > 0)
+    .map((item, idx) => ({
+      type:'PSU',
+      dateObj:item.dateObj,
+      amount:item.netAmount,
+      detail:`PSU ${idx+1}차 ${comma(item.shares)}주 · 세후 ${fmtM(item.netAmount)}`,
+    }));
+  const payoutTableMap = new Map();
+  [...spPayoutDetailRows, ...psuPayoutDetailRows].forEach(item => addPayoutTableItem(payoutTableMap, item));
+
+  // 년도별 총 성과급 표: 지급연도 기준으로 TAI/OPI-1/OPI-2/RSU를 한 줄에 합산합니다.
+  // OPI-2/RSU는 이미 세후 금액을 사용하므로, PI/PS도 연봉 기준 한계세율을 적용한 추정 세후값으로 맞춥니다.
+  const calcYearlyPiPsForTable = (year) => {
+    const y = Number(year);
+    const saved = findRecordByYear(salaryRecords, y);
+    const rawRow = spRsuScenarioRows[y] || {};
+    const effectiveRow = getEffectiveScenarioRow(y, rawRow);
+    const salary = Math.round(Number(saved?.contract_salary_man || 0) || getScenarioEstimatedSalary(y, effectiveRow) || 0);
+    if (salary <= 0) return { piAmount:0, psAmount:0, piGross:0, psGross:0, psRate:0, piRate:0 };
+    const piRate = Number(saved?.withholding_pi_rate ?? ((parseFloat(samsungTaiRateH1) + parseFloat(samsungTaiRateH2)) / 2 * 100) ?? 100) || 0;
+    const spForYear = getRecordSpecialSpNet(y) || calcScenarioSpecialNet(y);
+    const psRate = saved ? getEffectiveDsPsRateForRecord(saved) : (spForYear > 0 ? 50 : Number(getHistoricalDsPs(y) ?? 0));
+    const piGross = Math.max(0, calcPiAmountMan(salary, piRate));
+    const psGross = Math.max(0, calcPsAmountMan(salary, psRate));
+    const grossTotal = piGross + psGross;
+    if (grossTotal <= 0) return { piAmount:0, psAmount:0, piGross, psGross, psRate, piRate };
+    const baseW = salary * MAN;
+    const bonusTaxMan = Math.max(0, totalTax(baseW + grossTotal * MAN) - totalTax(baseW)) / MAN;
+    const piTax = bonusTaxMan * (piGross / grossTotal);
+    const psTax = bonusTaxMan * (psGross / grossTotal);
+    return {
+      piAmount:Math.max(0, Math.round(piGross - piTax)),
+      psAmount:Math.max(0, Math.round(psGross - psTax)),
+      piGross,
+      psGross,
+      psRate,
+      piRate,
+    };
+  };
+  Array.from(payoutTableMap.keys()).forEach(key => {
+    const row = payoutTableMap.get(key);
+    const perf = calcYearlyPiPsForTable(Number(key));
+    row.piAmount = perf.piAmount || 0;
+    row.psAmount = perf.psAmount || 0;
+    row.piDetails = perf.piGross > 0 ? [`TAI ${Number(perf.piRate || 0).toFixed(0)}%×2회 · 세전 ${fmtM(perf.piGross)} · 세후 ${fmtM(perf.piAmount)}`] : [];
+    row.psDetails = perf.psGross > 0 ? [`OPI-1 ${Number(perf.psRate || 0).toFixed(1)}% · 세전 ${fmtM(perf.psGross)} · 세후 ${fmtM(perf.psAmount)}`] : [];
+    row.totalAmount = (row.piAmount || 0) + (row.psAmount || 0) + (row.spAmount || 0) + (row.psuAmount || 0);
+    payoutTableMap.set(key, row);
+  });
+  const totalReceiptRows = Array.from(payoutTableMap.values()).sort((a,b)=>a.dateObj-b.dateObj);
+
+  // [7개년 수령액] 수령연도 기준 2025~2031년 — simYear-1 ~ simYear+5년.
+  // 기존 '향후 5년 현금흐름표'(2027~2031년)를 과거 2년(2025·2026년)까지 확장한 것.
+  // 2027~2031년 행은 기존 표와 동일하게 계산되며, 새로 추가된 것은 2025·2026년 행뿐이다.
+  // 위 '년도별 총 성과급' 표(totalReceiptRows)는 당해 귀속분 + RSU 고정 일정만으로
+  // 구성돼 미래 귀속분(2027~2031년 신규 부여분)의 현금화가 빠져 있고, OPI-1 열이
+  // 수령연도가 아닌 귀속연도 기준으로 계산됩니다. 이 표는 다음을 엄격한 수령연도
+  // 기준으로 다시 집계합니다.
+  // - TAI: 수령연도 = 귀속연도 (7/8·12/24 당해 지급) → calcYearlyPiPsForTable(수령연도).piAmount
+  // - OPI: 수령연도 Y = 귀속연도 Y-1분 (다음해 1/31 지급) → calcYearlyPiPsForTable(Y-1).psAmount
+  // - 특별성과급: 수령연도 Y에 현금화되는 3분할분 합계. 귀속연도 g분의 3등분 중
+  //   (Y-g)번째 조각이 Y년에 현금화됩니다. 귀속연도별 부여액은 spYearRefs(저장/수동/자동
+  //   적용값, 기준연도 및 직전 2개년)와 동일하게, 그 이후 연도는 calcScenarioSpecial +
+  //   sp5ProfitForYear(3년차 입력값 이어받기)로 계산합니다. 단, 체크 해제 시
+  //   기준연도+3년(기본 2029년) 귀속분부터는 미지급 가정(2030년 특별성과급 없음 예상)이라
+  //   cfGrantNet이 0을 돌려주고, 이 표의 특별성과급 열은 위 현금화 예정표와
+  //   정확히 같은 숫자가 됩니다. 체크 시에는 2029년 이후 귀속분도 계산합니다.
+  // - RSU/PSU: rsuSchedule의 지급 예정일 기준 세후 금액을 수령연도로 합산합니다.
+  //   (향후 신규 RSU 부여분은 모델에 없어 2028~2030년 고정 일정만 반영됩니다.)
+  // 전부 세후 수령액입니다. TAI/OPI 세후값은 연봉 기준 한계세율(누진) 적용 추정치로,
+  // 메인 산출결과의 고정 원천징수율 적용값과 약간 다를 수 있습니다.
+  const cfGrantNet = (y) => {
+    const ref = spYearRefs.find((r) => r.year === y);
+    if (ref) return Number(ref.amount || 0);
+    if (Number(y) <= 2025) return 0;
+    // [2029 이후 지급 가정] 체크 해제 시에만 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
+    if (!spAssumeGrantAfter2028 && Number(y) >= Number(targetSpYear) + 3) return 0;
+    return calcScenarioSpecial(Number(y), sp5ProfitForYear(Number(y))).net;
+  };
+  const cfYears = [-1, 0, 1, 2, 3, 4, 5].map((d) => Number(simYear) + d);
+  // 7개년 표 구분: 기준연도(simYear)까지는 과거 수령분, 그 이후는 예상 수령분.
+  const cfIsPastYear = (y) => Number(y) <= Number(simYear);
+  const cfRows = cfYears.map((y) => {
+    const tai = calcYearlyPiPsForTable(y).piAmount || 0;
+    const opi = calcYearlyPiPsForTable(y - 1).psAmount || 0;
+    let sp = 0;
+    for (let g = y - 3; g <= y - 1; g++) {
+      const thirds = splitThirds(cfGrantNet(g));
+      sp += thirds[y - g - 1] || 0;
+    }
+    const rsu = rsuSchedule
+      .filter((x) => x.dateObj && x.dateObj.getFullYear() === y)
+      .reduce((s, x) => s + (Number(x.netAmount) || 0), 0);
+    return { year: y, tai, opi, sp, rsu, total: tai + opi + sp + rsu };
+  });
+  const cfTotals = cfRows.reduce((acc, r) => ({ tai: acc.tai + r.tai, opi: acc.opi + r.opi, sp: acc.sp + r.sp, rsu: acc.rsu + r.rsu, total: acc.total + r.total }), { tai: 0, opi: 0, sp: 0, rsu: 0, total: 0 });
+  // [연도별 트렌드] 첫 페이지 차트용 데이터 — cfRows와 동일한 수령연도 기준 공식으로
+  // simYear-2 ~ simYear+5년(기준연도 2026년이면 2024~2031년, 8개년)을 집계한다.
+  // 세후 값과 세전 값(gross 필드)을 함께 만든다. 세전 특별성과급은 기준연도
+  // 부여분은 공제 역산(소득세·지방세·4대보험·기부금 전액 비례 공제라 역산 가능),
+  // 이후 연도는 calcScenarioSpecial(...).gross와 동일한 소스를 쓴다.
+  const cfGrantGross = (y) => {
+    const ref = spYearRefs.find((r) => r.year === y);
+    if (ref) {
+      const factor = 1 - SP_RULE.incomeTax - SP_RULE.localTax - SP_RULE.insurance - (Math.max(0, Number(spDonationPct) || 0) / 100);
+      return factor > 0 ? Math.round(Number(ref.amount || 0) / factor) : 0;
+    }
+    if (Number(y) <= 2025) return 0;
+    if (!spAssumeGrantAfter2028 && Number(y) >= Number(targetSpYear) + 3) return 0;
+    return calcScenarioSpecial(Number(y), sp5ProfitForYear(Number(y))).gross;
+  };
+  const trendYears = [-2, -1, 0, 1, 2, 3, 4, 5].map((d) => Number(simYear) + d);
+  const trendRows = trendYears.map((y) => {
+    const perf = calcYearlyPiPsForTable(y);
+    const perfPrev = calcYearlyPiPsForTable(y - 1);
+    const tai = perf.piAmount || 0, taiGross = perf.piGross || 0;
+    const opi = perfPrev.psAmount || 0, opiGross = perfPrev.psGross || 0;
+    let sp = 0, spGross = 0;
+    for (let g = y - 3; g <= y - 1; g++) {
+      const thirds = splitThirds(cfGrantNet(g));
+      const thirdsGross = splitThirds(cfGrantGross(g));
+      sp += thirds[y - g - 1] || 0;
+      spGross += thirdsGross[y - g - 1] || 0;
+    }
+    const rsuY = rsuSchedule.filter((x) => x.dateObj && x.dateObj.getFullYear() === y);
+    const rsu = rsuY.reduce((s, x) => s + (Number(x.netAmount) || 0), 0);
+    const rsuGross = rsuY.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    return { year: y, tai, opi, sp, rsu, total: tai + opi + sp + rsu,
+             taiGross, opiGross, spGross, rsuGross, totalGross: taiGross + opiGross + spGross + rsuGross };
+  });
+  const trendMaxTotal = Math.max(1, ...trendRows.map((r) => r.total));
+  const trendMaxGross = Math.max(1, ...trendRows.map((r) => r.totalGross));
+  const trendPeakYear = trendRows.reduce((best, r) => (r.total > best.total ? r : best), trendRows[0]).year;
+  const trendPeakYearGross = trendRows.reduce((best, r) => (r.totalGross > best.totalGross ? r : best), trendRows[0]).year;
+  const [trendGross, setTrendGross] = useState(false);
+  const [trendHoverYear, setTrendHoverYear] = useState(null);
   const EquityRewardSimContent = () => {
-    const parseManInput = (value) => Math.max(0, Math.round(Number(String(value ?? '').replace(/,/g,'')) || 0));
-    const parseTargetYear = (value) => {
-      const n = Math.round(Number(String(value ?? '').replace(/[^0-9]/g,'')) || 0);
-      return Math.min(2035, Math.max(2026, n || Number(simYear || 2026)));
-    };
-    const targetSpYear = spTargetYearManualMode ? parseTargetYear(spTargetYearDraft) : Number(simYear || 2026);
-    const spBaseNet = Math.round(Number(r.spNet || 0));
-    const getScenarioPerformanceDefault = (year, cl='CL3') => {
-      const c = normalizeCl(cl || 'CL3');
-      const byYear = getPerformanceRaiseReference(year, c, 'MT', 2);
-      if (byYear !== null && byYear !== undefined) return Number(byYear);
-      const latest = getPerformanceRaiseReference(2026, c, 'MT', 2);
-      if (latest !== null && latest !== undefined) return Number(latest);
-      return c === 'CL4' ? 0.0 : c === 'CL2' ? 1.5 : 1.0;
-    };
-    const normalizeScenarioNumber = (value, fallback=0) => {
-      const n = Number(String(value ?? '').replace(/,/g,''));
-      return Number.isFinite(n) ? n : fallback;
-    };
-    const updateSpRsuScenarioRow = (year, patch) => {
-      // [연동] 기준연도 행의 DS 영업이익을 고치면 메인 profit도 함께 바꾼다(양방향).
-      // 메인→행 방향은 App의 동기화 effect가 맡는다. 과거 연도 행은 메인에 연동하지 않는다.
-      if (Number(year) === Number(targetSpYear) && Object.prototype.hasOwnProperty.call(patch, 'profit')) {
-        const v = Number(patch.profit);
-        if (Number.isFinite(v)) setProfit(Math.max(-100, Math.min(900, v)));
-      }
-      setSpRsuScenarioRows(prev => {
-        const before = { salary:'', cl:'CL3', division:'memory', deficit:'none', profit:200, rating:'MT', baseUpRaise:3, performanceRaise:getScenarioPerformanceDefault(year, 'CL3'), ...(prev[year] || {}) };
-        const nextPatch = { ...patch };
-        if (Object.prototype.hasOwnProperty.call(patch, 'cl') && !Object.prototype.hasOwnProperty.call(patch, 'performanceRaise')) {
-          nextPatch.performanceRaise = getScenarioPerformanceDefault(year, patch.cl);
-        }
-        return { ...prev, [year]: { ...before, ...nextPatch } };
-      });
-    };
-    const divisionName = (division) => division === 'memory' ? '메모리' : division === 'common' ? '공통' : '르팡';
-    const getSavedScenarioRecordRow = (year) => {
-      const rec = findRecordByYear(salaryRecords, year);
-      if (!rec) return null;
-      const savedCl = normalizeCl(rec.cl || 'CL3');
-      return {
-        salary: Math.round(Number(rec.contract_salary_man || 0) || 0),
-        cl: savedCl || 'CL3',
-        division: rec.division || 'memory',
-        baseUpRaise: Number(rec.base_up_raise_rate ?? rec.baseUpRaiseRate ?? 3) || 0,
-        performanceRaise: Number(rec.performance_raise_rate ?? rec.performanceRaiseRate ?? getScenarioPerformanceDefault(year, savedCl)) || 0,
-        dsPsRate: Number(rec.ds_ps_rate ?? 0) || 0,
-        specialSpNet: Math.round(Number(rec.special_sp_net_man || 0) || 0),
-        source: 'saved',
-      };
-    };
-    const getLatestSavedScenarioDivision = () => {
-      const latest = getHighestYearSalaryRecord(salaryRecords || []);
-      return latest?.division || myDiv || 'memory';
-    };
-    const getEffectiveScenarioRow = (year, row={}) => {
-      const saved = getSavedScenarioRecordRow(year);
-      if (saved && saved.salary > 0) {
-        return { ...row, ...saved, profit: row.profit ?? 200, deficit: row.deficit ?? 'none', rating: row.rating ?? 'MT', source:'saved' };
-      }
-      // 사업부는 변경되는 경우가 드물기 때문에, 저장값이 없는 예상연도는
-      // 가장 최근 연봉정보의 사업부를 기본값으로 사용합니다. 단, 사용자가 해당 연도에서
-      // 사업부를 직접 바꾼 경우에는 그 값을 우선합니다.
-      const latestDivision = getLatestSavedScenarioDivision();
-      const division = row?.divisionManual ? (row.division || latestDivision) : latestDivision;
-      return { ...(row || {}), division };
-    };
-    const getScenarioRaiseRates = (year, row={}) => {
-      const effectiveRow = getEffectiveScenarioRow(year, row);
-      const cl = normalizeCl(effectiveRow.cl || 'CL3');
-      const base = normalizeScenarioNumber(effectiveRow.baseUpRaise, 3);
-      const perf = normalizeScenarioNumber(effectiveRow.performanceRaise, getScenarioPerformanceDefault(year, cl));
-      return { base, perf, total: base + perf };
-    };
-    const getScenarioEstimatedSalary = (year, row={}, visited=new Set()) => {
-      const saved = getSavedScenarioRecordRow(year);
-      if (saved && saved.salary > 0) return saved.salary;
-      const direct = normalizeScenarioNumber(row.salary, 0);
-      if (direct > 0) return direct;
-      // 2026년부터 OPI-2 자동추정을 시작하므로, 2025년 이전으로 내려가면
-      // 더 이상 과거 연도를 재귀 호출하지 않고 현재 입력 연봉을 기준값으로 사용합니다.
-      // 이 방어 로직이 없으면 OPI-2/RSU 탭 최초 진입 시 2025→2024→... 무한 재귀가 발생합니다.
-      if (Number(year) <= 2025) {
-        return normalizeScenarioNumber(mySalary, 0) || normalizeScenarioNumber(r.curSalary, 0) || 0;
-      }
-      if (visited.has(year)) return normalizeScenarioNumber(mySalary, 0) || 0;
-      visited.add(year);
-      const prev = spRsuScenarioRows[year - 1] || {};
-      const prevSalary = getScenarioEstimatedSalary(year - 1, prev, visited);
-      if (prevSalary <= 0) return 0;
-      const rates = getScenarioRaiseRates(year, row);
-      return Math.round(prevSalary * (1 + rates.total / 100));
-    };
-    // [P2] 연도별 특별성과급 예상 — 세전 총액과 공제 후 자사주 지급액을 함께 반환한다.
-    // 기존 calcScenarioSpecialNet은 이 함수의 net만 돌려주는 래퍼로 남겨둔다.
-    // [P2-5yr] profitOverride를 주면 해당 연도의 행 profit 대신 그 값을 씁니다.
-    // 5년 예상표의 4·5년차는 3년차 입력값을 그대로 이어받기 위해 이 인자를 씁니다.
-    const calcScenarioSpecial = (year, profitOverride) => {
-      // 특별경영성과급은 2026년도 성과부터 지급합니다. 2025년까지는 모두 0원입니다.
-      if (Number(year) <= 2025) return { gross: 0, net: 0 };
-      const rawRow = spRsuScenarioRows[year] || {};
-      const row = getEffectiveScenarioRow(year, rawRow);
-      if (!row) return { gross: 0, net: 0 };
-      // 향후 연도는 행이 없어도 컨센서스 기본값(370조)을 쓴다 ('가정 더 바꾸기' 입력 기본값과 동일).
-      const scenarioProfit = Number(profitOverride ?? row.profit ?? (Number(year) > targetSpYear ? (Number(scenarios?.consensus?.dsProfitJo) || 370) : 0)) || 0;
-      const scenarioSalary = getScenarioEstimatedSalary(year, row);
-      const scenarioCl = normalizeCl(row.cl || 'CL3');
-      const scenarioDiv = row.division || 'memory';
-      const scenarioDeficit = (year >= 2027 && scenarioDiv === 'lepan') ? (row.deficit || 'none') : 'none';
-      const scenarioRating = row.rating || 'MT';
-      const threshold = spHurdleForYear(year);
-      if (scenarioProfit < threshold || scenarioSalary <= 0) return { gross: 0, net: 0 };
-
-      const buPct = burate * 10;
-      const saPct = 100 - buPct;
-      const totalCount = cntMemory + cntCommon + cntLepan;
-      const fund = scenarioProfit * 1e12 * (sprate / 100);
-      let perMemory, perCommon, perLepan;
-      if (spDistribMode === "flat") {
-        // [회사 공지 문구 그대로] 차등배분 없이 공통 = 메모리 × ratCommon 그대로
-        const denom = cntMemory + ratCommon * cntCommon + (buPct / 100) * cntLepan;
-        perMemory = denom > 0 ? (fund / denom) / MAN : 0;
-        perCommon = perMemory * ratCommon;
-        perLepan  = perMemory * (buPct / 100);
-      } else {
-        // [언론보도 기준, 기본값] 부문(균등) buPct% + 사업부(차등) saPct% 2단계 배분 (본문 계산과 동일 로직)
-        const equalPoolFund = fund * (buPct / 100);
-        const diffPoolFund  = fund * (saPct / 100);
-        const equalPerPerson = totalCount > 0 ? equalPoolFund / totalCount : 0;
-        const diffDenom = cntMemory + ratCommon * cntCommon;
-        const diffPerMemory = diffDenom > 0 ? diffPoolFund / diffDenom : 0;
-        const diffPerCommon = diffPerMemory * ratCommon;
-        perMemory = (equalPerPerson + diffPerMemory) / MAN;
-        perCommon = (equalPerPerson + diffPerCommon) / MAN;
-        perLepan = equalPerPerson / MAN;
-      }
-      const baseByDiv = scenarioDiv === 'memory' ? perMemory : scenarioDiv === 'common' ? perCommon : perLepan;
-      const capInfo = splitSalaryByCap(scenarioCl, scenarioSalary);
-      const baseSalary = capInfo.baseSalary || scenarioSalary;
-      // [회사 규정안] CL4 고과가급: EM 1.4 · ES 1.2 · MT 1.0 · MS 0.9 · NM 0.8
-      const perf = getSpGradeMult(scenarioCl, scenarioRating);
-      // [회사 규정안] 지급액 = 기초금액 × 지급률. 시나리오 표에는 업무성과급 입력이 없어 기준연봉을 기초금액으로 사용합니다.
-      const rateDenom = (scenarioCl !== 'CL1' && spAvgBase > 0) ? spAvgBase : baseSalary;
-      let spGross = 0;
-      if (scenarioDiv === 'lepan' && year >= 2027 && scenarioDeficit !== 'none') spGross = (baseSalary * 0.24) * perf;
-      else spGross = baseSalary * (rateDenom > 0 ? baseByDiv / rateDenom : 0) * perf;
-
-      // [회사 규정안] 소득세 49.5%(지방세 포함) + 4대보험 4.967% + 기부금 공제 후 자사주 지급
-      return { gross: Math.round(spGross), net: Math.round(calcSpDeductions(spGross, spDonationPct).net) };
-    };
-    const calcScenarioSpecialNet = (year) => calcScenarioSpecial(year).net;
-    // [P2-5yr] 5년 예상표가 쓰는 연도별 예상 DS 영업이익. 1~3년차는 입력값,
-    // 4·5년차는 3년차 입력값을 그대로 이어받습니다(별도 전망치가 아님).
-    // 표 연도는 simYear 기준이라 입력 연도와 항상 일치합니다.
-    const sp5ProfitForYear = (y) => (Number(y) > simYear + 3 ? getSpFutureProfit(simYear + 3) : getSpFutureProfit(y));
-    // [2029 이후 지급 가정] 5년 부여분 표 합계 대상 연도 — 체크 시 2027~2031년, 미체크 시 2027~2028년.
-    const sp5GrantSumYears = spAssumeGrantAfter2028 ? [simYear+1, simYear+2, simYear+3, simYear+4, simYear+5] : [simYear+1, simYear+2];
-    // [P2-5yr] 기준주가 민감도 — 당해 특별성과급(공제 후)을 기준주가로 나눈 주식 수와
-    // 현금화 시 주가 하락 시나리오(-10/-20/-30%)별 가치·손실액. 전부 추정치.
-    // 주식 수는 기존 카드와 동일하게 공제 후 금액을 3등분해 각 1/3씩 기준주가로 나눈 값(r.sharesEach*3)이며,
-    // 기준주가는 주가 단일 소스(stockPrice.effective: 수동 오버라이드 > VWAP 자동 > 수동 입력)이다.
-    // 지급일 종가는 지급 당일에야 확정되므로 현재 주가는 그 대용 추정치라는 한계를 함께 표시한다.
-    const spSensShares = Math.max(0, Number(r.sharesEach || 0) * 3);
-    const spSensBasePrice = Math.max(0, Number(r.usePrice || 0));
-    const spSensBaseValue = Math.round(spSensShares * spSensBasePrice / 10000);
-    const spSensRows = [-10, -20, -30].map(drop => {
-      const priceAt = Math.round(spSensBasePrice * (1 + drop / 100));
-      const valueAt = Math.round(spSensShares * priceAt / 10000);
-      return { drop, priceAt, valueAt, loss: Math.max(0, spSensBaseValue - valueAt) };
-    });
-    const getAutoSpForYear = (year) => calcScenarioSpecialNet(year);
-    const currentSavedSpNet = getRecordSpecialSpNet(targetSpYear);
-    const prevOneSavedSpNet = getRecordSpecialSpNet(targetSpYear - 1);
-    const prevTwoSavedSpNet = getRecordSpecialSpNet(targetSpYear - 2);
-    const currentAutoSpNet = getAutoSpForYear(targetSpYear);
-    const prevOneAutoSpNet = getAutoSpForYear(targetSpYear - 1);
-    const prevTwoAutoSpNet = getAutoSpForYear(targetSpYear - 2);
-    const manualSpecialNet = Number(specialCashOverrideMan) > 0 ? Math.round(Number(specialCashOverrideMan)) : 0;
-    const specialNet = manualSpecialNet || currentSavedSpNet || currentAutoSpNet || spBaseNet;
-    const prevOneSpNet = prevOneSavedSpNet || prevOneAutoSpNet || Math.round(Number(recentSpOneYearMan) || 0);
-    const prevTwoSpNet = prevTwoSavedSpNet || prevTwoAutoSpNet || Math.round(Number(recentSpTwoYearMan) || 0);
-    const spYearRefs = [
-      { year: targetSpYear, amount: specialNet, saved: currentSavedSpNet, auto: currentAutoSpNet, manual: manualSpecialNet, fallback: spBaseNet, status: getSpecialSpStatusForYear(targetSpYear) },
-      { year: targetSpYear - 1, amount: prevOneSpNet, saved: prevOneSavedSpNet, auto: prevOneAutoSpNet, fallback: Math.round(Number(recentSpOneYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 1) },
-      { year: targetSpYear - 2, amount: prevTwoSpNet, saved: prevTwoSavedSpNet, auto: prevTwoAutoSpNet, fallback: Math.round(Number(recentSpTwoYearMan) || 0), status: getSpecialSpStatusForYear(targetSpYear - 2) },
-    ];
-    const scenarioYears = [targetSpYear - 2, targetSpYear - 1, targetSpYear].filter(year => year >= 2025);
-    const scenarioSummaryRows = scenarioYears.map(year => {
-      const row = spRsuScenarioRows[year] || {};
-      return { year, row, spNet: calcScenarioSpecialNet(year) };
-    });
-
-    const splitThirds = (amount) => {
-      const first = Math.round(amount / 3);
-      const second = Math.round(amount / 3);
-      const third = Math.max(0, Math.round(amount - first - second));
-      return [first, second, third];
-    };
-    // [현금화 예정표] 특별성과급 현금화 예정 — 매년 새로 부여되는 특별성과급을
-    // 1/3씩 3년에 걸쳐 매도하는 겹침 구조. 기본(체크 해제)은 부여분이
-    // 기준연도~기준연도+2년(기본 2026~2028년 귀속분)까지만 있고,
-    // 기준연도+3년(기본 2029년) 귀속분부터는 미지급 가정(2030년 특별성과급
-    // 없음 예상)이라 그 이후 부여분은 없다. 체크박스(2029년 이후 지급 가정)
-    // 적용 시에는 2029~2031년 귀속분도 예상 영업이익으로 계산해 포함한다.
-    // 기준연도 부여분은 specialNet(저장/수동/자동 적용값), 이후 2개년은
-    // calcScenarioSpecial + sp5ProfitForYear(향후 3년 예상 DS 영업이익 입력과 동일 소스).
-    // 날짜는 자사주 수령(3월말~4월초) 이후 매도 가능 시점인 매년 4월 기준이다
-    // (기존 1월 31일은 OPI 지급일이라 특별성과급과 맞지 않았다).
-    // 기본 시나리오(매년 31,416만원 부여)에서는 2027년 4월 10,472만원,
-    // 2028년 4월 20,944만원, 2029년 4월 31,416만원, 2030년 4월 20,944만원,
-    // 2031년 4월 10,472만원 — 사용자의 1/3·2/3·3/3·2/3·1/3 패턴과 같다.
-    // 체크 적용 시에는 2030년 4월 31,416만원, 2031년 4월 31,416만원,
-    // 2032년 4월 31,416만원, 2033년 4월 20,944만원, 2034년 4월 10,472만원이 추가된다.
-    const spSaleBaseYear = targetSpYear + 1;
-    const spNoGrantFromYear = targetSpYear + 3;
-    // [2029 이후 지급 가정] 현금화 예정표의 마지막 수령연도·부여 마지막 연도.
-    const spSaleLastYear = spSaleBaseYear + (spAssumeGrantAfter2028 ? 7 : 4);
-    const spGrantLastYear = spAssumeGrantAfter2028 ? targetSpYear + 5 : targetSpYear + 2;
-    const spGrantYears = spAssumeGrantAfter2028
-      ? [targetSpYear, targetSpYear + 1, targetSpYear + 2, targetSpYear + 3, targetSpYear + 4, targetSpYear + 5]
-      : [targetSpYear, targetSpYear + 1, targetSpYear + 2];
-    const spGrantNets = spGrantYears.map((g, gi) => {
-      if (gi === 0) return Math.max(0, Number(specialNet) || 0);
-      return Math.max(0, Number(calcScenarioSpecial(Number(g), sp5ProfitForYear(Number(g))).net) || 0);
-    });
-    const spGrantThirds = spGrantNets.map((n) => splitThirds(n));
-    const spSchedule = (spAssumeGrantAfter2028 ? [1, 2, 3, 4, 5, 6, 7, 8] : [1, 2, 3, 4, 5]).map((d) => {
-      const y = targetSpYear + d;
-      const parts = [];
-      let amount = 0;
-      spGrantYears.forEach((g, gi) => {
-        const idx = y - g - 1;
-        if (idx >= 0 && idx <= 2) {
-          const a = Number(spGrantThirds[gi][idx] || 0);
-          amount += a;
-          if (a > 0) parts.push(`${g}년분 1/3`);
-        }
-      });
-      return {
-        date: `${y}년 4월`,
-        dateObj: new Date(y, 3, 1),
-        amount,
-        desc: parts.length ? parts.join(' + ') : '매도 가능분 없음',
-      };
-    });
-    const spNextYearPayout = spSchedule[0]?.amount || 0;
-    const spFuturePayoutTotal = spSchedule.reduce((sum, x) => sum + x.amount, 0);
-
-    const psuInitialBasePrice = 85385;
-    const futureBasePrice = Math.max(0, Number(rsuFutureBasePrice) || 0);
-    const psuGrowthRate = psuInitialBasePrice > 0 ? ((futureBasePrice / psuInitialBasePrice) - 1) * 100 : 0;
-    const getPsuMultiplier = (growthPct) => {
-      if (growthPct < 20) return 0;
-      if (growthPct < 40) return 0.5;
-      if (growthPct < 60) return 1;
-      if (growthPct < 80) return 1.3;
-      if (growthPct < 100) return 1.7;
-      return 2;
-    };
-    const rsuEligible = !!rsuEligibleOnGrantDate && !!rsuAgreementSigned;
-    const baseShareCount = ['CL3','CL4'].includes(normalizeCl(myCl)) ? 300 : 200;
-    const psuMultiplier = rsuEligible ? getPsuMultiplier(psuGrowthRate) : 0;
-    const finalShareCount = Math.round(baseShareCount * psuMultiplier * 100) / 100;
-    const rsuGrossFutureWon = Math.round(finalShareCount * futureBasePrice);
-    const rsuGrossFutureMan = Math.round(rsuGrossFutureWon / 10000);
-    const rsuNetFutureMan = Math.round(rsuGrossFutureMan * (1 - (Number(rsuTaxRate) || 0) / 100));
-    const rsuThirdShares = Math.round((finalShareCount / 3) * 100) / 100;
-    const rsuSchedule = [
-      { date:'2028년 10월 13일', dateObj:new Date(2028, 9, 13), shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
-      { date:'2029년 10월 15일', dateObj:new Date(2029, 9, 15), shares:rsuThirdShares, amount:Math.round((rsuThirdShares * futureBasePrice) / 10000) },
-      { date:'2030년 10월 15일', dateObj:new Date(2030, 9, 15), shares:Math.round((finalShareCount - rsuThirdShares * 2) * 100) / 100, amount:Math.round(((finalShareCount - rsuThirdShares * 2) * futureBasePrice) / 10000) },
-    ].map(x => ({ ...x, netAmount:Math.round(x.amount * (1 - (Number(rsuTaxRate) || 0) / 100)) }));
-    const isUnlockedAsOfToday = (dateObj) => todayDate >= dateObj;
-    const rsuPaidGrossToday = rsuSchedule.filter(x => isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
-    const rsuScheduledGrossFuture = rsuSchedule.filter(x => !isUnlockedAsOfToday(x.dateObj)).reduce((sum, x) => sum + x.amount, 0);
-
-    // 지급 예상일 기준 현금화 가능액은 OPI-2 매도제한 물량을 제외한 금액에,
-    // RSU/PSU의 첫 지급 예정분을 더해 산출합니다.
-    // RSU/PSU는 매도제한 물량이 아니라 지급일자가 정해진 예정분이므로
-    // 자사주 매도 제한액에는 포함하지 않고 지급 예정 잔여분으로 별도 표시합니다.
-    const spExpectedPayoutCashableNet = spNextYearPayout;
-    const spExpectedPayoutRestrictedNet = Math.max(0, spFuturePayoutTotal - spExpectedPayoutCashableNet);
-    const rsuExpectedPayoutCashableNet = rsuSchedule[0]?.netAmount || 0;
-    const rsuExpectedPayoutScheduledNet = Math.max(0, rsuNetFutureMan - rsuExpectedPayoutCashableNet);
-    const rsuExpectedPayoutCashableGross = rsuSchedule[0]?.amount || 0;
-    const rsuExpectedPayoutScheduledGross = Math.max(0, rsuGrossFutureMan - rsuExpectedPayoutCashableGross);
-    const totalExpectedPayoutCashableNet = spExpectedPayoutCashableNet + rsuExpectedPayoutCashableNet;
-    const totalRestrictedNet = spExpectedPayoutRestrictedNet;
-    const totalRestrictedGross = spExpectedPayoutRestrictedNet;
-    const totalNet = spFuturePayoutTotal + rsuNetFutureMan;
-    const totalGross = spFuturePayoutTotal + rsuGrossFutureMan;
-    const totalPayoutCheckNet = totalExpectedPayoutCashableNet + totalRestrictedNet + rsuExpectedPayoutScheduledNet;
-
-    // 총 수령액 기준 테이블: OPI-2는 귀속연도별 3분할 지급액을 실제 현금화 연도로 재집계하고,
-    // PSU/RSU는 각 지급 예정일의 세후 주식가치를 같은 연도 기준으로 합산합니다.
-    const addPayoutTableItem = (map, item) => {
-      if (!item || !item.dateObj || !Number(item.amount || 0)) return;
-      const payYear = item.dateObj.getFullYear();
-      const key = String(payYear);
-      const existing = map.get(key) || {
-        key,
-        dateObj:new Date(payYear, 0, 1),
-        dateLabel:`${payYear}년`,
-        piAmount:0,
-        psAmount:0,
-        spAmount:0,
-        psuAmount:0,
-        totalAmount:0,
-        piDetails:[],
-        psDetails:[],
-        spDetails:[],
-        psuDetails:[],
-      };
-      if (item.type === 'SP') {
-        existing.spAmount += item.amount;
-        existing.spDetails.push(item.detail);
-      } else {
-        existing.psuAmount += item.amount;
-        existing.psuDetails.push(item.detail);
-      }
-      existing.totalAmount += item.amount;
-      map.set(key, existing);
-    };
-    const spAwardRowsForPayoutTable = [...spYearRefs]
-      .sort((a,b)=>a.year-b.year)
-      .filter(item => item.year >= 2026 && Number(item.amount || 0) > 0);
-    const spPayoutDetailRows = spAwardRowsForPayoutTable.flatMap(item => {
-      const thirds = splitThirds(item.amount);
-      return thirds.map((amount, idx) => ({
-        type:'SP',
-        dateObj:new Date(item.year + idx + 1, 3, 1),
-        amount,
-        detail:`${item.year}년 OPI-2 ${idx+1}/3 ${fmtM(amount)}`,
-      }));
-    });
-    const psuPayoutDetailRows = rsuSchedule
-      .filter(item => Number(item.netAmount || 0) > 0)
-      .map((item, idx) => ({
-        type:'PSU',
-        dateObj:item.dateObj,
-        amount:item.netAmount,
-        detail:`PSU ${idx+1}차 ${comma(item.shares)}주 · 세후 ${fmtM(item.netAmount)}`,
-      }));
-    const payoutTableMap = new Map();
-    [...spPayoutDetailRows, ...psuPayoutDetailRows].forEach(item => addPayoutTableItem(payoutTableMap, item));
-
-    // 년도별 총 성과급 표: 지급연도 기준으로 TAI/OPI-1/OPI-2/RSU를 한 줄에 합산합니다.
-    // OPI-2/RSU는 이미 세후 금액을 사용하므로, PI/PS도 연봉 기준 한계세율을 적용한 추정 세후값으로 맞춥니다.
-    const calcYearlyPiPsForTable = (year) => {
-      const y = Number(year);
-      const saved = findRecordByYear(salaryRecords, y);
-      const rawRow = spRsuScenarioRows[y] || {};
-      const effectiveRow = getEffectiveScenarioRow(y, rawRow);
-      const salary = Math.round(Number(saved?.contract_salary_man || 0) || getScenarioEstimatedSalary(y, effectiveRow) || 0);
-      if (salary <= 0) return { piAmount:0, psAmount:0, piGross:0, psGross:0, psRate:0, piRate:0 };
-      const piRate = Number(saved?.withholding_pi_rate ?? ((parseFloat(samsungTaiRateH1) + parseFloat(samsungTaiRateH2)) / 2 * 100) ?? 100) || 0;
-      const spForYear = getRecordSpecialSpNet(y) || calcScenarioSpecialNet(y);
-      const psRate = saved ? getEffectiveDsPsRateForRecord(saved) : (spForYear > 0 ? 50 : Number(getHistoricalDsPs(y) ?? 0));
-      const piGross = Math.max(0, calcPiAmountMan(salary, piRate));
-      const psGross = Math.max(0, calcPsAmountMan(salary, psRate));
-      const grossTotal = piGross + psGross;
-      if (grossTotal <= 0) return { piAmount:0, psAmount:0, piGross, psGross, psRate, piRate };
-      const baseW = salary * MAN;
-      const bonusTaxMan = Math.max(0, totalTax(baseW + grossTotal * MAN) - totalTax(baseW)) / MAN;
-      const piTax = bonusTaxMan * (piGross / grossTotal);
-      const psTax = bonusTaxMan * (psGross / grossTotal);
-      return {
-        piAmount:Math.max(0, Math.round(piGross - piTax)),
-        psAmount:Math.max(0, Math.round(psGross - psTax)),
-        piGross,
-        psGross,
-        psRate,
-        piRate,
-      };
-    };
-    Array.from(payoutTableMap.keys()).forEach(key => {
-      const row = payoutTableMap.get(key);
-      const perf = calcYearlyPiPsForTable(Number(key));
-      row.piAmount = perf.piAmount || 0;
-      row.psAmount = perf.psAmount || 0;
-      row.piDetails = perf.piGross > 0 ? [`TAI ${Number(perf.piRate || 0).toFixed(0)}%×2회 · 세전 ${fmtM(perf.piGross)} · 세후 ${fmtM(perf.piAmount)}`] : [];
-      row.psDetails = perf.psGross > 0 ? [`OPI-1 ${Number(perf.psRate || 0).toFixed(1)}% · 세전 ${fmtM(perf.psGross)} · 세후 ${fmtM(perf.psAmount)}`] : [];
-      row.totalAmount = (row.piAmount || 0) + (row.psAmount || 0) + (row.spAmount || 0) + (row.psuAmount || 0);
-      payoutTableMap.set(key, row);
-    });
-    const totalReceiptRows = Array.from(payoutTableMap.values()).sort((a,b)=>a.dateObj-b.dateObj);
-
-    // [7개년 수령액] 수령연도 기준 2025~2031년 — simYear-1 ~ simYear+5년.
-    // 기존 '향후 5년 현금흐름표'(2027~2031년)를 과거 2년(2025·2026년)까지 확장한 것.
-    // 2027~2031년 행은 기존 표와 동일하게 계산되며, 새로 추가된 것은 2025·2026년 행뿐이다.
-    // 위 '년도별 총 성과급' 표(totalReceiptRows)는 당해 귀속분 + RSU 고정 일정만으로
-    // 구성돼 미래 귀속분(2027~2031년 신규 부여분)의 현금화가 빠져 있고, OPI-1 열이
-    // 수령연도가 아닌 귀속연도 기준으로 계산됩니다. 이 표는 다음을 엄격한 수령연도
-    // 기준으로 다시 집계합니다.
-    // - TAI: 수령연도 = 귀속연도 (7/8·12/24 당해 지급) → calcYearlyPiPsForTable(수령연도).piAmount
-    // - OPI: 수령연도 Y = 귀속연도 Y-1분 (다음해 1/31 지급) → calcYearlyPiPsForTable(Y-1).psAmount
-    // - 특별성과급: 수령연도 Y에 현금화되는 3분할분 합계. 귀속연도 g분의 3등분 중
-    //   (Y-g)번째 조각이 Y년에 현금화됩니다. 귀속연도별 부여액은 spYearRefs(저장/수동/자동
-    //   적용값, 기준연도 및 직전 2개년)와 동일하게, 그 이후 연도는 calcScenarioSpecial +
-    //   sp5ProfitForYear(3년차 입력값 이어받기)로 계산합니다. 단, 체크 해제 시
-    //   기준연도+3년(기본 2029년) 귀속분부터는 미지급 가정(2030년 특별성과급 없음 예상)이라
-    //   cfGrantNet이 0을 돌려주고, 이 표의 특별성과급 열은 위 현금화 예정표와
-    //   정확히 같은 숫자가 됩니다. 체크 시에는 2029년 이후 귀속분도 계산합니다.
-    // - RSU/PSU: rsuSchedule의 지급 예정일 기준 세후 금액을 수령연도로 합산합니다.
-    //   (향후 신규 RSU 부여분은 모델에 없어 2028~2030년 고정 일정만 반영됩니다.)
-    // 전부 세후 수령액입니다. TAI/OPI 세후값은 연봉 기준 한계세율(누진) 적용 추정치로,
-    // 메인 산출결과의 고정 원천징수율 적용값과 약간 다를 수 있습니다.
-    const cfGrantNet = (y) => {
-      const ref = spYearRefs.find((r) => r.year === y);
-      if (ref) return Number(ref.amount || 0);
-      if (Number(y) <= 2025) return 0;
-      // [2029 이후 지급 가정] 체크 해제 시에만 기준연도+3년(기본 2029년) 귀속분부터 미지급 가정.
-      if (!spAssumeGrantAfter2028 && Number(y) >= Number(targetSpYear) + 3) return 0;
-      return calcScenarioSpecial(Number(y), sp5ProfitForYear(Number(y))).net;
-    };
-    const cfYears = [-1, 0, 1, 2, 3, 4, 5].map((d) => Number(simYear) + d);
-    // 7개년 표 구분: 기준연도(simYear)까지는 과거 수령분, 그 이후는 예상 수령분.
-    const cfIsPastYear = (y) => Number(y) <= Number(simYear);
-    const cfRows = cfYears.map((y) => {
-      const tai = calcYearlyPiPsForTable(y).piAmount || 0;
-      const opi = calcYearlyPiPsForTable(y - 1).psAmount || 0;
-      let sp = 0;
-      for (let g = y - 3; g <= y - 1; g++) {
-        const thirds = splitThirds(cfGrantNet(g));
-        sp += thirds[y - g - 1] || 0;
-      }
-      const rsu = rsuSchedule
-        .filter((x) => x.dateObj && x.dateObj.getFullYear() === y)
-        .reduce((s, x) => s + (Number(x.netAmount) || 0), 0);
-      return { year: y, tai, opi, sp, rsu, total: tai + opi + sp + rsu };
-    });
-    const cfTotals = cfRows.reduce((acc, r) => ({ tai: acc.tai + r.tai, opi: acc.opi + r.opi, sp: acc.sp + r.sp, rsu: acc.rsu + r.rsu, total: acc.total + r.total }), { tai: 0, opi: 0, sp: 0, rsu: 0, total: 0 });
     const buildReceiptRowsByType = (items) => {
       const map = new Map();
       items.forEach(item => {
@@ -4530,7 +4573,7 @@ function App() {
               value={spTargetYearDraft}
               onCommit={v=>setSpTargetYearDraft(v)}
               placeholder={String(simYear || 2026)}
-              style={{ width:'100%', background:spTargetYearManualMode?'#0b1220':'rgba(11,18,32,.5)', color:spTargetYearManualMode?'#fff':'#94A3B8', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontWeight:900, outline:'none' }}
+              style={{ width:'100%', background:spTargetYearManualMode?'#0B1220':'rgba(11,18,32,.5)', color:spTargetYearManualMode?'#fff':'#94A3B8', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontWeight:900, outline:'none' }}
             />
           </div>
           <div style={{ color:'#00C6FF', fontSize:12, fontWeight:800, marginBottom:10 }}>
@@ -4564,27 +4607,27 @@ function App() {
                   <div className="sp-scenario-primary-grid">
                     <div className="scenario-field scenario-field-salary">
                       <label>연봉(만)</label>
-                      <DraftNumberInput inputMode="numeric" disabled={!!savedRec} value={savedRec ? String(scenarioSalaryForRow || '') : (row.salary ?? '')} onCommit={v=>updateSpRsuScenarioRow(year, { salary:v })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : (savedRec?.contract_salary_man ? `저장값 ${comma(savedRec.contract_salary_man)}` : '예: 11000')} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0b1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
+                      <DraftNumberInput inputMode="numeric" disabled={!!savedRec} value={savedRec ? String(scenarioSalaryForRow || '') : (row.salary ?? '')} onCommit={v=>updateSpRsuScenarioRow(year, { salary:v })} placeholder={salaryAutoApplied ? `자동 ${comma(scenarioSalaryForRow)}` : (savedRec?.contract_salary_man ? `저장값 ${comma(savedRec.contract_salary_man)}` : '예: 11000')} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0B1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
                       {savedRec ? <div className="scenario-help ok">개인 연봉저장값 우선 반영</div> : (salaryAutoApplied && <div className="scenario-help info">전년 연봉×총 {rates.total.toFixed(1)}% 자동</div>)}
                     </div>
                     <div className="scenario-field">
                       <label>베이스업</label>
-                      <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.baseUpRaise ?? 0) : (row.baseUpRaise ?? 3)} onCommit={v=>updateSpRsuScenarioRow(year, { baseUpRaise:v })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0b1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
+                      <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.baseUpRaise ?? 0) : (row.baseUpRaise ?? 3)} onCommit={v=>updateSpRsuScenarioRow(year, { baseUpRaise:v })} placeholder="3.0" style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0B1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
                     </div>
                     <div className="scenario-field">
                       <label>성과%</label>
-                      <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.performanceRaise ?? 0) : (row.performanceRaise ?? getScenarioPerformanceDefault(year, effectiveRow.cl))} onCommit={v=>updateSpRsuScenarioRow(year, { performanceRaise:v })} placeholder={String(getScenarioPerformanceDefault(year, effectiveRow.cl))} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0b1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
+                      <DraftNumberInput inputMode="decimal" disabled={!!savedRec} value={savedRec ? String(effectiveRow.performanceRaise ?? 0) : (row.performanceRaise ?? getScenarioPerformanceDefault(year, effectiveRow.cl))} onCommit={v=>updateSpRsuScenarioRow(year, { performanceRaise:v })} placeholder={String(getScenarioPerformanceDefault(year, effectiveRow.cl))} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0B1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
                       <div className="scenario-help">총 {rates.total.toFixed(1)}%</div>
                     </div>
                     <div className="scenario-field">
                       <label>직급</label>
-                      <select disabled={!!savedRec} value={effectiveRow.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value, performanceRaise:getScenarioPerformanceDefault(year, e.target.value) })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0b1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
+                      <select disabled={!!savedRec} value={effectiveRow.cl || 'CL3'} onChange={e=>updateSpRsuScenarioRow(year, { cl:e.target.value, performanceRaise:getScenarioPerformanceDefault(year, e.target.value) })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0B1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
                         {['CL1','CL2','CL3','CL4'].map(x=><option key={x} value={x}>{x}</option>)}
                       </select>
                     </div>
                     <div className="scenario-field">
                       <label>사업부</label>
-                      <select disabled={!!savedRec} value={effectiveRow.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, divisionManual:true, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0b1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
+                      <select disabled={!!savedRec} value={effectiveRow.division || 'memory'} onChange={e=>updateSpRsuScenarioRow(year, { division:e.target.value, divisionManual:true, deficit:(year >= 2027 && e.target.value === 'lepan') ? (row.deficit || 'none') : 'none' })} style={{ width:'100%', marginTop:4, background:savedRec?'rgba(11,18,32,.55)':'#0B1220', color:savedRec?'#00DC82':'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
                         <option value="memory">메모리</option>
                         <option value="common">공통</option>
                         <option value="lepan">르팡</option>
@@ -4595,7 +4638,7 @@ function App() {
                   <div className="sp-scenario-secondary-grid">
                     <div className="scenario-field">
                       <label>CL4 고과</label>
-                      <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (effectiveRow.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0b1220':'rgba(11,18,32,.45)', color:cl4RatingEnabled?'#fff':'#94A3B8', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
+                      <select disabled={!cl4RatingEnabled} value={cl4RatingEnabled ? (effectiveRow.rating || 'MT') : 'MT'} onChange={e=>updateSpRsuScenarioRow(year, { rating:e.target.value })} style={{ width:'100%', marginTop:4, background:cl4RatingEnabled?'#0B1220':'rgba(11,18,32,.45)', color:cl4RatingEnabled?'#fff':'#94A3B8', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
                         <option value="EM">EM ×1.4</option>
                         <option value="ES">ES ×1.2</option>
                         <option value="MT">MT ×1.0</option>
@@ -4605,11 +4648,11 @@ function App() {
                     </div>
                     <div className="scenario-field">
                       <label>DS영업이익(조)</label>
-                      <DraftNumberInput inputMode="decimal" value={row.profit ?? ''} onCommit={v=>updateSpRsuScenarioRow(year, { profit:v })} placeholder="200" style={{ width:'100%', marginTop:4, background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
+                      <DraftNumberInput inputMode="decimal" value={row.profit ?? ''} onCommit={v=>updateSpRsuScenarioRow(year, { profit:v })} placeholder="200" style={{ width:'100%', marginTop:4, background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 10px', fontWeight:900 }} />
                     </div>
                     <div className="scenario-field">
                       <label>적자여부</label>
-                      <select disabled={!deficitEnabled} value={deficitEnabled ? (effectiveRow.deficit || 'none') : 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:deficitEnabled?'#0b1220':'rgba(11,18,32,.45)', color:deficitEnabled?'#fff':'#94A3B8', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
+                      <select disabled={!deficitEnabled} value={deficitEnabled ? (effectiveRow.deficit || 'none') : 'none'} onChange={e=>updateSpRsuScenarioRow(year, { deficit:e.target.value })} style={{ width:'100%', marginTop:4, background:deficitEnabled?'#0B1220':'rgba(11,18,32,.45)', color:deficitEnabled?'#fff':'#94A3B8', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'9px 8px', fontWeight:900 }}>
                         <option value="none">해당없음</option>
                         <option value="lepan">르팡적자</option>
                       </select>
@@ -4626,19 +4669,19 @@ function App() {
             <div style={{ fontSize:15, fontWeight:900, color:'#FFCA45', marginBottom:12 }}>OPI-2 특별경영성과급</div>
             <label style={{ display:'block', color:'#D5DCE6', fontSize:12, marginBottom:6 }}>{targetSpYear}년 세후 OPI-2 수동 지급액(만) · 비워두면 연봉저장값 또는 산출결과 사용</label>
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
-              <DraftNumberInput inputMode="numeric" value={specialCashDraftMan} onCommit={v=>setSpecialCashDraftMan(v)} placeholder={String(spBaseNet || 0)} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
+              <DraftNumberInput inputMode="numeric" value={specialCashDraftMan} onCommit={v=>setSpecialCashDraftMan(v)} placeholder={String(spBaseNet || 0)} style={{ width:'100%', background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:16, fontWeight:900, outline:'none' }} />
               <button onClick={applySpecialManual} style={{ background:'#00DC82', color:'#fff', border:0, borderRadius:16, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetSpecialManual} style={{ background:'rgba(255,255,255,.08)', color:'#D5DCE6', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center', marginBottom:10 }}>
-              <DraftNumberInput inputMode="numeric" value={recentSpOneYearDraftMan} onCommit={v=>setRecentSpOneYearDraftMan(v)} placeholder={`${targetSpYear-1}년 세후 OPI-2(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <DraftNumberInput inputMode="numeric" value={recentSpOneYearDraftMan} onCommit={v=>setRecentSpOneYearDraftMan(v)} placeholder={`${targetSpYear-1}년 세후 OPI-2(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
               <button onClick={applyPrevSpOne} style={{ background:'#00C6FF', color:'#fff', border:0, borderRadius:16, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetPrevSpOne} style={{ background:'rgba(255,255,255,.08)', color:'#D5DCE6', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto auto', gap:8, alignItems:'center' }}>
-              <DraftNumberInput inputMode="numeric" value={recentSpTwoYearDraftMan} onCommit={v=>setRecentSpTwoYearDraftMan(v)} placeholder={`${targetSpYear-2}년 세후 OPI-2(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0b1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
+              <DraftNumberInput inputMode="numeric" value={recentSpTwoYearDraftMan} onCommit={v=>setRecentSpTwoYearDraftMan(v)} placeholder={`${targetSpYear-2}년 세후 OPI-2(만) · 저장값 없을 때만 수동`} style={{ width:'100%', background:'#0B1220', color:'#fff', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 13px', fontSize:14, fontWeight:900, outline:'none' }} />
               <button onClick={applyPrevSpTwo} style={{ background:'#00C6FF', color:'#fff', border:0, borderRadius:16, padding:'12px 14px', fontWeight:900 }}>적용</button>
               <button onClick={resetPrevSpTwo} style={{ background:'rgba(255,255,255,.08)', color:'#D5DCE6', border:'1px solid rgba(255,255,255,.12)', borderRadius:16, padding:'12px 14px', fontWeight:900 }}>리셋</button>
             </div>
@@ -5152,6 +5195,72 @@ function App() {
             <div className="reward-side-label">보상 리포트 포인트</div>
             <div className="reward-side-note">아래 카드에서 OPI, 스페셜 보너스, TAI, 비교 시나리오와 지급 조건을 순서대로 확인할 수 있습니다.</div>
           </div>
+        </div>
+      </div>
+
+      {/* 연도별 성과급 트렌드 — 첫 페이지 가시화 (bonuschip 벤치마크: 세로 스택 막대, Y축 없음, 피크 해 강조, 세전/세후 토글, 상세 목록 연동) */}
+      <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:16, padding:18, marginTop:20 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, flexWrap:'wrap' }}>
+          <div>
+            <div style={{ fontSize:16, fontWeight:900, color:'#D5DCE6' }}>📊 연도별 성과급 트렌드 <span style={{ fontSize:12, fontWeight:400, color:'#B9C4D2' }}>{trendYears[0]}~{trendYears[7]}년 · 수령연도 기준</span></div>
+            <div style={{ fontSize:12, color:'#B9C4D2', marginTop:4 }}>{trendGross ? trendPeakYearGross : trendPeakYear}년에 가장 많이 들어와요 · {trendGross ? '세전' : '세후'} 수령액 · 연봉 제외</div>
+          </div>
+          <div style={{ display:'flex', border:'1px solid rgba(255,255,255,0.15)', borderRadius:999, overflow:'hidden', flexShrink:0 }}>
+            <button onClick={() => setTrendGross(false)} style={{ border:'none', background: trendGross ? 'transparent' : '#00C6FF', color: trendGross ? '#B9C4D2' : '#0B1220', fontSize:12, fontWeight:900, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}>세후</button>
+            <button onClick={() => setTrendGross(true)} style={{ border:'none', background: trendGross ? '#00C6FF' : 'transparent', color: trendGross ? '#0B1220' : '#B9C4D2', fontSize:12, fontWeight:900, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}>세전</button>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginTop:12, fontSize:12, color:'#B9C4D2' }}>
+          <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:3, background:'#8B7CFF', marginRight:4 }} />TAI</span>
+          <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:3, background:'#00C6FF', marginRight:4 }} />OPI</span>
+          <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:3, background:'#FFCA45', marginRight:4 }} />특별성과급</span>
+          <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:3, background:'#00DC82', marginRight:4 }} />RSU/PSU</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'flex-end', gap:8, marginTop:12 }}>
+          {trendRows.map((row) => {
+            const total = trendGross ? row.totalGross : row.total;
+            const max = trendGross ? trendMaxGross : trendMaxTotal;
+            const peakYear = trendGross ? trendPeakYearGross : trendPeakYear;
+            const isPeak = row.year === peakYear;
+            const segs = [
+              { key:'tai', val: trendGross ? row.taiGross : row.tai, color:'#8B7CFF' },
+              { key:'opi', val: trendGross ? row.opiGross : row.opi, color:'#00C6FF' },
+              { key:'sp', val: trendGross ? row.spGross : row.sp, color:'#FFCA45' },
+              { key:'rsu', val: trendGross ? row.rsuGross : row.rsu, color:'#00DC82' },
+            ];
+            return (
+              <div key={row.year} data-trend-year={row.year} data-trend-total={total} data-trend-peak={isPeak ? '1' : '0'}
+                onMouseEnter={() => setTrendHoverYear(row.year)} onMouseLeave={() => setTrendHoverYear(null)} onClick={() => setTrendHoverYear(row.year)}
+                style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6, cursor:'pointer' }}>
+                <div className="yearly-bonus-desktop" style={{ fontSize:12, fontWeight:900, color: isPeak ? '#FFCA45' : '#D5DCE6', whiteSpace:'nowrap' }}>{fmtM(total)}</div>
+                <div style={{ width:'100%', height:160, display:'flex', flexDirection:'column-reverse', borderRadius:8, overflow:'hidden', border: isPeak ? '2px solid #FFCA45' : '2px solid transparent', boxSizing:'border-box', background:'rgba(255,255,255,0.04)' }}>
+                  {segs.filter((s) => s.val > 0).map((s) => (
+                    <div key={s.key} style={{ height:`${Math.max(1, (s.val / max) * 160)}px`, background:s.color }} />
+                  ))}
+                </div>
+                <div style={{ fontSize:12, fontWeight: isPeak ? 900 : 400, color: isPeak ? '#FFCA45' : '#B9C4D2', whiteSpace:'nowrap' }}>{row.year}년</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop:12 }}>
+          {trendRows.map((row) => {
+            const total = trendGross ? row.totalGross : row.total;
+            const active = trendHoverYear === row.year;
+            const peakYear = trendGross ? trendPeakYearGross : trendPeakYear;
+            return (
+              <div key={row.year} data-trend-row={row.year}
+                onMouseEnter={() => setTrendHoverYear(row.year)} onMouseLeave={() => setTrendHoverYear(null)} onClick={() => setTrendHoverYear(row.year)}
+                style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, padding:'9px 8px', borderRadius:8, background: active ? 'rgba(255,202,69,0.10)' : 'transparent', border: active ? '1px solid rgba(255,202,69,0.35)' : '1px solid transparent', cursor:'pointer' }}>
+                <div style={{ fontSize:13, color:'#D5DCE6', fontWeight:800, whiteSpace:'nowrap' }}>{row.year}년 <span style={{ fontSize:12, fontWeight:900, color: cfIsPastYear(row.year) ? '#B9C4D2' : '#00DC82', background: cfIsPastYear(row.year) ? 'rgba(185,196,210,.12)' : 'rgba(0,220,130,.12)', border:`1px solid ${cfIsPastYear(row.year) ? 'rgba(185,196,210,.25)' : 'rgba(0,220,130,.25)'}`, borderRadius:999, padding:'2px 7px', marginLeft:4 }}>{cfIsPastYear(row.year) ? '과거' : '예상'}</span>{row.year === peakYear ? <span style={{ fontSize:12, fontWeight:900, color:'#FFCA45', marginLeft:6 }}>★ 최다</span> : null}</div>
+                <div style={{ fontSize:12, color:'#B9C4D2', textAlign:'right', lineHeight:1.5 }}>TAI {fmtM(trendGross ? row.taiGross : row.tai)} · OPI {fmtM(trendGross ? row.opiGross : row.opi)} · 특별 {fmtM(trendGross ? row.spGross : row.sp)} · RSU/PSU {fmtM(trendGross ? row.rsuGross : row.rsu)}</div>
+                <div style={{ fontSize:13, fontWeight:900, color:'#fff', whiteSpace:'nowrap' }}>{fmtM(total)}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize:12, color:'#B9C4D2', marginTop:8, lineHeight:1.6 }}>
+          {spAssumeGrantAfter2028 ? '2029년 이후 지급 가정 적용 중' : '2029년 귀속분부터 미지급 가정'} · 특별성과급은 2026년 귀속분부터 지급 · TAI/OPI {trendGross ? '세전' : '세후'}값은 연봉 기준 한계세율 적용 추정치
         </div>
       </div>
     </div>
