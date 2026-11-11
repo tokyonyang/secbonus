@@ -3546,8 +3546,8 @@ function App() {
       ctx.fillStyle = '#5F6B7A'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
       ctx.fillText('추정치 · secbonus.vercel.app', 64, H - 36);
       const a = document.createElement('a');
-      a.download = `secbonus-총보상-${simYear}.png`;
-      a.href = cv.toDataURL('image/png');
+      a.download = `secbonus-총보상-${simYear}.jpg`;
+      a.href = cv.toDataURL('image/jpeg', 0.92);
       a.click();
       flashShareMsg('이미지를 저장했습니다 ✓');
     } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
@@ -3597,8 +3597,8 @@ function App() {
       ctx.fillStyle = '#5F6B7A'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
       ctx.fillText('수령액 기준 · 세전(금색) · 공제 후(초록) · 출처: Morgan Stanley 2026-11-09', 64, H - 36);
       const a = document.createElement('a');
-      a.download = `secbonus-특별인센티브-${simYear}.png`;
-      a.href = cv.toDataURL('image/png');
+      a.download = `secbonus-특별인센티브-${simYear}.jpg`;
+      a.href = cv.toDataURL('image/jpeg', 0.92);
       a.click();
       flashShareMsg('이미지를 저장했습니다 ✓');
     } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
