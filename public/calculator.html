@@ -2768,6 +2768,8 @@ function App() {
   const [salaryManualWithholding, setSalaryManualWithholding] = useState(0);
   const [salaryMemo, setSalaryMemo] = useState("");
   const [salaryMsg, setSalaryMsg] = useState("");
+  const [salaryAuthExpired, setSalaryAuthExpired] = useState(false); // 로그인 만료로 연봉정보를 못 불러온 상태 (첫 페이지 안내용)
+  const [salaryLoadError, setSalaryLoadError] = useState(false); // 네트워크 등 비인증 사유로 연봉정보를 못 불러온 상태
   const [salaryLoading, setSalaryLoading] = useState(false);
 
   const salaryHeaders = () => ({ "Content-Type":"application/json", ...(salaryToken ? { Authorization:`Bearer ${salaryToken}` } : {}) });
@@ -2793,6 +2795,8 @@ function App() {
     const shouldApplyLatest = !!options.applyLatest || !!options.applyHighest;
     setSalaryLoading(true);
     setSalaryMsg("");
+    setSalaryAuthExpired(false);
+    setSalaryLoadError(false);
     try {
       const res = await fetch('/api/salary/records', { headers:{ Authorization:`Bearer ${token}` }, cache:'no-store' });
       const data = await res.json();
@@ -2805,11 +2809,28 @@ function App() {
       }
     } catch(e) {
       setSalaryMsg(e.message || '연봉정보 조회 실패');
-      if (String(e.message || '').includes('로그인')) salaryLogout();
+      const authMsg = String(e.message || '');
+      if (authMsg.includes('로그인') || authMsg.includes('인증 토큰')) { setSalaryAuthExpired(true); salaryLogout(); }
+      else setSalaryLoadError(true);
     }
     setSalaryLoading(false);
   };
 
+
+  // 첫 페이지 연봉정보 로딩 상태 표시 (계산기 탭·특별 탭 공통).
+  // 불러오는 동안 기본값이 정답처럼 보이는 문제, 만료/실패 시 조용한 기본값 문제를 막는다.
+  const SalaryLoadStatus = () => {
+    if (salaryToken && salaryLoading) {
+      return (<div style={{ fontSize:13, color:'#1B4FD8', fontWeight:800, padding:'10px 12px', background:'rgba(27,79,216,0.08)', border:'1px solid rgba(27,79,216,0.25)', borderRadius:12, lineHeight:1.6 }}>연봉정보를 불러오는 중입니다...</div>);
+    }
+    if (salaryAuthExpired) {
+      return (<div style={{ fontSize:13, color:'#B45309', fontWeight:800, padding:'10px 12px', background:'rgba(180,83,9,0.08)', border:'1px solid rgba(180,83,9,0.3)', borderRadius:12, lineHeight:1.6 }}>로그인이 만료되어 저장된 연봉정보를 불러오지 못했습니다. 다시 로그인하면 연봉정보가 자동으로 반영됩니다. <button onClick={() => moveTab(3)} style={{ marginLeft:6, background:'#B45309', color:'#FFFFFF', border:0, borderRadius:8, padding:'5px 10px', fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>로그인하러 가기</button></div>);
+    }
+    if (salaryToken && salaryLoadError) {
+      return (<div style={{ fontSize:13, color:'#B45309', fontWeight:800, padding:'10px 12px', background:'rgba(180,83,9,0.08)', border:'1px solid rgba(180,83,9,0.3)', borderRadius:12, lineHeight:1.6 }}>연봉정보를 불러오지 못했습니다. 기본값으로 표시 중입니다. <button onClick={() => loadSalaryRecords(salaryToken, { applyHighest: true })} style={{ marginLeft:6, background:'#B45309', color:'#FFFFFF', border:0, borderRadius:8, padding:'5px 10px', fontWeight:800, cursor:'pointer', fontFamily:'inherit' }}>다시 불러오기</button></div>);
+    }
+    return null;
+  };
 
   // 로그인 계정에 저장된 연봉정보를 OPI-2/RSU 예상 시뮬레이션 입력값에 자동 연동합니다.
   // 저장 연봉정보가 있으면 해당 연도의 연봉·직급·사업부·베업·성과인상률을 기본값으로 사용합니다.
@@ -2881,6 +2902,8 @@ function App() {
       setSalaryPassword("");
       setSalaryRecoveryCode("");
       setSalaryMsg(salaryAuthMode === 'register' ? '가입 및 로그인 완료' : '로그인 완료');
+      setSalaryAuthExpired(false);
+      setSalaryLoadError(false);
       await loadSalaryRecords(data.token, { applyLatest: true });
     } catch(e) {
       setSalaryMsg(e.message || '처리 실패');
@@ -3088,6 +3111,16 @@ function App() {
     setSalaryManualWithholdingAuto(false);
     setSalaryManualWithholding(Math.round(Number(rec.withholding_income_man) || 0));
     setSalaryMemo(rec.memo || '');
+    // 첫 페이지(특별 인센티브 탭) 입력값도 저장된 연봉정보로 동기화한다.
+    // spTabSalary는 마운트 시점 스냅샷이라 기록 적용 뒤에도 기본값 8000에 머물렀고,
+    // spTabDiv도 기본값 'memory'에 머물러 공통 소속 사용자의 첫 화면 금액이
+    // 메모리 기준으로 잘못 표시됐다. 조회 결과도 기록값으로 다시 계산한다.
+    const spDiv = rec.division || 'memory';
+    const spDeficit = spDiv !== 'lepan' ? 'none' : spTabDeficit;
+    setSpTabSalary(contract);
+    setSpTabDiv(spDiv);
+    setSpTabDeficit(spDeficit);
+    runSpTabQuery({ salary: contract, division: spDiv, deficit: spDeficit });
     if (!silent) setSalaryMsg(`${rec.year}년 연봉정보를 계산기에 불러왔습니다.`);
     else if (options.reason === 'highest') setSalaryMsg(`로그인된 계정의 가장 높은 연도(${rec.year}년) 연봉정보를 기본값으로 불러왔습니다.`);
     else if (options.reason === 'latest') setSalaryMsg(`로그인된 계정의 가장 높은 연도(${rec.year}년) 연봉정보를 기본값으로 불러왔습니다.`);
@@ -3437,6 +3470,29 @@ function App() {
   // ── 이미지 저장·링크 복사: iOS 사파리 대응 ─────────────────────────────
   // iOS 사파리는 DOM에 없는 앵커의 프로그래밍 클릭을 무시하고 data URL을 다운로드 대신 이동으로 처리한다.
   // 그래서 Blob URL + DOM 부착 앵커를 쓰고, 공유가 가능하면 네이티브 공유 시트를 우선 사용한다.
+  // data URL → Blob 동기 변환 (toDataURL은 동기라 클릭 태스크 안에서 share 호출까지 이어진다)
+  const dataUrlToBlob = (dataUrl) => {
+    const parts = String(dataUrl || '').split(',');
+    if (parts.length < 2) return null;
+    const mime = (parts[0].match(/data:(.*?);/) || [])[1] || 'image/jpeg';
+    const bin = atob(parts[1]);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  };
+  const isIOSLike = () => {
+    if (typeof navigator === 'undefined') return false;
+    return /iP(hone|ad|od)/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);
+  };
+  const [saveImageModal, setSaveImageModal] = useState(null); // { url, filename, isBlobUrl }
+  const openSaveImageModal = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    setSaveImageModal({ url, filename, isBlobUrl: true });
+  };
+  const closeSaveImageModal = () => {
+    if (saveImageModal && saveImageModal.isBlobUrl && saveImageModal.url) { try { URL.revokeObjectURL(saveImageModal.url); } catch (e) {} }
+    setSaveImageModal(null);
+  };
   const anchorDownload = (url, filename) => {
     const a = document.createElement('a');
     a.download = filename;
@@ -3446,8 +3502,12 @@ function App() {
     document.body.removeChild(a);
   };
   const saveCanvasJpeg = async (cv, filename) => {
+    // [iOS 제스처 유지] toDataURL은 동기라 클릭 태스크 안에서 Blob→File→share 호출까지
+    // 이어진다. toBlob을 await한 뒤에 share를 호출하면 iOS 사파리에서 사용자 제스처
+    // (Transient Activation)가 끊겨 NotAllowedError로 실패할 수 있다.
     let blob = null;
-    if (typeof cv.toBlob === 'function') {
+    try { blob = dataUrlToBlob(cv.toDataURL('image/jpeg', 0.92)); } catch (e) { blob = null; }
+    if (!blob && typeof cv.toBlob === 'function') {
       blob = await new Promise((resolve) => { try { cv.toBlob(resolve, 'image/jpeg', 0.92); } catch (e) { resolve(null); } });
     }
     if (blob) {
@@ -3460,7 +3520,13 @@ function App() {
             return;
           } catch (e) {
             if (e && e.name === 'AbortError') return; // 사용자가 공유 시트에서 취소 — 실패가 아님
+            // share 실패(NotAllowedError 등) → 아래 앵커/모달 폴백
           }
+        } else if (isIOSLike()) {
+          // 공유 시트 미지원 iOS 인앱 브라우저: 파일 다운로드도 안 먹히는 환경이라
+          // 이미지를 모달로 보여주고 길게 눌러 저장하도록 안내한다 (성공 토스트 없음).
+          openSaveImageModal(blob, filename);
+          return;
         }
       } catch (e) { /* File/canShare 미지원 — 앵커 다운로드로 폴백 */ }
       const url = URL.createObjectURL(blob);
@@ -3469,9 +3535,11 @@ function App() {
       flashShareMsg('이미지를 저장했습니다 ✓');
       return;
     }
-    // toBlob 실패 시 기존 data URL 방식으로 폴백
-    anchorDownload(cv.toDataURL('image/jpeg', 0.92), filename);
-    flashShareMsg('이미지를 저장했습니다 ✓');
+    // toDataURL·toBlob 모두 실패 시 기존 data URL 방식으로 폴백
+    try {
+      anchorDownload(cv.toDataURL('image/jpeg', 0.92), filename);
+      flashShareMsg('이미지를 저장했습니다 ✓');
+    } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
   };
   // 클립보드 API가 막힌 환경용 textarea 폴백. iOS에서는 focus + setSelectionRange가 필요하다.
   // 반환값이 true일 때만 복사가 된 것이다.
@@ -7726,6 +7794,7 @@ function App() {
           <div style={{ flex:1, overflowY:'auto', background:'transparent', width:'100%' }}>
             <div className="calc-stack" style={{ maxWidth:1024, margin:'0 auto', width:'100%', padding:"20px 0 30px", display:'flex', flexDirection:'column', gap:20 }}>
               <div className="calc-side-pad"><SectionHeader kicker="SPECIAL INCENTIVE" kickerColor="#B45309" title="✨ 특별 인센티브" titleGradient="#B45309" desc="연봉·소속·영업이익 추정치만 넣으면 특별성과급만 따로 보여줍니다." /></div>
+              <div className="calc-side-pad">{SalaryLoadStatus()}</div>
               <div className="calc-side-pad">
                 <div style={{ background:'rgba(255,255,255,.72)', border:'1px solid rgba(180,83,9,.25)', borderRadius:16, padding:18 }}>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }} className="two-col-grid">
@@ -7883,6 +7952,7 @@ function App() {
                 <span>TAI <b style={{ color:'#6A4FE0' }}>{fmtM(r.taiNet)}</b></span>
               </div>
               <div className="calc-result">{ResultPanelTop()}</div>
+              <div className="calc-side-pad">{SalaryLoadStatus()}</div>
               <div className="calc-inputs calc-side-pad">{CoreInputs()}</div>
               <div className="calc-detail">{ResultPanelDetail()}</div>
               <div className="calc-more calc-side-pad">{MoreAssumptions()}</div>
@@ -7915,6 +7985,17 @@ function App() {
             {LogicSettings()}
             <CommentBoard salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(3)} />
             <LiveChatPopup salaryUser={salaryUser} salaryToken={salaryToken} onLoginClick={() => moveTab(3)} />
+          </div>
+        )}
+        {/* 이미지 저장 모달 폴백 (공유 시트·다운로드 미지원 iOS 인앱 브라우저용) */}
+        {saveImageModal && (
+          <div style={{ position:'fixed', inset:0, zIndex:300, background:'rgba(17,24,39,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }} onClick={closeSaveImageModal}>
+            <div style={{ background:'#FFFFFF', borderRadius:16, padding:16, maxWidth:520, width:'100%', maxHeight:'90vh', overflowY:'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize:15, fontWeight:900, color:'#1F2937', marginBottom:8 }}>이미지를 길게 눌러 저장해 주세요</div>
+              <div style={{ fontSize:13, color:'#4B5563', lineHeight:1.6, marginBottom:12 }}>이 브라우저에서는 파일 다운로드가 지원되지 않아 이미지를 바로 저장할 수 없습니다. 아래 이미지를 길게 누른 뒤 '사진에 저장'을 선택해 주세요.</div>
+              <img src={saveImageModal.url} alt={saveImageModal.filename} style={{ width:'100%', borderRadius:12, border:'1px solid rgba(17,24,39,0.12)' }} />
+              <button onClick={closeSaveImageModal} style={{ marginTop:12, width:'100%', padding:'12px 14px', borderRadius:12, border:'1px solid rgba(17,24,39,0.2)', background:'rgba(17,24,39,0.06)', color:'#1F2937', fontSize:14, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>닫기</button>
+            </div>
           </div>
         )}
       </div>
