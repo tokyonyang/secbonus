@@ -6295,7 +6295,6 @@ function App() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"rgba(106,79,224,0.12)", border:"1px solid rgba(106,79,224,0.35)", borderRadius:16, padding:"10px 12px" }}>
               <div>
                 <div style={{ fontSize:12, color:"#6A4FE0", fontWeight:800 }}>로그인됨</div>
-                <div style={{ fontSize:13, color:"#1F2937" }}>{salaryUser?.display_name || salaryUser?.login_id}</div>
               </div>
               <button onClick={salaryLogout} style={{ padding:"8px 10px", borderRadius:16, border:"1px solid rgba(17,24,39,0.14)", background:"rgba(17,24,39,0.05)", color:"#1F2937", cursor:"pointer", fontFamily:"inherit" }}>로그아웃</button>
             </div>
@@ -7749,7 +7748,7 @@ function App() {
         {salaryToken ? (
           <>
             <span style={{ fontSize:12, color:"#6A4FE0", fontWeight:800, whiteSpace:"nowrap", padding:"0 4px 0 8px" }}>
-              👤 {salaryUser?.display_name || salaryUser?.login_id}
+              👤 로그인됨
             </span>
             <button onClick={salaryLogout} style={{
               padding:"6px 12px", borderRadius:999, border:"none",
