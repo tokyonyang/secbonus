@@ -3486,6 +3486,7 @@ function App() {
     return /iP(hone|ad|od)/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);
   };
   const [saveImageModal, setSaveImageModal] = useState(null); // { url, filename, isBlobUrl }
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false); // 로그아웃 확인 모달 (상단 배지 이모티콘 탭 시)
   const openSaveImageModal = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     setSaveImageModal({ url, filename, isBlobUrl: true });
@@ -3714,6 +3715,96 @@ function App() {
       ctx.fillStyle = '#5F6B7A'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
       ctx.fillText('수령액 기준 · 세전(금색) · 공제 후(초록) · 출처: Morgan Stanley 2026-11-09', 64, H - 36);
       await saveCanvasJpeg(cv, `secbonus-특별인센티브-${simYear}.jpg`);
+    } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
+  };
+  // ── 연도별 성과급 트렌드 차트: 이미지로 저장 ───────────────────────────
+  // downloadSummaryImage와 같은 방식(순수 캔버스, 외부 라이브러리 없음)으로 그린다.
+  // 화면 차트와 같은 데이터·색상·규칙(막대 안 억원 라벨은 세그먼트 높이 충분할 때만)을 쓰며,
+  // 현재 세후/세전 토글(trendGross) 상태를 그대로 반영한다.
+  const downloadTrendImage = async () => {
+    try {
+      const rows = trendRows || [];
+      if (!rows.length) { flashShareMsg('차트 데이터가 없습니다.'); return; }
+      const gross = trendGross;
+      const max = gross ? trendMaxGross : trendMaxTotal;
+      const peakYear = gross ? trendPeakYearGross : trendPeakYear;
+      const W = 1080, H = 740;
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      const font = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
+      const grad = ctx.createLinearGradient(0, 0, W, 0);
+      grad.addColorStop(0, 'rgba(27,79,216,0.25)'); grad.addColorStop(1, 'rgba(106,79,224,0.18)');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 10);
+      ctx.fillStyle = '#1F2937'; ctx.font = `800 30px ${font}`; ctx.textAlign = 'left';
+      ctx.fillText(`연도별 성과급 트렌드 ${trendYears[0]}~${trendYears[7]}년 · 수령연도 기준`, 64, 84);
+      ctx.fillStyle = '#4B5563'; ctx.font = `400 26px ${font}`;
+      ctx.fillText(`${peakYear}년에 가장 많이 들어와요 · ${gross ? '세전' : '세후'} 수령액 · 연봉 제외`, 64, 126);
+      ctx.fillText('단위: 만원 · 막대 안 금액은 억원', 64, 160);
+      // 범례
+      const legend = [['TAI', '#6A4FE0'], ['OPI', '#1B4FD8'], ['특별성과급', '#B45309'], ['RSU/PSU', '#0B7A55']];
+      let lx = 64;
+      const legendY = 205;
+      ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
+      legend.forEach(([label, color]) => {
+        ctx.fillStyle = color;
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(lx, legendY - 16, 18, 18, 4); ctx.fill(); }
+        else ctx.fillRect(lx, legendY - 16, 18, 18);
+        ctx.fillStyle = '#4B5563';
+        ctx.fillText(label, lx + 26, legendY);
+        lx += 26 + ctx.measureText(label).width + 28;
+      });
+      // 차트 영역
+      const plotX0 = 150, plotX1 = 1016, chartTop = 250, chartBottom = 630, barH = chartBottom - chartTop;
+      const barW = 90, barGap = 20;
+      // Y축 눈금 + 격자선 (화면과 같은 0/25/50/75/100% 눈금)
+      [1, 0.75, 0.5, 0.25, 0].forEach((f) => {
+        const y = chartBottom - f * barH;
+        ctx.strokeStyle = 'rgba(17,24,39,0.08)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(plotX0, y); ctx.lineTo(plotX1, y); ctx.stroke();
+        ctx.fillStyle = '#4B5563'; ctx.font = `400 22px ${font}`; ctx.textAlign = 'right';
+        ctx.fillText(f === 0 ? '0' : comma(Math.round(max * f)), plotX0 - 14, y + 8);
+      });
+      rows.forEach((row, i) => {
+        const total = gross ? row.totalGross : row.total;
+        const isPeak = row.year === peakYear;
+        const segs = [
+          { key:'tai', val: gross ? row.taiGross : row.tai, color:'#6A4FE0' },
+          { key:'opi', val: gross ? row.opiGross : row.opi, color:'#1B4FD8' },
+          { key:'sp', val: gross ? row.spGross : row.sp, color:'#B45309' },
+          { key:'rsu', val: gross ? row.rsuGross : row.rsu, color:'#0B7A55' },
+        ];
+        const x = plotX0 + i * (barW + barGap);
+        // 막대 위 합계 (fmtM)
+        ctx.fillStyle = isPeak ? '#B45309' : '#1F2937'; ctx.font = `900 20px ${font}`; ctx.textAlign = 'center';
+        ctx.fillText(fmtM(total), x + barW / 2, chartTop - 12);
+        // 스택 막대 (아래부터 TAI → OPI → 특별성과급 → RSU/PSU, 화면 column-reverse와 동일 순서)
+        let y = chartBottom;
+        segs.forEach((s) => {
+          if (!(s.val > 0)) return;
+          const segH = Math.max(2, (s.val / max) * barH);
+          y -= segH;
+          ctx.fillStyle = s.color;
+          ctx.fillRect(x, y, barW, segH);
+          // 막대 안 억원 라벨 — 화면과 같은 규칙(세그먼트 높이 충분할 때만, 26px/160px → 62px/380px)
+          if (segH >= 62) {
+            ctx.fillStyle = '#FFFFFF'; ctx.font = `800 24px ${font}`; ctx.textAlign = 'center';
+            ctx.fillText(fmtYiuk1(s.val), x + barW / 2, y + segH / 2 + 8);
+          }
+        });
+        // 피크 연도 강조 (금색 테두리)
+        if (isPeak) {
+          ctx.strokeStyle = '#B45309'; ctx.lineWidth = 4;
+          ctx.strokeRect(x - 2, chartTop - 2, barW + 4, barH + 4);
+        }
+        // 연도 라벨
+        ctx.fillStyle = isPeak ? '#B45309' : '#4B5563'; ctx.font = `${isPeak ? 900 : 400} 24px ${font}`; ctx.textAlign = 'center';
+        ctx.fillText(`${row.year}년`, x + barW / 2, chartBottom + 38);
+      });
+      ctx.fillStyle = '#5F6B7A'; ctx.font = `400 24px ${font}`; ctx.textAlign = 'left';
+      ctx.fillText('추정치 · secbonus.vercel.app', 64, H - 36);
+      await saveCanvasJpeg(cv, `secbonus-트렌드-${simYear}.jpg`);
     } catch (e) { flashShareMsg('이미지 저장에 실패했습니다.'); }
   };
   // 특별 인센티브 탭 공유 링크 — 탭 입력값을 URL 파라미터로 인코딩한다.
@@ -5473,6 +5564,10 @@ function App() {
             <button onClick={() => setTrendGross(false)} style={{ border:'none', background: trendGross ? 'transparent' : '#1B4FD8', color: trendGross ? '#4B5563' : '#FFFFFF', fontSize:12, fontWeight:900, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}>세후</button>
             <button onClick={() => setTrendGross(true)} style={{ border:'none', background: trendGross ? '#1B4FD8' : 'transparent', color: trendGross ? '#FFFFFF' : '#4B5563', fontSize:12, fontWeight:900, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}>세전</button>
           </div>
+        </div>
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:12, flexWrap:'wrap' }}>
+          <button onClick={downloadTrendImage} style={{ border:"1px solid rgba(17,24,39,0.25)", background:"rgba(17,24,39,0.06)", color:"#1F2937", borderRadius:999, padding:"6px 12px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>🖼️ 이미지로 저장</button>
+          <button onClick={() => { if (tab === 0) copySpTabShareLink(); else copyShareLink(); }} style={{ border:0, background:"#B45309", color:"#FFFFFF", borderRadius:999, padding:"6px 14px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit" }}>🔗 링크 복사</button>
         </div>
         <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginTop:12, fontSize:12, color:'#4B5563' }}>
           <span><span style={{ display:'inline-block', width:10, height:10, borderRadius:3, background:'#6A4FE0', marginRight:4 }} />TAI</span>
@@ -7746,16 +7841,12 @@ function App() {
         padding:6, boxShadow:"0 4px 16px rgba(15,23,42,0.122)",
       }}>
         {salaryToken ? (
-          <>
-            <span style={{ fontSize:12, color:"#6A4FE0", fontWeight:800, whiteSpace:"nowrap", padding:"0 4px 0 8px" }}>
-              👤 로그인됨
-            </span>
-            <button onClick={salaryLogout} style={{
-              padding:"6px 12px", borderRadius:999, border:"none",
-              background:"rgba(17,24,39,0.1)", color:"#1F2937",
-              fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
-            }}>로그아웃</button>
-          </>
+          <button onClick={() => setLogoutConfirmOpen(true)} aria-label="로그아웃" title="로그아웃" style={{
+            width:36, height:36, borderRadius:"50%", border:"none",
+            background:"rgba(106,79,224,0.2)", color:"#6A4FE0",
+            fontSize:18, cursor:"pointer", fontFamily:"inherit",
+            display:"flex", alignItems:"center", justifyContent:"center", padding:0,
+          }}>👤</button>
         ) : (
           <button onClick={() => moveTab(3)} style={{
             padding:"6px 14px", borderRadius:999, border:"none",
@@ -7996,6 +8087,18 @@ function App() {
               <div style={{ fontSize:13, color:'#4B5563', lineHeight:1.6, marginBottom:12 }}>이 브라우저에서는 파일 다운로드가 지원되지 않아 이미지를 바로 저장할 수 없습니다. 아래 이미지를 길게 누른 뒤 '사진에 저장'을 선택해 주세요.</div>
               <img src={saveImageModal.url} alt={saveImageModal.filename} style={{ width:'100%', borderRadius:12, border:'1px solid rgba(17,24,39,0.12)' }} />
               <button onClick={closeSaveImageModal} style={{ marginTop:12, width:'100%', padding:'12px 14px', borderRadius:12, border:'1px solid rgba(17,24,39,0.2)', background:'rgba(17,24,39,0.06)', color:'#1F2937', fontSize:14, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>닫기</button>
+            </div>
+          </div>
+        )}
+        {/* 로그아웃 확인 모달 (상단 배지 이모티콘 탭 시) */}
+        {logoutConfirmOpen && (
+          <div style={{ position:'fixed', inset:0, zIndex:300, background:'rgba(17,24,39,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }} onClick={() => setLogoutConfirmOpen(false)}>
+            <div style={{ background:'#FFFFFF', borderRadius:16, padding:20, maxWidth:360, width:'100%' }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize:16, fontWeight:900, color:'#1F2937', marginBottom:16 }}>로그아웃 하시겠습니까?</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => { setLogoutConfirmOpen(false); salaryLogout(); }} style={{ flex:1, padding:'12px 14px', borderRadius:12, border:'none', background:'#C62828', color:'#FFFFFF', fontSize:14, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>로그아웃</button>
+                <button onClick={() => setLogoutConfirmOpen(false)} style={{ flex:1, padding:'12px 14px', borderRadius:12, border:'1px solid rgba(17,24,39,0.2)', background:'rgba(17,24,39,0.06)', color:'#1F2937', fontSize:14, fontWeight:900, cursor:'pointer', fontFamily:'inherit' }}>취소</button>
+              </div>
             </div>
           </div>
         )}
