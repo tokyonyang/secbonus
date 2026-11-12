@@ -2695,7 +2695,10 @@ function App() {
     // [OPI-1 50% 규칙] PR #25와 동일 — 전년도 기록에 실제 지급률이 아직 없는 경우
     // (2026년처럼 실적 확정 전)에도 허들을 넘으면 50% 추정값을 쓴다. 실제 기록된
     // 지급률(2025년 47% 등)이나 적자 해 0%(2023년)는 그대로 유지된다.
-    const prevSpForYear = getRecordSpecialSpNet(prevYear) || calcScenarioSpecialNet(prevYear);
+    // [연쇄 규칙을 원천징수 기본값 경로에도 적용] 4806행과 같은 가드. prevRec이
+    // 있어야 도달하므로 2036년 이후 기록이 있을 때만 영향이 있다.
+    const prevChained = sp5ProfitForYear(prevYear);
+    const prevSpForYear = getRecordSpecialSpNet(prevYear) || (prevChained !== undefined && prevChained !== null && Number.isFinite(Number(prevChained)) ? calcScenarioSpecial(prevYear, prevChained).net : calcScenarioSpecialNet(prevYear));
     const savedRate = getEffectiveDsPsRateForRecord(prevRec);
     const psRate = savedRate > 0 ? savedRate : (prevSpForYear > 0 ? 50 : Number(getHistoricalDsPs(prevYear) ?? 0));
     const psMan = calcPsAmountMan(prevSalary, psRate);
@@ -4803,7 +4806,12 @@ function App() {
     const salary = Math.round(Number(saved?.contract_salary_man || 0) || getScenarioEstimatedSalary(y, effectiveRow) || 0);
     if (salary <= 0) return { piAmount:0, psAmount:0, piGross:0, psGross:0, psRate:0, piRate:0 };
     const piRate = Number(saved?.withholding_pi_rate ?? ((parseFloat(samsungTaiRateH1) + parseFloat(samsungTaiRateH2)) / 2 * 100) ?? 100) || 0;
-    const spForYear = getRecordSpecialSpNet(y) || calcScenarioSpecialNet(y);
+    // [연쇄 규칙을 OPI 경로에도 적용] 입력이 없는 연도는 앞 연도 확정값을 이어받는다.
+    // calcScenarioSpecial은 profit이 없으면 컨센서스(370조)로 메우므로, 2036년처럼
+    // 입력 범위 밖 연도는 370조로 계산돼 OPI 50%가 잘못 나왔다. sp5GrantForYear와
+    // 같은 가드로 연쇄값이 있을 때만 연쇄값을 쓰고, 사슬이 끊기면 기존 동작(370 폴백)을 유지한다.
+    const spChained = sp5ProfitForYear(y);
+    const spForYear = getRecordSpecialSpNet(y) || (spChained !== undefined && spChained !== null && Number.isFinite(Number(spChained)) ? calcScenarioSpecial(y, spChained).net : calcScenarioSpecialNet(y));
     // [OPI-1 50% 규칙] 허들(특별성과급 지급 기준 영업이익)을 넘으면 OPI-1은 무조건 연봉의 50%.
     // 저장된 기록에 실제 지급률이 아직 없는 당해 연도(2026년처럼 실적 확정 전)도 예외가 아니다.
     // getEffectiveDsPsRateForRecord는 기록된 특별·과거 지급률이 없을 때 0을 돌려주므로,
