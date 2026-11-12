@@ -1533,9 +1533,9 @@ function Slider({ value, min, max, step, onChange, color="#1B4FD8" }) {
   );
 }
 
-function FieldBox({ label, children, accent }) {
+function FieldBox({ label, children, accent, id }) {
   return (
-      <div className="field-box" style={{
+      <div id={id} className="field-box" style={{
         background:"linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.94))",
         border:`1px solid ${accent||"rgba(17,24,39,0.1)"}`,
         borderRadius:16, padding:"18px 18px",
@@ -2255,30 +2255,47 @@ function App() {
       2027: mk(saved[2027] ?? 685),
       2028: mk(saved[2028] ?? 687),
     };
-    // 2029·2030년은 MS 추정치가 없어 영업이익 시드를 채우지 않는다 (profit 빈 값).
-    // 단, 행 자체는 만든다 — 인상률 기본값(baseUpRaise 3%·성과 1%)이 없으면
+    // [PR #42] 2029·2030년 영업이익 기본값 100조(허들 수준) — 저장값이 있으면 그 값을 쓴다 (지우지 않는다).
+    // 행 자체는 만든다 — 인상률 기본값(baseUpRaise 3%·성과 1%)이 없으면
     // getScenarioEstimatedSalary가 인상률을 0%로 계산해 2029년 이후 TAI/OPI가
-    // 2028년 수준에 멈추기 때문이다. 저장값이 있으면 그 값을 쓴다 (지우지 않는다).
-    rows[2029] = mk(saved[2029]);
-    rows[2030] = mk(saved[2030]);
-    // 2032~2037년: 트렌드 차트(2037년까지)에 맞춰 행을 미리 만든다 (profit 빈 값).
+    // 2028년 수준에 멈추기 때문이다.
+    rows[2029] = mk(saved[2029] ?? 100);
+    rows[2030] = mk(saved[2030] ?? 100);
+    // 2032~2037년: 트렌드 차트(2037년까지)에 맞춰 행을 미리 만든다.
+    // 2032~2035년은 기본값 100조, 2036·2037년은 추정치가 없어 profit 빈 값.
     // 행이 없으면 인상률 기본값이 없어 getScenarioEstimatedSalary가 인상률을 0%로 계산해
     // 해당 연도 이후 TAI/OPI가 멈추기 때문이다. 저장값이 있으면 그 값을 쓴다.
-    // 단, 2031년 행은 만들지 않는다 — 2031년 TAI가 기존 동작(2030년과 동일하게 평평한 값)을
-    // 유지해야 2024~2031년 회귀 가드를 만족하기 때문이다.
-    [2032, 2033, 2034, 2035, 2036, 2037].forEach((y) => { rows[y] = mk(saved[y]); });
+    // 단, 2031년 행은 만들지 않는다 — 행이 생기면 인상률이 적용돼 2031년 TAI가
+    // 기존 동작(2030년과 동일하게 평평한 값, 610만원)에서 바뀌어 회귀 가드를 깨기 때문이다.
+    // 2031년의 영업이익 기본값 100은 getSpFutureProfit의 폴백으로 돌려준다 (행 없이).
+    [2032, 2033, 2034, 2035].forEach((y) => { rows[y] = mk(saved[y] ?? 100); });
+    [2036, 2037].forEach((y) => { rows[y] = mk(saved[y]); });
     Object.keys(saved).forEach(k => {
       const y = Number(k);
       if (!rows[y]) rows[y] = { ...mk(370), profit: saved[y] };
     });
     return rows;
   });
+  // [PR #42] 연도별 예상 DS 영업이익 기본값 — 2027년 685·2028년 687(MS 추정치), 2029~2035년 100조(허들 수준).
+  // 그 외 연도는 기본값이 없다 (undefined — 체인 규칙이 적용된다).
+  const spFutureProfitDefaultForYear = (y) => {
+    const yy = Number(y);
+    if (yy === 2027) return 685;
+    if (yy === 2028) return 687;
+    if (yy >= 2029 && yy <= 2035) return 100;
+    return undefined;
+  };
   // 향후 연도 예상 DS 영업이익 조회 — 값이 없으면 빈 값(undefined)을 돌려준다.
   // 추정치가 없는 연도를 컨센서스(370조)로 메우지 않는다. 호출처에서 빈 값을
   // '—'(미입력)으로 표시하고 부여액을 만들지 않는다.
+  // 단, 2029~2035년은 기본값 100조를 돌려준다 — 2031년은 행이 없어도 기본값이 보이도록
+  // (2031년 행을 만들면 인상률이 적용돼 2031년 TAI가 바뀌므로 행은 만들지 않는다).
   const getSpFutureProfit = (year) => {
     const v = spRsuScenarioRows[Number(year)]?.profit;
-    return Number.isFinite(Number(v)) ? Number(v) : undefined;
+    if (Number.isFinite(Number(v))) return Number(v);
+    const yy = Number(year);
+    if (yy >= 2029 && yy <= 2035) return 100;
+    return undefined;
   };
   // 향후 연도 예상 DS 영업이익 변경 — spRsuScenarioRows와 localStorage에 함께 저장한다.
   const updateSpFutureProfit = (year, v) => {
@@ -5140,7 +5157,7 @@ function App() {
               <div style={{ fontSize:12, fontWeight:900, color: spAssumeGrantAfter2028 ? '#0B7A55' : '#4B5563', marginBottom:6 }}>{spAssumeGrantAfter2028 ? `✓ 2029년 이후 지급 가정 적용 중 — ${spNoGrantFromYear}~${spGrantLastYear}년 귀속분도 예상 영업이익으로 계산합니다` : `${spNoGrantFromYear}년 귀속분부터 미지급 가정`}</div>
               <div style={{ fontSize:16, fontWeight:900, color:'#B45309', marginBottom:4 }}>향후 5년 특별성과급 예상 (신규 부여분)</div>
               <div style={{ fontSize:12, color:'#4B5563', lineHeight:1.6, marginBottom:10 }}>
-                '가정 더 바꾸기'의 향후 9년 예상 DS 영업이익으로 계산합니다(입력하지 않은 연도는 바로 앞 연도의 확정값을 이어받으며, 앞 연도가 비어 있으면 미지급으로 표시됩니다). {spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중입니다.` : `2029년 귀속분부터 미지급 가정 — 계산기 탭 ‘가정 더 바꾸기’의 체크박스에서 바꿀 수 있습니다.`} 현금화 예정표(매도 가능액)와는 기준이 다릅니다. 허들 200조(2026~2028년)·100조(2029년부터), 미달 연도는 미지급. 입력이 비어 있는 연도는 미입력으로 표시됩니다. 추정치이며 실제 지급액은 실적·주가에 따라 달라집니다.
+                '가정 더 바꾸기'의 향후 9년 예상 DS 영업이익으로 계산합니다(2029~2031년은 기본값 100조로 계산되며, 100조 미만으로 바꾸면 해당 연도는 미지급으로 표시됩니다). {spAssumeGrantAfter2028 ? `2029년 이후 지급 가정 적용 중입니다.` : `2029년 귀속분부터 미지급 가정 — 계산기 탭 ‘가정 더 바꾸기’의 체크박스에서 바꿀 수 있습니다.`} 현금화 예정표(매도 가능액)와는 기준이 다릅니다. 허들 200조(2026~2028년)·100조(2029년부터), 미달 연도는 미지급. 추정치이며 실제 지급액은 실적·주가에 따라 달라집니다.
               </div>
               <div className="reward-table-wrap yearly-bonus-desktop">
                 <table className="reward-table compact-mobile" style={{ minWidth:560 }}>
@@ -5577,6 +5594,16 @@ function App() {
   // ╚══════════════════════════════════════════════════════════════════╝
   /* ── 결과 패널 ── */
   // ── 연도별 성과급 트렌드 차트 — 계산기 탭과 특별 탭에서 공유 (PR #24 호이스트 계산 재사용) ──
+  // [PR #42] 트렌드 차트에서 영업이익 입력란으로 바로 이동 — 계산기 탭으로 가서 '가정 더 바꾸기'를
+  // 펼친 뒤 '향후 9년 예상 DS 영업이익' FieldBox로 스크롤한다.
+  const goToSpFutureProfitInput = () => {
+    setTab(1);
+    setAssumptionsOpen(true);
+    setTimeout(() => {
+      const el = document.getElementById('sp-future-profit-box');
+      if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior:'smooth', block:'start' });
+    }, 100);
+  };
   const YearlyTrendChart = () => (
       <div className="trend-card" style={{ background:'rgba(17,24,39,0.03)', border:'1px solid rgba(17,24,39,0.08)', borderRadius:16, padding:18, marginTop:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, flexWrap:'wrap' }}>
@@ -5605,7 +5632,9 @@ function App() {
               <div key={f} style={{ fontSize:12, color:'#4B5563', textAlign:'right', lineHeight:1, transform:'translateY(-50%)' }}>{f === 0 ? '0' : comma(Math.round((trendGross ? trendMaxGross : trendMaxTotal) * f))}</div>
             ))}
           </div>
-          <div style={{ flex:1, minWidth:0, position:'relative' }}>
+          {/* [PR #42] 막대 영역만 좌우 스크롤 — Y축은 고정, 격자선은 스크롤 콘텐츠 안에 둬서 끝까지 이어지게 한다. */}
+          <div className="trend-scroll" style={{ flex:1, minWidth:0, overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+            <div style={{ position:'relative', minWidth: trendRows.length * 40 + (trendRows.length - 1) * 8 }}>
             <div style={{ position:'absolute', left:0, right:0, top:24, bottom:24, pointerEvents:'none' }}>
               {[0, 25, 50, 75, 100].map((p) => (
                 <div key={p} style={{ position:'absolute', left:0, right:0, bottom:`${p}%`, borderTop:'1px solid rgba(17,24,39,0.08)' }} />
@@ -5626,7 +5655,7 @@ function App() {
             return (
               <div key={row.year} data-trend-year={row.year} data-trend-total={total} data-trend-peak={isPeak ? '1' : '0'}
                 onMouseEnter={() => setTrendHoverYear(row.year)} onMouseLeave={() => setTrendHoverYear(null)} onClick={() => setTrendHoverYear(row.year)}
-                style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6, cursor:'pointer' }}>
+                style={{ flex:1, minWidth:40, display:'flex', flexDirection:'column', alignItems:'center', gap:6, cursor:'pointer' }}>
                 <div className="yearly-bonus-desktop" style={{ height:18, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:900, color: isPeak ? '#B45309' : '#1F2937', whiteSpace:'nowrap' }}>{fmtM(total)}</div>
                 <div style={{ width:'100%', height:160, display:'flex', flexDirection:'column-reverse', borderRadius:8, overflow:'hidden', border: isPeak ? '2px solid #B45309' : '2px solid transparent', boxSizing:'border-box', background:'rgba(17,24,39,0.04)' }}>
                   {segs.filter((s) => s.val > 0).map((s) => {
@@ -5642,6 +5671,7 @@ function App() {
               </div>
             );
           })}
+            </div>
             </div>
           </div>
         </div>
@@ -5664,6 +5694,11 @@ function App() {
         </details>
         <div style={{ fontSize:12, color:'#4B5563', marginTop:8, lineHeight:1.6 }}>
           {spAssumeGrantAfter2028 ? '2029년 이후 지급 가정 적용 중' : '2029년 귀속분부터 미지급 가정'} · 특별성과급은 2026년 귀속분부터 지급 · 2029년부터 허들 100조 — 입력 영업이익이 100조 미만이면 해당 연도 특별성과급 미지급 · TAI/OPI {trendGross ? '세전' : '세후'}값은 연봉 기준 한계세율 적용 추정치
+        </div>
+        {/* [PR #42] 영업이익 입력 위치 안내 + 바로 이동 버튼 */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginTop:10 }}>
+          <span style={{ fontSize:12, color:'#4B5563', lineHeight:1.6 }}>영업이익은 계산기 탭 › 가정 더 바꾸기 › 향후 9년 예상 DS 영업이익에서 입력합니다.</span>
+          <button onClick={goToSpFutureProfitInput} style={{ border:0, background:"#B45309", color:"#FFFFFF", borderRadius:999, padding:"6px 14px", fontSize:13, fontWeight:900, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>📝 영업이익 입력하기</button>
         </div>
       </div>
   );
@@ -7235,9 +7270,9 @@ function App() {
 
             {/* 향후 9년 예상 DS 영업이익 (P2: 특별성과급 현금화 예상용) */}
             {/* [P2-5yr UX] 연도별 슬라이더+숫자 입력 동기화, 연도별 프리셋 칩, 9년 모두 한 번에, 9년 동일, 기본값/변경됨 표시. 숫자 입력은 기존 NumInput(blur 확정·모바일 키보드 유지)을 그대로 쓴다. 슬라이더는 0~500조(step 5)이며, 적자 연도처럼 음수는 숫자 입력으로 -100조까지 넣을 수 있다. */}
-            <FieldBox label="향후 9년 예상 DS 영업이익 — 특별성과급 예상용" accent="rgba(180,83,9,0.2)">
+            <FieldBox label="향후 9년 예상 DS 영업이익 — 특별성과급 예상용" accent="rgba(180,83,9,0.2)" id="sp-future-profit-box">
               <div style={{ fontSize:13, color:"#1F2937", marginBottom:12, lineHeight:1.6 }}>
-                특별성과급은 매년 새로 부여되어 3년에 걸쳐 현금화됩니다. 향후 9년의 예상 DS 영업이익을 넣으면 OPI-2/RSU 탭의 ‘향후 5년 특별성과급 예상’ 표와 연도별 성과급 트렌드 차트에서 연도별 예상액을 계산합니다. 기본값은 Morgan Stanley 2026-11-09 추정치(2027년 685조·2028년 687조)와 동일합니다. 2029~2035년은 추정치가 없어 비워 두었습니다 — 직접 입력해주세요. 입력이 비어 있는 연도는 부여분이 계산되지 않습니다.
+                특별성과급은 매년 새로 부여되어 3년에 걸쳐 현금화됩니다. 향후 9년의 예상 DS 영업이익을 넣으면 OPI-2/RSU 탭의 ‘향후 5년 특별성과급 예상’ 표와 연도별 성과급 트렌드 차트에서 연도별 예상액을 계산합니다. 기본값은 Morgan Stanley 2026-11-09 추정치(2027년 685조·2028년 687조)와 동일하며, 2029~2035년은 허들 수준인 100조로 기본 설정되어 있습니다. 2029년부터는 허들 100조가 적용되어, 입력 영업이익이 100조 미만이면 해당 연도는 미지급으로 표시됩니다.
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:12 }}>
                 <span style={{ fontSize:13, fontWeight:800, color:"#1F2937" }}>9년 모두 한 번에</span>
@@ -7255,9 +7290,9 @@ function App() {
               </div>
               {spFutureInputYears.map((y) => {
                 const curV = getSpFutureProfit(y);
-                const defV = Number(scenarios?.consensus?.dsProfitJo) || 370;
+                const defV = spFutureProfitDefaultForYear(y);
                 const isNoInput = curV === undefined || curV === null;
-                const isDefault = !isNoInput && curV === defV;
+                const isDefault = !isNoInput && defV !== undefined && curV === defV;
                 const sliderV = isNoInput ? 0 : Math.max(0, Math.min(500, curV));
                 return (
                 <div key={y} style={{ background:"rgba(17,24,39,0.03)", border:"1px solid rgba(17,24,39,0.08)", borderRadius:16, padding:"12px 12px 8px", marginBottom:10 }}>
@@ -7287,13 +7322,13 @@ function App() {
               })}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                 <span style={{ fontSize:12, color:"#4B5563", lineHeight:1.5 }}>연도별 예상액은 OPI-2/RSU 탭의 ‘향후 5년 특별성과급 예상’ 표에서 확인하세요. 입력값은 이 브라우저에 저장됩니다.</span>
-                <button onClick={() => {spFutureInputYears.forEach(y=>updateSpFutureProfit(y, Number(scenarios?.consensus?.dsProfitJo) || 370));}} style={{ border:"1px solid rgba(17,24,39,0.25)", background:"rgba(17,24,39,0.06)", color:"#1F2937", borderRadius:999, padding:"6px 12px", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>↩ 컨센서스 기본값으로 되돌리기</button>
+                <button onClick={() => {spFutureInputYears.forEach(y=>{ const d = spFutureProfitDefaultForYear(y); if (d !== undefined && getSpFutureProfit(y) !== d) updateSpFutureProfit(y, d); });}} style={{ border:"1px solid rgba(17,24,39,0.25)", background:"rgba(17,24,39,0.06)", color:"#1F2937", borderRadius:999, padding:"6px 12px", fontSize:12, fontWeight:900, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>↩ 기본값으로 되돌리기</button>
               </div>
               <label style={{ display:"flex", alignItems:"flex-start", gap:10, marginTop:14, background:"rgba(180,83,9,0.08)", border:"1px solid rgba(180,83,9,0.3)", borderRadius:16, padding:"12px 14px", cursor:"pointer" }}>
                 <input type="checkbox" checked={spAssumeGrantAfter2028} onChange={(e)=>setSpAssumeGrantAfter2028Stored(e.target.checked)} style={{ width:20, height:20, marginTop:2, accentColor:"#B45309", cursor:"pointer", flexShrink:0 }} />
                 <span>
                   <span style={{ display:"block", fontSize:14, fontWeight:900, color:"#B45309" }}>2029년 이후 특별성과급도 지급되는 것으로 가정</span>
-                  <span style={{ display:"block", fontSize:12, color:"#4B5563", lineHeight:1.6, marginTop:3 }}>체크하면 위에서 입력한 예상 DS 영업이익으로 2029년 이후 귀속분도 계산해 ‘향후 5년 특별성과급 예상’ 표·현금화 예정표·7개년 수령액 표·트렌드 차트(2037년 수령분까지)에 표시합니다. 입력하지 않은 연도는 바로 앞 연도의 확정값을 이어받으며, 앞 연도가 비어 있으면 해당 연도는 미지급으로 표시됩니다. 2029년부터는 허들 100조가 적용되어, 입력 영업이익이 100조 미만이면 해당 연도는 미지급으로 표시됩니다. 체크 해제 시 2029년 귀속분부터 미지급 가정으로 돌아갑니다.</span>
+                  <span style={{ display:"block", fontSize:12, color:"#4B5563", lineHeight:1.6, marginTop:3 }}>체크하면 위에서 입력한 예상 DS 영업이익으로 2029년 이후 귀속분도 계산해 ‘향후 5년 특별성과급 예상’ 표·현금화 예정표·7개년 수령액 표·트렌드 차트(2037년 수령분까지)에 표시합니다. 2029~2035년은 기본값 100조로 계산되며, 100조 미만으로 바꾸면 해당 연도는 미지급으로 표시됩니다. 2036년 이후는 2035년 값을 이어받습니다. 체크 해제 시 2029년 귀속분부터 미지급 가정으로 돌아갑니다.</span>
                 </span>
               </label>
             </FieldBox>
