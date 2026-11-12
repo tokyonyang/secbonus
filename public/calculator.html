@@ -265,7 +265,7 @@
   /* OPI-2/RSU 모바일 레이아웃 강제 보정 */
   @media (max-width: 900px) {
     .two-col-grid { grid-template-columns: 1fr !important; }
-    .sp-rsu-panel-grid { grid-template-columns: 1fr !important; }
+    .sp-rsu-panel-grid { grid-template-columns: minmax(0,1fr) !important; }
     .sp-year-ref-grid { grid-template-columns: 1fr !important; }
     .sp-scenario-row { grid-template-columns: 1fr !important; }
   }
@@ -281,6 +281,7 @@
   .sp-rsu-root { max-width: 800px !important; }
   .sp-rsu-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
   .reward-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .sp-rsu-panel-grid > * { min-width: 0; }
   .reward-table { width: 100%; border-collapse: collapse; }
   .reward-table th, .reward-table td { vertical-align: top; }
   .mobile-bonus-cards { display: none; }
@@ -1245,7 +1246,7 @@
 
     .sp-rsu-root { padding: 14px 14px 24px !important; }
     .sp-rsu-summary-grid,
-    .sp-rsu-panel-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+    .sp-rsu-panel-grid { grid-template-columns: minmax(0,1fr) !important; gap: 10px !important; }
     .sp-scenario-card { padding: 14px !important; border-radius: 16px !important; }
     .sp-scenario-card-head { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
     .sp-scenario-result { width: 100% !important; min-width: 0 !important; text-align: left !important; }
@@ -4976,7 +4977,7 @@ function App() {
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:20, marginBottom:20 }} className="two-col-grid sp-rsu-panel-grid">
+        <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr)', gap:20, marginBottom:20 }} className="two-col-grid sp-rsu-panel-grid">
           <div className="sp-rsu-card" style={{ background:'rgba(255,255,255,.72)', border:'1px solid rgba(180,83,9,.22)', borderRadius:16, padding:18 }}>
             <div style={{ fontSize:15, fontWeight:900, color:'#B45309', marginBottom:12 }}>OPI-2 특별경영성과급</div>
             <label style={{ display:'block', color:'#1F2937', fontSize:12, marginBottom:6 }}>{targetSpYear}년 세후 OPI-2 수동 지급액(만) · 비워두면 연봉저장값 또는 산출결과 사용</label>
@@ -5169,7 +5170,7 @@ function App() {
           <div style={{ background:'rgba(106,79,224,.08)', border:'1px solid rgba(106,79,224,.18)', borderRadius:16, padding:14 }}><div style={{ color:'#6A4FE0', fontSize:12, fontWeight:800 }}>RSU/PSU 세전/세후</div><div style={{ color:'#6A4FE0', fontSize:18, fontWeight:900 }}>{fmtM(rsuGrossFutureMan)} / {fmtM(rsuNetFutureMan)}</div></div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:20, marginBottom:20 }} className="two-col-grid sp-rsu-panel-grid">
+        <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr)', gap:20, marginBottom:20 }} className="two-col-grid sp-rsu-panel-grid">
           <div style={{ background:'rgba(255,255,255,.72)', border:'1px solid rgba(180,83,9,.22)', borderRadius:16, padding:18 }}>
             <div style={{ fontSize:16, fontWeight:900, color:'#B45309', marginBottom:6 }}>OPI-2 현금화 예정표</div>
             <div style={{ color:'#4B5563', fontSize:12, lineHeight:1.6, marginBottom:12 }}>연도별 OPI-2를 3등분해 다음해부터 3년간 1월 기준으로 합산합니다.</div>
@@ -5263,7 +5264,7 @@ function App() {
             <div style={{ background:'linear-gradient(135deg,rgba(11,122,85,0.1),transparent)', border:'1px solid rgba(11,122,85,.25)', borderRadius:16, padding:18, marginBottom:20 }}>
               <div style={{ fontSize:13, color:'#4B5563', marginBottom:4 }}>연도별 예정액 누적 (세후 추정)</div>
               <div style={{ fontSize:30, fontWeight:900, color:'#0B7A55', marginBottom:12 }}>{fmtM(grandTotal)}</div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:16 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:8, marginBottom:16 }}>
                 <div style={{ background:'rgba(106,79,224,.1)', borderRadius:16, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#6A4FE0', fontSize:12, fontWeight:900 }}>TAI</div><div style={{ color:'#111827', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(piGrand)}</div></div>
                 <div style={{ background:'rgba(27,79,216,.1)', borderRadius:16, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#1B4FD8', fontSize:12, fontWeight:900 }}>OPI-1</div><div style={{ color:'#111827', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(psGrand)}</div></div>
                 <div style={{ background:'rgba(180,83,9,.1)', borderRadius:16, padding:'8px 6px', textAlign:'center' }}><div style={{ color:'#B45309', fontSize:12, fontWeight:900 }}>OPI-2</div><div style={{ color:'#111827', fontWeight:900, fontSize:12, marginTop:3 }}>{fmtM(spGrand)}</div></div>
